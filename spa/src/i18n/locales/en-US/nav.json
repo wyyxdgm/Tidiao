@@ -62,6 +62,36 @@
     "deleteConfirmBody": "This will hide the project and all its versions and tasks from the list. Data stays in the database and can be restored there. Continue?",
     "deleteConfirmBtn": "Delete",
     "deletedToast": "Project \"{name}\" deleted",
-    "deleteFailed": "Delete failed"
+    "deleteFailed": "Delete failed",
+    "tabs": {
+      "projects": "Projects",
+      "projectDetail": "Project",
+      "versionDetail": "Version",
+      "versionRequirements": "Requirements",
+      "taskDetail": "Task",
+      "taskNew": "New task",
+      "schedules": "Schedules",
+      "templates": "Templates",
+      "webhookDetail": "Webhook detail",
+      "settings": "Settings",
+      "requirements": "Requirements",
+      "requirementDetail": "Requirement detail",
+      "requirementNew": "New requirement",
+      "assets": "Assets",
+      "import": "Import",
+      "runners": "Runners",
+      "uncategorized": "Uncategorized tasks",
+      "progress": "Live progress",
+      "stats": "Stats",
+      "global": "Global board",
+      "ideas": "Ideas canvas",
+      "usage": "Usage",
+      "transcript": "Transcript",
+      "projectUnversioned": "Other tasks",
+      "projectUnversionedRequirements": "Unversioned requirements",
+      "projectConsole": "Console",
+      "projectWiki": "Wiki",
+      "versionBoard": "Board"
+    }
   }
 }

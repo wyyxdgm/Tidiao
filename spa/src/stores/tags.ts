@@ -67,6 +67,8 @@ function saveList(visited: TagItem[]): void {
     const data = visited.map((t) => ({
       name: t.name,
       title: t.title,
+      // i18n (W4.5a): locale key 随列表持久化 — 刷新后仍能按当前语言渲染 tab 标题.
+      titleKey: t.titleKey,
       path: t.path,
       query: t.query,
     }));
@@ -86,7 +88,7 @@ function loadList(): TagItem[] {
     const customTitles = loadCustomTitles();
     const pinned = loadPinnedPaths();
     return parsed
-      .filter((e): e is { name: string; title: string; path: string; query?: Record<string, string> } => {
+      .filter((e): e is { name: string; title: string; titleKey?: string; path: string; query?: Record<string, string> } => {
         return (
           typeof e === 'object' &&
           e !== null &&
@@ -102,6 +104,7 @@ function loadList(): TagItem[] {
         return {
           name: e.name,
           title: custom || e.title,
+          titleKey: custom ? undefined : e.titleKey,
           path: e.path,
           query: e.query,
           customTitle: !!custom,
@@ -122,6 +125,9 @@ export interface TagItem {
   name: string;
   // Human label shown in the tab.
   title: string;
+  // i18n (W4.5a): 可选 locale key (nav.tabs.*) — 存在时渲染层走 t(titleKey),
+  // 语言切换即时跟新; title 保留作 zh 兜底 + 用户重命名回退值.
+  titleKey?: string;
   // URL path WITHOUT query (path is the tab identity for close/activate).
   path: string;
   // Last-seen query snapshot for this path. R57: 切回 tab 时还原, 否则 URL-driven
@@ -185,7 +191,10 @@ export const useTagsStore = defineStore('tags', () => {
       existing.query = tag.query;
       // Respect user rename: router.afterEach 每次推都带原始 meta tagTitle, 不
       // 覆盖用户自定义过的标题.
-      if (!existing.customTitle) existing.title = tag.title;
+      if (!existing.customTitle) {
+        existing.title = tag.title;
+        existing.titleKey = tag.titleKey;
+      }
       currentPath.value = tag.path;
       commit();
       return false;

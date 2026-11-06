@@ -304,7 +304,8 @@ onBeforeUnmount(() => {
         @contextmenu="onContextMenu($event, tg.path)"
       >
         <span v-if="tg.closable === false" class="tag-pin" :aria-label="t('components.tags.pinned')">📌</span>
-        <span class="tag-title">{{ tg.title }}</span>
+        <!-- i18n (W4.5a): titleKey 存在走 locale (语言切换即时跟新), title 作 zh 兜底 -->
+        <span class="tag-title">{{ tg.titleKey ? t(tg.titleKey) : tg.title }}</span>
         <button
           v-if="tg.closable !== false"
           class="tag-close"

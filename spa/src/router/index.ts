@@ -72,7 +72,7 @@ const routes: RouteRecordRaw[] = [
         path: 'projects',
         name: 'projects',
         component: ProjectsView,
-        meta: { tagTitle: '项目列表', tagName: 'projects' },
+        meta: { tagTitle: '项目列表', tagTitleKey: 'nav.tabs.projects', tagName: 'projects' },
       },
       {
         // detail-view is a stub for M1 — proves the sidebar click → tag
@@ -80,13 +80,13 @@ const routes: RouteRecordRaw[] = [
         path: 'projects/:projectId',
         name: 'project-detail',
         component: ProjectDetailView,
-        meta: { tagTitle: '项目', tagName: 'project-detail' },
+        meta: { tagTitle: '项目', tagTitleKey: 'nav.tabs.projectDetail', tagName: 'project-detail' },
       },
       {
         path: 'projects/:projectId/versions/:versionId',
         name: 'version-detail',
         component: VersionDetailView,
-        meta: { tagTitle: '版本', tagName: 'version-detail' },
+        meta: { tagTitle: '版本', tagTitleKey: 'nav.tabs.versionDetail', tagName: 'version-detail' },
       },
       {
         // R26: 项目+版本下需求列表 — 完整镜像 Next.js /[projectId]/[versionId]/
@@ -97,13 +97,13 @@ const routes: RouteRecordRaw[] = [
         path: 'projects/:projectId/versions/:versionId/requirements',
         name: 'version-requirements',
         component: VersionRequirements,
-        meta: { tagTitle: '需求点', tagName: 'version-requirements' },
+        meta: { tagTitle: '需求点', tagTitleKey: 'nav.tabs.versionRequirements', tagName: 'version-requirements' },
       },
       {
         path: 'tasks/:taskId',
         name: 'task-detail',
         component: TaskDetailView,
-        meta: { tagTitle: '任务', tagName: 'task-detail' },
+        meta: { tagTitle: '任务', tagTitleKey: 'nav.tabs.taskDetail', tagName: 'task-detail' },
       },
       {
         // R23: 新建任务视图 — 完整镜像 Next.js /tasks/new (1561 行).
@@ -114,19 +114,19 @@ const routes: RouteRecordRaw[] = [
         path: 'tasks/new',
         name: 'task-new',
         component: TaskNew,
-        meta: { tagTitle: '新建任务', tagName: 'task-new', hideInTabs: true },
+        meta: { tagTitle: '新建任务', tagTitleKey: 'nav.tabs.taskNew', tagName: 'task-new', hideInTabs: true },
       },
       {
         path: 'schedules',
         name: 'schedules',
         component: Schedules,
-        meta: { tagTitle: '定时任务', tagName: 'schedules' },
+        meta: { tagTitle: '定时任务', tagTitleKey: 'nav.tabs.schedules', tagName: 'schedules' },
       },
       {
         path: 'templates',
         name: 'templates',
         component: Templates,
-        meta: { tagTitle: '模板管理', tagName: 'templates' },
+        meta: { tagTitle: '模板管理', tagTitleKey: 'nav.tabs.templates', tagName: 'templates' },
       },
       {
         path: 'webhooks',
@@ -142,19 +142,19 @@ const routes: RouteRecordRaw[] = [
         path: 'webhooks/:webhookId',
         name: 'webhook-detail',
         component: WebhookDetail,
-        meta: { tagTitle: 'Webhook 详情', tagName: 'webhook-detail' },
+        meta: { tagTitle: 'Webhook 详情', tagTitleKey: 'nav.tabs.webhookDetail', tagName: 'webhook-detail' },
       },
       {
         path: 'settings',
         name: 'settings',
         component: Settings,
-        meta: { tagTitle: '设置', tagName: 'settings' },
+        meta: { tagTitle: '设置', tagTitleKey: 'nav.tabs.settings', tagName: 'settings' },
       },
       {
         path: 'requirements',
         name: 'requirements',
         component: Requirements,
-        meta: { tagTitle: '需求点', tagName: 'requirements' },
+        meta: { tagTitle: '需求点', tagTitleKey: 'nav.tabs.versionRequirements', tagName: 'requirements' },
       },
       {
         // R16: 需求点详情 — 完整镜像 Next.js /requirements/[id] 布局
@@ -164,7 +164,7 @@ const routes: RouteRecordRaw[] = [
         path: 'requirements/:requirementId',
         name: 'requirement-detail',
         component: RequirementDetail,
-        meta: { tagTitle: '需求点详情', tagName: 'requirement-detail' },
+        meta: { tagTitle: '需求点详情', tagTitleKey: 'nav.tabs.requirementDetail', tagName: 'requirement-detail' },
       },
       {
         // R15: 新建需求点视图 — 完整镜像 Next.js /requirements/new.
@@ -174,43 +174,43 @@ const routes: RouteRecordRaw[] = [
         path: 'requirements/new',
         name: 'requirement-new',
         component: RequirementNew,
-        meta: { tagTitle: '新建需求点', tagName: 'requirement-new', hideInTabs: true },
+        meta: { tagTitle: '新建需求点', tagTitleKey: 'nav.tabs.requirementNew', tagName: 'requirement-new', hideInTabs: true },
       },
       {
         path: 'assets',
         name: 'assets',
         component: Assets,
-        meta: { tagTitle: '资源池', tagName: 'assets' },
+        meta: { tagTitle: '资源池', tagTitleKey: 'nav.tabs.assets', tagName: 'assets' },
       },
       {
         path: 'import',
         name: 'import',
         component: Import,
-        meta: { tagTitle: '批量导入', tagName: 'import' },
+        meta: { tagTitle: '批量导入', tagTitleKey: 'nav.tabs.import', tagName: 'import' },
       },
       {
         path: 'runners',
         name: 'runners',
         component: Runners,
-        meta: { tagTitle: 'Runners', tagName: 'runners' },
+        meta: { tagTitle: 'Runners', tagTitleKey: 'nav.tabs.runners', tagName: 'runners' },
       },
       {
         path: 'uncategorized',
         name: 'uncategorized',
         component: Uncategorized,
-        meta: { tagTitle: '未分类任务', tagName: 'uncategorized' },
+        meta: { tagTitle: '未分类任务', tagTitleKey: 'nav.tabs.uncategorized', tagName: 'uncategorized' },
       },
       {
         path: 'progress',
         name: 'progress',
         component: Progress,
-        meta: { tagTitle: '实时进度', tagName: 'progress' },
+        meta: { tagTitle: '实时进度', tagTitleKey: 'nav.tabs.progress', tagName: 'progress' },
       },
       {
         path: 'stats',
         name: 'stats',
         component: Stats,
-        meta: { tagTitle: '统计看板', tagName: 'stats' },
+        meta: { tagTitle: '统计看板', tagTitleKey: 'nav.tabs.stats', tagName: 'stats' },
       },
       {
         // R5: 全局看板 — 跨项目跨版本汇总所有 task, 8 维筛选 + cards/list/grouped
@@ -218,7 +218,7 @@ const routes: RouteRecordRaw[] = [
         path: 'global',
         name: 'global',
         component: GlobalBoard,
-        meta: { tagTitle: '全局看板', tagName: 'global' },
+        meta: { tagTitle: '全局看板', tagTitleKey: 'nav.tabs.global', tagName: 'global' },
       },
       {
         // idea-canvas P2 (docs/plans/idea-canvas.md): 构思画布 — 跨项目构思层,
@@ -226,7 +226,7 @@ const routes: RouteRecordRaw[] = [
         path: 'ideas',
         name: 'ideas',
         component: () => import('@/views/IdeasView.vue'),
-        meta: { tagTitle: '构思画布', tagName: 'ideas' },
+        meta: { tagTitle: '构思画布', tagTitleKey: 'nav.tabs.ideas', tagName: 'ideas' },
       },
       {
         // R8: 用量统计 — 完整镜像 Next.js src/app/usage/page.tsx.
@@ -236,7 +236,7 @@ const routes: RouteRecordRaw[] = [
         path: 'usage',
         name: 'usage',
         component: Usage,
-        meta: { tagTitle: '用量统计', tagName: 'usage' },
+        meta: { tagTitle: '用量统计', tagTitleKey: 'nav.tabs.usage', tagName: 'usage' },
       },
       {
         // R20: 任务完整会话转录视图 — 完整镜像 Next.js /transcript/[id] 布局
@@ -248,7 +248,7 @@ const routes: RouteRecordRaw[] = [
         path: 'transcript/:id',
         name: 'transcript',
         component: Transcript,
-        meta: { tagTitle: '转录', tagName: 'transcript' },
+        meta: { tagTitle: '转录', tagTitleKey: 'nav.tabs.transcript', tagName: 'transcript' },
       },
       {
         // R24: 镜像 Next.js /[projectId] 的 307 redirect 行为 (SPA 用 hash 路由
@@ -289,7 +289,7 @@ const routes: RouteRecordRaw[] = [
         path: ':projectId/unversioned',
         name: 'project-unversioned',
         component: ProjectUnversioned,
-        meta: { tagTitle: '其他任务', tagName: 'project-unversioned' },
+        meta: { tagTitle: '其他任务', tagTitleKey: 'nav.tabs.projectUnversioned', tagName: 'project-unversioned' },
       },
       {
         // R30: 项目未挂版本需求点列表 — 完整镜像 Next.js /[projectId]/unversioned/
@@ -308,7 +308,7 @@ const routes: RouteRecordRaw[] = [
         path: ':projectId/unversioned/requirements',
         name: 'project-unversioned-requirements',
         component: ProjectUnversionedRequirements,
-        meta: { tagTitle: '未挂版本需求', tagName: 'project-unversioned-requirements' },
+        meta: { tagTitle: '未挂版本需求', tagTitleKey: 'nav.tabs.projectUnversionedRequirements', tagName: 'project-unversioned-requirements' },
       },
       {
         // R177: 任务画布总控制台 — 单项目全景画布 (近期聚焦/四象限/等我处理/
@@ -320,7 +320,7 @@ const routes: RouteRecordRaw[] = [
         path: ':projectId/console',
         name: 'project-console',
         component: ConsoleCanvas,
-        meta: { tagTitle: '总控制台', tagName: 'project-console' },
+        meta: { tagTitle: '总控制台', tagTitleKey: 'nav.tabs.projectConsole', tagName: 'project-console' },
       },
       {
         // R31: 项目 Wiki 视图 — 完整镜像 Next.js /[projectId]/wiki. hash 路由 →
@@ -338,7 +338,7 @@ const routes: RouteRecordRaw[] = [
         path: ':projectId/wiki',
         name: 'project-wiki',
         component: ProjectWiki,
-        meta: { tagTitle: 'Wiki', tagName: 'project-wiki' },
+        meta: { tagTitle: 'Wiki', tagTitleKey: 'nav.tabs.projectWiki', tagName: 'project-wiki' },
       },
       {
         // R25: 版本看板视图 — 完整镜像 Next.js /[projectId]/[versionId]
@@ -362,7 +362,7 @@ const routes: RouteRecordRaw[] = [
         path: ':projectId/:versionId',
         name: 'version-board',
         component: VersionBoard,
-        meta: { tagTitle: '版本看板', tagName: 'version-board' },
+        meta: { tagTitle: '版本看板', tagTitleKey: 'nav.tabs.versionBoard', tagName: 'version-board' },
       },
       {
         // R27: 镜像 Next.js /[projectId]/[versionId]/requirements/[id] 的
@@ -469,6 +469,9 @@ router.afterEach((to) => {
   tags.visit({
     name: cacheName,
     title: String(to.meta.tagTitle),
+    // i18n (W4.5a): meta.tagTitleKey 存在时 tab 渲染走 locale (语言切换即时跟新),
+    // tagTitle 保留作 zh 兜底 (持久化列表恢复 / 未知 key 回落).
+    titleKey: typeof to.meta.tagTitleKey === 'string' ? to.meta.tagTitleKey : undefined,
     path: to.path,
     query: querySnapshot,
   });

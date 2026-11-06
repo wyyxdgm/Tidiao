@@ -62,6 +62,36 @@
     "deleteConfirmBody": "将隐藏该项目及其下所有版本和任务，从列表中消失。数据保留在数据库中，可通过数据库恢复。继续？",
     "deleteConfirmBtn": "删除",
     "deletedToast": "项目「{name}」已删除",
-    "deleteFailed": "删除失败"
+    "deleteFailed": "删除失败",
+    "tabs": {
+      "projects": "项目列表",
+      "projectDetail": "项目",
+      "versionDetail": "版本",
+      "versionRequirements": "需求点",
+      "taskDetail": "任务",
+      "taskNew": "新建任务",
+      "schedules": "定时任务",
+      "templates": "模板管理",
+      "webhookDetail": "Webhook 详情",
+      "settings": "设置",
+      "requirements": "需求点",
+      "requirementDetail": "需求点详情",
+      "requirementNew": "新建需求点",
+      "assets": "资源池",
+      "import": "批量导入",
+      "runners": "Runners",
+      "uncategorized": "未分类任务",
+      "progress": "实时进度",
+      "stats": "统计看板",
+      "global": "全局看板",
+      "ideas": "构思画布",
+      "usage": "用量统计",
+      "transcript": "转录",
+      "projectUnversioned": "其他任务",
+      "projectUnversionedRequirements": "未挂版本需求",
+      "projectConsole": "总控制台",
+      "projectWiki": "Wiki",
+      "versionBoard": "版本看板"
+    }
   }
 }
