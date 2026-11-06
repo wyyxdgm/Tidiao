@@ -17,7 +17,7 @@ A self-hosted task orchestrator for **Claude Code agents**: dispatch coding task
 - **Feishu sync** — mirror task boards to Feishu sheets (optional)
 - **Multi-tenant** — JWT auth, all data isolated by owner; first registered user becomes admin
 - **LLM provider catalog** — built-in catalog of model providers (Anthropic, Ark, and more), BYO API keys, encrypted at rest
-- **SPA UI** — Vue 3 single-page app served by the same Next.js server
+- **SPA UI** — Vue 3 single-page app served by the same Next.js server, bilingual (中文 / English, toggle in the header or Settings)
 
 ## Quick start
 
