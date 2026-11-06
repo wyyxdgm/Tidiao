@@ -1,0 +1,20 @@
+{
+  "register": {
+    "title": "Tidiao",
+    "subtitle": "Create a new account",
+    "email": "Email",
+    "password": "Password (min 6 characters)",
+    "submit": "Register",
+    "submitting": "Registering…",
+    "errEmailRequired": "Email is required",
+    "errPasswordRequired": "Password is required",
+    "errPasswordMin": "Password must be at least 6 characters",
+    "errFormIncomplete": "Please complete the form",
+    "errEmailTaken": "This email is already registered",
+    "errRateLimitedMinutes": "Too many attempts — try again in {mins} minutes",
+    "errRateLimited": "Too many attempts, please try again later",
+    "errGeneric": "Registration failed, please retry",
+    "footHasAccount": "Already have an account?",
+    "footLogin": "Sign in"
+  }
+}

@@ -7,6 +7,7 @@
 //   AppHeader 改 sticky + z-index 70 (sidebar=60 之上), 保证 hamburger 永远可点,
 //   不被 sidebar/backdrop 覆盖.
 import { onBeforeUnmount, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useSidebarDrawer } from '@/composables/useSidebarDrawer';
 import AccountSwitcher from '@/components/AccountSwitcher.vue';
@@ -14,6 +15,7 @@ import BackendBreathDot from '@/components/BackendBreathDot.vue';
 import HostGaugeRing from '@/components/HostGaugeRing.vue';
 import TaskSearchBox from '@/components/TaskSearchBox.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import LangToggle from '@/components/LangToggle.vue';
 import {
   acquireTaskResourcesPolling,
   releaseTaskResourcesPolling,
@@ -21,6 +23,7 @@ import {
 } from '@/composables/useTaskResources';
 
 const auth = useAuthStore();
+const { t } = useI18n();
 const { drawerOpen, toggleDrawer } = useSidebarDrawer();
 
 // R232 Round5 (damo「搜索框左侧就是看不到」): 系统资源小块挂顶栏搜索框左侧 —
@@ -41,8 +44,8 @@ onBeforeUnmount(() => releaseTaskResourcesPolling());
     <button
       type="button"
       class="sidebar-toggle"
-      :title="drawerOpen ? '关闭导航' : '打开导航'"
-      :aria-label="drawerOpen ? '关闭导航' : '打开导航'"
+      :title="drawerOpen ? t('header.closeNav') : t('header.openNav')"
+      :aria-label="drawerOpen ? t('header.closeNav') : t('header.openNav')"
       :aria-expanded="drawerOpen"
       @click="toggleDrawer"
     >
@@ -57,7 +60,7 @@ onBeforeUnmount(() => releaseTaskResourcesPolling());
       <!-- H5 (≤1023px) 文字换 logo 方块 (damo 1011): 省 ~110px 给单环/账号;
            桌面文字不变. -->
       <span class="brand-logo" aria-hidden="true">AO</span>
-      <span class="brand-text">提调 <span class="brand-tag">SPA</span></span>
+      <span class="brand-text">{{ t('header.brand') }} <span class="brand-tag">SPA</span></span>
     </div>
     <!-- R185 迭代: 后台状态呼吸点挂标题旁 (damo 10-05: 原视口右缘中间位置错, 应在左上角标题边).
          登录页不经过 MainLayout (AppHeader 唯一引用方) 天然不显示. -->
@@ -75,6 +78,8 @@ onBeforeUnmount(() => releaseTaskResourcesPolling());
     <TaskSearchBox v-if="auth.user" />
     <!-- R206: 主题切换 (浅色/深色/随系统) — 用户区左侧, 未登录也显示. -->
     <ThemeToggle />
+    <!-- i18n W1: 语言切换 (zh-CN/en-US) — 主题切换右侧. -->
+    <LangToggle />
     <div v-if="auth.user" class="user">
       <span class="user-name">{{ auth.user.name || auth.user.email }}</span>
       <span class="user-role">{{ auth.user.role }}</span>

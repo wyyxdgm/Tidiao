@@ -24,17 +24,22 @@
 //   3. SPA 字段级错误 UI (input 红边框 + 下方红字) 是 LoginView 引入的
 //      客户端前置校验基础设施, register 顺手复用, 客户端先校验密码长度,
 //      后端 400 后再叠加服务端错误
+// i18n (W1 样板 2026-11-06): 用户可见字符串走 t('register.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/register.json; 迁移模式同 LoginView.
 import { ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { HttpError } from '@/api/http';
 import { hardNavigate } from '@/lib/hard-navigate';
 import { addRecentAccount } from '@/lib/recent-accounts';
 import Input from '@/components/Input.vue';
 import Button from '@/components/Button.vue';
+import LangToggle from '@/components/LangToggle.vue';
 
 const auth = useAuthStore();
 const route = useRoute();
+const { t } = useI18n();
 
 const email = ref('');
 const password = ref('');
@@ -51,17 +56,17 @@ function resetErrors() {
 async function onSubmit() {
   // 客户端前置校验 —— 邮箱非空 + 密码 ≥ 6 位 (与 Next 一致)。
   const localFieldErrors: { email?: string; password?: string } = {};
-  if (!email.value) localFieldErrors.email = '请输入邮箱';
+  if (!email.value) localFieldErrors.email = t('register.errEmailRequired');
   if (!password.value) {
-    localFieldErrors.password = '请输入密码';
+    localFieldErrors.password = t('register.errPasswordRequired');
   } else if (password.value.length < 6) {
     // 与 Next.js setError("密码至少 6 位") 同款文案。
-    localFieldErrors.password = '密码至少 6 位';
+    localFieldErrors.password = t('register.errPasswordMin');
   }
   if (Object.keys(localFieldErrors).length > 0) {
     resetErrors();
     fieldErrors.value = localFieldErrors;
-    errorMsg.value = '请补全表单';
+    errorMsg.value = t('register.errFormIncomplete');
     return;
   }
 
@@ -103,25 +108,25 @@ async function onSubmit() {
           errorMsg.value = err.message;
         }
       } else if (err.status === 409) {
-        // 与 Next.js 一致: 覆盖后端英文 "Email already registered" 为中文。
-        errorMsg.value = '该邮箱已注册';
+        // 与 Next.js 一致: 覆盖后端英文 "Email already registered" 为本地文案。
+        errorMsg.value = t('register.errEmailTaken');
       } else if (err.status === 429) {
-        // 后端 message 已是中文 ("尝试次数过多, 请 N 分钟后再试"), 直接展示;
-        // 后端未返回 message 时按 Retry-After header 拼兜底文案。
+        // 后端 message 展示原样 (语言随部署方配置); 后端未返回 message 时按
+        // Retry-After header 拼本地化兜底文案。
         if (err.message && err.message !== `HTTP ${err.status}`) {
           errorMsg.value = err.message;
         } else if (err.retryAfter) {
           const mins = Math.ceil(err.retryAfter / 60);
-          errorMsg.value = `尝试次数过多，请 ${mins} 分钟后再试`;
+          errorMsg.value = t('register.errRateLimitedMinutes', { mins });
         } else {
-          errorMsg.value = '尝试次数过多，请稍后再试';
+          errorMsg.value = t('register.errRateLimited');
         }
       } else {
         // 400 (邮箱格式 / 密码不足 6 位 后端二次校验) + 其他兜底。
-        errorMsg.value = err.message || '注册失败，请重试';
+        errorMsg.value = err.message || t('register.errGeneric');
       }
     } else {
-      errorMsg.value = '注册失败，请重试';
+      errorMsg.value = t('register.errGeneric');
     }
   } finally {
     submitting.value = false;
@@ -131,12 +136,13 @@ async function onSubmit() {
 
 <template>
   <div class="register-page">
+    <LangToggle floating />
     <form class="register-card card" @submit.prevent="onSubmit">
-      <h1 class="register-title">提调</h1>
-      <p class="register-subtitle">注册新账号</p>
+      <h1 class="register-title">{{ t('register.title') }}</h1>
+      <p class="register-subtitle">{{ t('register.subtitle') }}</p>
 
       <div class="form-group">
-        <label class="form-label" for="email">邮箱</label>
+        <label class="form-label" for="email">{{ t('register.email') }}</label>
         <Input
           id="email"
           v-model="email"
@@ -149,7 +155,7 @@ async function onSubmit() {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="password">密码（至少 6 位）</label>
+        <label class="form-label" for="password">{{ t('register.password') }}</label>
         <Input
           id="password"
           v-model="password"
@@ -163,12 +169,12 @@ async function onSubmit() {
       <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
 
       <Button variant="primary" type="submit" block :loading="submitting">
-        {{ submitting ? '注册中…' : '注册' }}
+        {{ submitting ? t('register.submitting') : t('register.submit') }}
       </Button>
 
       <p class="register-foot">
-        已有账号？
-        <a class="register-link" href="#/login">登录</a>
+        {{ t('register.footHasAccount') }}
+        <a class="register-link" href="#/login">{{ t('register.footLogin') }}</a>
       </p>
     </form>
   </div>

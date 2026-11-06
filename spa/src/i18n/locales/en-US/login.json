@@ -1,0 +1,19 @@
+{
+  "login": {
+    "title": "Tidiao",
+    "subtitle": "Sign in to the console",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "errEmailRequired": "Email is required",
+    "errPasswordRequired": "Password is required",
+    "errFormIncomplete": "Please complete the form",
+    "errBadCredentials": "Incorrect email or password",
+    "errRateLimitedMinutes": "Too many attempts — try again in {mins} minutes",
+    "errRateLimited": "Too many attempts, please try again later",
+    "errGeneric": "Sign-in failed, please retry",
+    "footNoAccount": "No account yet?",
+    "footRegister": "Register"
+  }
+}

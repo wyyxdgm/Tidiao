@@ -17,17 +17,23 @@
 //   4. 401 文案统一为「邮箱或密码错误」(后端 msg 是英文 "Invalid email or password",
 //      与 Next 端覆盖一致)
 //   5. 底部注册链接 (Next 端 <Link href="/register">, SPA 用 <a href="#/register">)
+// i18n (W1 样板 2026-11-06): 用户可见字符串走 t('login.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/login.json; 本文件是 i18n 迁移样板,
+//   后续波次照抄此模式 (script: useI18n → t; template: {{ t('key') }}).
 import { ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { HttpError } from '@/api/http';
 import { addRecentAccount } from '@/lib/recent-accounts';
 import { hardNavigate } from '@/lib/hard-navigate';
 import Input from '@/components/Input.vue';
 import Button from '@/components/Button.vue';
+import LangToggle from '@/components/LangToggle.vue';
 
 const auth = useAuthStore();
 const route = useRoute();
+const { t } = useI18n();
 
 const email = ref('');
 const password = ref('');
@@ -45,12 +51,12 @@ async function onSubmit() {
   // 客户端前置校验 —— 用 HttpError 走统一错误链路, 让 isFormError / getFieldError
   // 路径在没接后端 Zod 错误时也能跑通, 表单 UI 立即可见字段级反馈。
   const localFieldErrors: { email?: string; password?: string } = {};
-  if (!email.value) localFieldErrors.email = '请输入邮箱';
-  if (!password.value) localFieldErrors.password = '请输入密码';
+  if (!email.value) localFieldErrors.email = t('login.errEmailRequired');
+  if (!password.value) localFieldErrors.password = t('login.errPasswordRequired');
   if (Object.keys(localFieldErrors).length > 0) {
     resetErrors();
     fieldErrors.value = localFieldErrors;
-    errorMsg.value = '请补全表单';
+    errorMsg.value = t('login.errFormIncomplete');
     return;
   }
 
@@ -93,23 +99,23 @@ async function onSubmit() {
         }
       } else if (err.status === 401) {
         // 与 Next.js 一致: 不区分用户存在与否, 统一文案防枚举。
-        errorMsg.value = '邮箱或密码错误';
+        errorMsg.value = t('login.errBadCredentials');
       } else if (err.status === 429) {
-        // 后端 message 已是中文 ("尝试次数过多, 请 N 分钟后再试"), 直接展示;
-        // 后端未返回 message 时按 Retry-After header 拼兜底文案。
+        // 后端 message 展示原样 (语言随部署方配置); 后端未返回 message 时按
+        // Retry-After header 拼本地化兜底文案。
         if (err.message && err.message !== `HTTP ${err.status}`) {
           errorMsg.value = err.message;
         } else if (err.retryAfter) {
           const mins = Math.ceil(err.retryAfter / 60);
-          errorMsg.value = `尝试次数过多，请 ${mins} 分钟后再试`;
+          errorMsg.value = t('login.errRateLimitedMinutes', { mins });
         } else {
-          errorMsg.value = '尝试次数过多，请稍后再试';
+          errorMsg.value = t('login.errRateLimited');
         }
       } else {
-        errorMsg.value = err.message || '登录失败，请重试';
+        errorMsg.value = err.message || t('login.errGeneric');
       }
     } else {
-      errorMsg.value = '登录失败，请重试';
+      errorMsg.value = t('login.errGeneric');
     }
   } finally {
     submitting.value = false;
@@ -119,12 +125,13 @@ async function onSubmit() {
 
 <template>
   <div class="login-page">
+    <LangToggle floating />
     <form class="login-card card" @submit.prevent="onSubmit">
-      <h1 class="login-title">提调</h1>
-      <p class="login-subtitle">登录管理台</p>
+      <h1 class="login-title">{{ t('login.title') }}</h1>
+      <p class="login-subtitle">{{ t('login.subtitle') }}</p>
 
       <div class="form-group">
-        <label class="form-label" for="email">邮箱</label>
+        <label class="form-label" for="email">{{ t('login.email') }}</label>
         <Input
           id="email"
           v-model="email"
@@ -137,7 +144,7 @@ async function onSubmit() {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="password">密码</label>
+        <label class="form-label" for="password">{{ t('login.password') }}</label>
         <Input
           id="password"
           v-model="password"
@@ -151,12 +158,12 @@ async function onSubmit() {
       <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
 
       <Button variant="primary" type="submit" block :loading="submitting">
-        {{ submitting ? '登录中…' : '登录' }}
+        {{ submitting ? t('login.submitting') : t('login.submit') }}
       </Button>
 
       <p class="login-foot">
-        没有账号？
-        <a class="login-link" href="#/register">注册</a>
+        {{ t('login.footNoAccount') }}
+        <a class="login-link" href="#/register">{{ t('login.footRegister') }}</a>
       </p>
     </form>
   </div>
