@@ -151,6 +151,62 @@
       "statusLabel": "Status: {status}",
       "depsLabel": "· Depends on {n} upstream task(s)"
     },
+    "agg": {
+      "taskCountTitle": "Linked task count",
+      "pctTitle": "{pct}% complete",
+      "feedbackTitle": "Latest feedback",
+      "noFeedback": "No feedback"
+    },
+    "attach": {
+      "deleteTitle": "Delete attachment",
+      "confirmMessage": "Delete this attachment? The file itself will be deleted too.",
+      "deleting": "Deleting…",
+      "deleted": "Attachment deleted",
+      "deleteFailedMsg": "Delete failed: {msg}"
+    },
+    "stepper": {
+      "closedHint": "Soft-deleted; can be switched back to other statuses",
+      "current": "Current:"
+    },
+    "flow": {
+      "changedToast": "Status changed to \"{status}\"",
+      "changeFailed": "Failed to change status: {msg}",
+      "doneBlocked": "At least one dev/test/deploy task must be completed before marking the requirement as done.",
+      "doneBlockedTitle": "At least one dev/test/deploy task must be completed",
+      "pickTitle": "Click to pick another requirement status",
+      "updating": "Updating…",
+      "closedHint": "closed = soft-deleted, can be switched back",
+      "closeTitle": "Close this requirement?",
+      "closeMessage": "Status will change to \"{status}\"; you can switch back anytime.",
+      "closeConfirm": "Confirm close"
+    },
+    "newTask": {
+      "openBtn": "New task",
+      "title": "New task for this requirement",
+      "labelTitle": "Title *",
+      "placeholderTitle": "e.g. fix login page responsive layout",
+      "labelPrompt": "Task prompt *",
+      "placeholderPrompt": "The actual prompt passed to the agent...",
+      "forestHint": "Once linked to this requirement, you can pull up the \"task forest\" view (with dependency relations).",
+      "labelType": "Task stage *",
+      "typeDesignHint": "Design/research — completion does NOT count toward the \"ready to mark done\" precondition",
+      "typeDevHint": "Implementation/test/deploy — completion counts toward the \"ready to mark done\" precondition",
+      "labelStart": "Start timing",
+      "startNow": "Start now (enters the scheduling queue right after creation)",
+      "startLater": "Create without starting (start manually on the task page)",
+      "labelEffort": "Reasoning effort",
+      "labelMaxTurns": "Max turns",
+      "labelTools": "Allowed tools",
+      "errTitleRequired": "Title is required",
+      "errPromptRequired": "Task prompt is required",
+      "createdStarted": "Task created and started: {title} ({status})",
+      "createdStartFailed": "Task created but failed to start: {msg} (start it manually on the task page)",
+      "createdPending": "Task created (not started): {title}",
+      "createFailed": "Failed to create",
+      "createFailedMsg": "Failed to create: {msg}",
+      "submitStart": "Create and start",
+      "submitPending": "Create without starting"
+    },
     "new": {
       "backLink": "← Requirements",
       "title": "New requirement",

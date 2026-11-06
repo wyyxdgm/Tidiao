@@ -11,6 +11,7 @@
      用户可重试或取消.
    - sessionIdAvailable=false 时按钮 disabled (需要先启动任务生成 session_id). */
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { post, HttpError } from '@/api/http';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   onCreated: () => void;
 }
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 const open = ref<boolean>(false);
 const summary = ref<string>('');
@@ -42,7 +44,7 @@ async function handleSubmit(e: Event): Promise<void> {
     open.value = false;
     props.onCreated();
   } catch (err) {
-    error.value = err instanceof HttpError ? err.message : (err instanceof Error ? err.message : '添加失败');
+    error.value = err instanceof HttpError ? err.message : (err instanceof Error ? err.message : t('tasks.checkpoint.addFailed'));
   } finally {
     submitting.value = false;
   }
@@ -60,22 +62,22 @@ function cancel(): void {
     type="button"
     class="add-cp-btn"
     :disabled="!sessionIdAvailable"
-    :title="sessionIdAvailable ? '手动添加一个 checkpoint 作为 fork 点' : '需要先启动任务生成 session'"
+    :title="sessionIdAvailable ? t('tasks.checkpoint.addTitle') : t('tasks.checkpoint.needSessionTitle')"
     @click="open = true"
   >
-    + 手动添加 checkpoint
+    {{ t('tasks.checkpoint.addBtn') }}
   </button>
   <form v-else class="add-cp-form" @submit="handleSubmit">
     <textarea
       v-model="summary"
       class="add-cp-textarea"
-      placeholder="简述这个 checkpoint（可选）"
+      :placeholder="t('tasks.checkpoint.summaryPlaceholder')"
       rows="2"
     />
     <input
       v-model="stepInput"
       class="add-cp-input"
-      placeholder="step（数字或语义词，如 final；留空用时间戳）"
+      :placeholder="t('tasks.checkpoint.stepPlaceholder')"
     />
     <div v-if="error" class="add-cp-error">⚠ {{ error }}</div>
     <div class="add-cp-actions">
@@ -83,12 +85,12 @@ function cancel(): void {
         type="submit"
         class="add-cp-submit"
         :disabled="submitting"
-      >{{ submitting ? '添加中...' : '添加' }}</button>
+      >{{ submitting ? t('tasks.checkpoint.adding') : t('tasks.checkpoint.add') }}</button>
       <button
         type="button"
         class="add-cp-cancel"
         @click="cancel"
-      >取消</button>
+      >{{ t('common.cancel') }}</button>
     </div>
   </form>
 </template>

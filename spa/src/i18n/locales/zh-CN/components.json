@@ -1,0 +1,64 @@
+{
+  "components": {
+    "breath": {
+      "ok": "后台正常 · {t}",
+      "down": "后台不可用 · {t}",
+      "unknown": "后台状态探测中…"
+    },
+    "pagination": {
+      "navAria": "分页",
+      "total": "共 ",
+      "totalUnit": " 条",
+      "perPage": "每页",
+      "perPageAria": "每页条数",
+      "first": "首页",
+      "prev": "上一页",
+      "next": "下一页",
+      "last": "末页",
+      "jumpAria": "跳转到指定页"
+    },
+    "tags": {
+      "pinned": "已固定",
+      "closeTab": "关闭 tab",
+      "empty": "无打开的 tab",
+      "menuAria": "操作菜单",
+      "persistOnTitle": "开启后刷新保留 tab 列表",
+      "persistOffTitle": "关闭后刷新不再保留 tab 列表",
+      "close": "关闭",
+      "closeOthers": "关闭其他",
+      "closeLeft": "关闭左侧",
+      "closeRight": "关闭右侧",
+      "rename": "重命名…",
+      "renameTab": "重命名 tab",
+      "newTitlePlaceholder": "新标题",
+      "pin": "固定",
+      "unpin": "取消固定",
+      "closeAll": "关闭全部",
+      "ok": "确定"
+    },
+    "gauge": {
+      "load": "负载",
+      "loadDetail": "{v} / {cores}核",
+      "cpuDetail": "共 {cores} 核",
+      "mem": "内存",
+      "disk": "磁盘",
+      "unavailable": "不可用",
+      "segTip": "任务「{label}」· {metric} {v}% (全机口径)",
+      "offHead": "后台断开 (数据已停更) · ",
+      "triggerTip": "主机: 负载 {load}% · CPU {cpu}% · 内存 {mem}% · 磁盘 {disk} (点击看宝塔式四环)",
+      "quadTip": "{label} {pct}% · {detail} (点击看明细)",
+      "metrics": "指标",
+      "clickHide": "点击隐藏",
+      "clickShow": "点击显示",
+      "form": "顶栏形态",
+      "formSingle": "单环",
+      "formQuad": "四环",
+      "formBars": "横条",
+      "ringText": "环内",
+      "ringNone": "无数字",
+      "ringNum": "仅数字",
+      "ringPct": "数字+%",
+      "ringBar": "进度条"
+    }
+  }
+}

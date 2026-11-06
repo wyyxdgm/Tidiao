@@ -16,6 +16,7 @@
      并把"用户上传了以下文件"段落塞进 prompt, agent 首条消息能看到.
    - 提交后 emit('forked', newTaskId) 让父级跳转到新 task. */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Modal from '@/components/Modal.vue';
 import Button from '@/components/Button.vue';
 import Select from '@/components/Select.vue';
@@ -46,12 +47,13 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 
-const AUTO_APPROVE_OPTIONS = [
-  { value: 'inherit', label: '继承父 task' },
-  { value: 'on', label: '自动通过（不审核）' },
-  { value: 'off', label: '需要逐个审核' },
-];
+const AUTO_APPROVE_OPTIONS = computed(() => [
+  { value: 'inherit', label: t('tasks.fork.inherit') },
+  { value: 'on', label: t('common.toolReviewOn') },
+  { value: 'off', label: t('common.toolReviewOff') },
+]);
 
 /* R55.6 (B249) — 附件 staging. 与聊天输入框相同的"选完先缓存, 提交时再上传"
    模式. 单文件 ≤ 10MB (后端 /api/tasks/[id]/fork 也按这个限制截断, 与 master
@@ -67,7 +69,7 @@ function pickFiles(fileList: FileList | null): void {
     const f = fileList.item(i);
     if (!f) continue;
     if (f.size > MAX_FILE_SIZE) {
-      toast.warn(`「${f.name}」超过 10MB, 已跳过`);
+      toast.warn(t('tasks.fork.fileTooLarge', { name: f.name }));
       continue;
     }
     next.push(f);
@@ -141,7 +143,7 @@ const canSubmit = computed<boolean>(
 
 async function submit(): Promise<void> {
   if (!canSubmit.value) {
-    submitError.value = sessionHead.value ? '请填写新任务标题' : '请先从 transcript 选择一条消息';
+    submitError.value = sessionHead.value ? t('tasks.fork.errTitleRequired') : t('tasks.fork.errPickMessage');
     return;
   }
   submitting.value = true;
@@ -164,12 +166,12 @@ async function submit(): Promise<void> {
     const attachCount = res.attachments?.length ?? 0;
     toast.success(
       attachCount > 0
-        ? `已 fork 新 task #${res.new_task_id.slice(0, 8)} (+${attachCount} 附件)`
-        : `已 fork 新 task #${res.new_task_id.slice(0, 8)}`,
+        ? t('tasks.fork.forkedWithAttachments', { id: res.new_task_id.slice(0, 8), n: attachCount })
+        : t('tasks.fork.forked', { id: res.new_task_id.slice(0, 8) }),
     );
     emit('forked', res.new_task_id);
   } catch (e) {
-    submitError.value = isHttpError(e) ? e.message : (e instanceof Error ? e.message : 'fork 失败');
+    submitError.value = isHttpError(e) ? e.message : (e instanceof Error ? e.message : t('tasks.fork.failed'));
   } finally {
     submitting.value = false;
   }
@@ -184,67 +186,65 @@ function onClose(): void {
 <template>
   <Modal
     :model-value="true"
-    :title="sessionHead ? '📋 从当前会话 Fork' : '🔀 从消息处 Fork'"
+    :title="sessionHead ? t('tasks.fork.titleSession') : t('tasks.fork.titleMessage')"
     size="md"
     @close="onClose"
   >
     <div class="fork-form">
       <p class="hint">
         <template v-if="sessionHead">
-          从当前 session 末尾 fork，新任务继承完整 session 历史 + 上下文。
-          未填字段 = 沿用父 task 当前值。
+          {{ t('tasks.fork.hintSession') }}
         </template>
         <template v-else>
-          从 transcript 中某条消息处 fork，新 task 继承到此为止的历史。
-          未填字段 = 沿用父 task 当前值。
+          {{ t('tasks.fork.hintMessage') }}
         </template>
       </p>
 
       <label v-if="!sessionHead" class="field">
-        <span class="lbl">Fork 起点消息</span>
-        <Input :model-value="upToMessageId" placeholder="(由 transcript hover ⑂ 按钮填入)" readonly />
+        <span class="lbl">{{ t('tasks.fork.startMessage') }}</span>
+        <Input :model-value="upToMessageId" :placeholder="t('tasks.fork.startMessagePlaceholder')" readonly />
       </label>
 
       <label class="field">
-        <span class="lbl">新任务标题</span>
-        <Input v-model="title" placeholder="新 fork 任务标题" />
+        <span class="lbl">{{ t('tasks.fork.newTitle') }}</span>
+        <Input v-model="title" :placeholder="t('tasks.fork.newTitlePlaceholder')" />
       </label>
 
       <label class="field">
-        <span class="lbl">新 prompt (可选)</span>
+        <span class="lbl">{{ t('tasks.fork.newPrompt') }}</span>
         <textarea
           v-model="prompt"
           class="ta"
           rows="3"
-          placeholder="留空 = 沿用父 task prompt"
+          :placeholder="t('tasks.fork.newPromptPlaceholder')"
         />
       </label>
 
       <div class="grid-2">
         <label class="field">
-          <span class="lbl">新 cwd (可选)</span>
-          <Input v-model="newCwd" placeholder="留空 = 自动隔离" />
+          <span class="lbl">{{ t('tasks.fork.newCwd') }}</span>
+          <Input v-model="newCwd" :placeholder="t('tasks.fork.newCwdPlaceholder')" />
         </label>
         <label class="field">
-          <span class="lbl">最大轮次 (可选)</span>
+          <span class="lbl">{{ t('tasks.fork.maxTurns') }}</span>
           <Input
             v-model="maxTurns"
             type="number"
             :min="1"
             :max="1000"
-            :placeholder="parentMaxTurns ? `留空保持 ${parentMaxTurns}` : '留空保持当前设置'"
+            :placeholder="parentMaxTurns ? t('tasks.fork.maxTurnsKeepN', { n: parentMaxTurns }) : t('tasks.fork.maxTurnsKeep')"
           />
         </label>
       </div>
 
       <label class="field">
-        <span class="lbl">工具审核</span>
+        <span class="lbl">{{ t('tasks.resume.toolReviewLabel') }}</span>
         <Select v-model="autoApprove" :options="AUTO_APPROVE_OPTIONS" />
       </label>
 
       <label class="field inline-field">
         <Checkbox v-model="compactFirst" />
-        <span>压缩后继续（context 占用过高时推荐）</span>
+        <span>{{ t('tasks.fork.compactFirst') }}</span>
       </label>
 
       <!-- R55.6 (B249) — 附件 staging. 与 master task-detail-client.tsx:3614-3651 同款.
@@ -253,12 +253,12 @@ function onClose(): void {
            了以下文件」段落, agent 首条消息就能看到绝对路径 + media_type + size. -->
       <div class="field">
         <div class="attach-head">
-          <span class="lbl">附件 (可选, 单文件 ≤ 10MB)</span>
+          <span class="lbl">{{ t('tasks.fork.attachments') }}</span>
           <button
             type="button"
             class="attach-add"
             @click="fileInputRef?.click()"
-          >📎 添加</button>
+          >📎 {{ t('common.add') }}</button>
           <input
             ref="fileInputRef"
             type="file"
@@ -280,7 +280,7 @@ function onClose(): void {
             <button
               type="button"
               class="attach-remove"
-              title="移除"
+              :title="t('tasks.fork.remove')"
               @click="removeFile(idx)"
             >×</button>
           </li>
@@ -291,9 +291,9 @@ function onClose(): void {
     </div>
 
     <template #footer>
-      <Button variant="ghost" :disabled="submitting" @click="onClose">取消</Button>
+      <Button variant="ghost" :disabled="submitting" @click="onClose">{{ t('common.cancel') }}</Button>
       <Button variant="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">
-        Fork 新任务
+        {{ t('tasks.fork.submit') }}
       </Button>
     </template>
   </Modal>

@@ -9,6 +9,7 @@
    - retrying=true 时按钮 disabled + 显示 R11 Spinner (lg 档) —— 父组件
      触发重试后异步置 true, 完成后置 false. */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Loading from './Loading.vue';
 
 /* ------------------------------------------------------------------ */
@@ -39,9 +40,13 @@ const props = withDefaults(defineProps<Props>(), {
   variant: 'error',
   showRetry: true,
   retrying: false,
-  retryLabel: '重试',
+  retryLabel: undefined,
   size: 'md',
 });
+
+// i18n: retryLabel 未传时兜底走当前语言 (调用方传入值优先, 向后兼容).
+const { t } = useI18n();
+const retryText = computed(() => props.retryLabel ?? t('common.retry'));
 
 const emit = defineEmits<{
   (e: 'retry'): void;
@@ -121,7 +126,7 @@ function onRetry(): void {
         @click="onRetry"
       >
         <Loading v-if="retrying" size="sm" color="currentColor" />
-        <span>{{ retrying ? '重试中…' : retryLabel }}</span>
+        <span>{{ retrying ? t('common.retrying') : retryText }}</span>
       </button>
       <slot />
     </div>

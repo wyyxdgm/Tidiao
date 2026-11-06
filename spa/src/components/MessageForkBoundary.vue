@@ -7,6 +7,7 @@
    - 仅 client-side 渲染, window 安全.
    - copyToClipboard 走 navigator.clipboard, 失败静默. */
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 interface Props {
   parentTask: {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 const copied = ref<boolean>(false);
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,12 +45,12 @@ async function copyLink(): Promise<void> {
       <div class="mfb-line" />
       <div class="mfb-pill">
         <span>🔀</span>
-        <span>Fork 起点 — 以下为本会话内容</span>
+        <span>{{ t('tasks.forkBoundary.startPill') }}</span>
       </div>
       <div class="mfb-line" />
     </div>
     <div class="mfb-footer">
-      <span>上方继承自</span>
+      <span>{{ t('tasks.forkBoundary.inheritedFrom') }}</span>
       <a class="mfb-link" :href="`/#/tasks/${parentTask.id}`" :title="parentTask.title">
         {{ parentTask.title }}
       </a>
@@ -58,7 +60,7 @@ async function copyLink(): Promise<void> {
       <button
         type="button"
         class="mfb-copy"
-        :title="copied ? '已复制' : '复制任务链接'"
+        :title="copied ? t('common.copied') : t('tasks.forkBoundary.copyTitle')"
         @click="copyLink"
       >
         <svg

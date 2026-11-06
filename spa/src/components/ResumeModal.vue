@@ -15,6 +15,7 @@
    - auto_approve 初始 = task.auto_approve ? 'on' : 'off' (master 同款).
    - maxTurns 初始 = 空字符串 (master 同款, placeholder 显示当前值). */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Modal from '@/components/Modal.vue';
 import Button from '@/components/Button.vue';
 import Select from '@/components/Select.vue';
@@ -39,11 +40,12 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 
-const AUTO_APPROVE_OPTIONS = [
-  { value: 'off', label: '需要逐个审核' },
-  { value: 'on', label: '自动通过（不审核）' },
-];
+const AUTO_APPROVE_OPTIONS = computed(() => [
+  { value: 'off', label: t('common.toolReviewOff') },
+  { value: 'on', label: t('common.toolReviewOn') },
+]);
 
 const autoApprove = ref<'on' | 'off'>(
   props.currentAutoApprove === 1 ? 'on' : 'off',
@@ -54,8 +56,8 @@ const submitError = ref<string | null>(null);
 
 const maxTurnsPlaceholder = computed<string>(() => {
   return props.currentMaxTurns
-    ? `留空保持当前设置（${props.currentMaxTurns}）`
-    : '留空保持当前设置';
+    ? t('tasks.resume.maxTurnsKeepN', { n: props.currentMaxTurns })
+    : t('tasks.resume.maxTurnsKeep');
 });
 
 async function submit(): Promise<void> {
@@ -77,14 +79,14 @@ async function submit(): Promise<void> {
 
     // 2. POST resume.
     const res = await resumeTask(props.taskId);
-    toast.success(`已恢复执行 (${res.status})`);
+    toast.success(t('tasks.resume.resumedToast', { status: res.status }));
     emit('resumed', res.status);
   } catch (e) {
     submitError.value = isHttpError(e)
       ? e.message
       : e instanceof Error
         ? e.message
-        : '恢复失败';
+        : t('tasks.resume.resumeFailed');
   } finally {
     submitting.value = false;
   }
@@ -97,19 +99,19 @@ function onClose(): void {
 </script>
 
 <template>
-  <Modal :model-value="true" title="▶ 恢复执行" size="md" @close="onClose">
+  <Modal :model-value="true" :title="t('tasks.resume.title')" size="md" @close="onClose">
     <div class="resume-form">
       <p class="hint">
-        恢复前可调整工具审核策略与最大轮次，恢复后对新 session 生效。
+        {{ t('tasks.resume.hint') }}
       </p>
 
       <label class="field">
-        <span class="lbl">工具审核</span>
+        <span class="lbl">{{ t('tasks.resume.toolReviewLabel') }}</span>
         <Select v-model="autoApprove" :options="AUTO_APPROVE_OPTIONS" />
       </label>
 
       <label class="field">
-        <span class="lbl">最大轮次（可选）</span>
+        <span class="lbl">{{ t('tasks.resume.maxTurnsLabel') }}</span>
         <Input
           v-model="maxTurns"
           type="number"
@@ -122,9 +124,9 @@ function onClose(): void {
     </div>
 
     <template #footer>
-      <Button variant="ghost" :disabled="submitting" @click="onClose">取消</Button>
+      <Button variant="ghost" :disabled="submitting" @click="onClose">{{ t('common.cancel') }}</Button>
       <Button variant="primary" :loading="submitting" @click="submit">
-        {{ submitting ? '恢复中…' : '确认恢复' }}
+        {{ submitting ? t('tasks.resume.resuming') : t('tasks.resume.confirmResume') }}
       </Button>
     </template>
   </Modal>

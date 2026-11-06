@@ -1,0 +1,64 @@
+{
+  "components": {
+    "breath": {
+      "ok": "Backend healthy · {t}",
+      "down": "Backend unavailable · {t}",
+      "unknown": "Probing backend status…"
+    },
+    "pagination": {
+      "navAria": "Pagination",
+      "total": "Total ",
+      "totalUnit": "",
+      "perPage": "Per page",
+      "perPageAria": "Items per page",
+      "first": "First page",
+      "prev": "Previous page",
+      "next": "Next page",
+      "last": "Last page",
+      "jumpAria": "Jump to page"
+    },
+    "tags": {
+      "pinned": "Pinned",
+      "closeTab": "Close tab",
+      "empty": "No open tabs",
+      "menuAria": "Tab actions",
+      "persistOnTitle": "Keep tab list across refresh",
+      "persistOffTitle": "Tab list will not be kept across refresh",
+      "close": "Close",
+      "closeOthers": "Close others",
+      "closeLeft": "Close left",
+      "closeRight": "Close right",
+      "rename": "Rename…",
+      "renameTab": "Rename tab",
+      "newTitlePlaceholder": "New title",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "closeAll": "Close all",
+      "ok": "OK"
+    },
+    "gauge": {
+      "load": "Load",
+      "loadDetail": "{v} / {cores} cores",
+      "cpuDetail": "{cores} cores total",
+      "mem": "Memory",
+      "disk": "Disk",
+      "unavailable": "Unavailable",
+      "segTip": "Task \"{label}\" · {metric} {v}% (host-wide)",
+      "offHead": "Backend disconnected (data stale) · ",
+      "triggerTip": "Host: load {load}% · CPU {cpu}% · memory {mem}% · disk {disk} (click for the four-ring panel)",
+      "quadTip": "{label} {pct}% · {detail} (click for details)",
+      "metrics": "Metrics",
+      "clickHide": "Click to hide",
+      "clickShow": "Click to show",
+      "form": "Header form",
+      "formSingle": "Single",
+      "formQuad": "Four rings",
+      "formBars": "Bars",
+      "ringText": "Ring text",
+      "ringNone": "None",
+      "ringNum": "Number only",
+      "ringPct": "Number + %",
+      "ringBar": "Progress bar"
+    }
+  }
+}

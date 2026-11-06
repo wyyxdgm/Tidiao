@@ -12,11 +12,13 @@
    - 视觉与 master 一致: slate chip (border + text-xs + rounded-full). */
 
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 interface Props {
   dispatchedByTaskId: string;
 }
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 const router = useRouter();
 const shortId = props.dispatchedByTaskId.slice(0, 8);
@@ -34,7 +36,7 @@ function go(e: MouseEvent | KeyboardEvent): void {
     role="link"
     tabindex="0"
     :data-href="target"
-    :title="`派发自 ${dispatchedByTaskId} (短id 复制可搜)`"
+    :title="t('tasks.comp.dispatchedFromTitle', { id: dispatchedByTaskId })"
     class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 hover:text-slate-900 cursor-pointer"
     @click="go"
     @keydown="

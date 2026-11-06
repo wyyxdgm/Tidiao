@@ -151,6 +151,62 @@
       "statusLabel": "状态: {status}",
       "depsLabel": "· 依赖 {n} 个上游 task"
     },
+    "agg": {
+      "taskCountTitle": "关联任务数",
+      "pctTitle": "完成 {pct}%",
+      "feedbackTitle": "最近反馈时间",
+      "noFeedback": "无反馈"
+    },
+    "attach": {
+      "deleteTitle": "删除附件",
+      "confirmMessage": "确认删除这个附件？文件本身也会一起删除。",
+      "deleting": "删除中…",
+      "deleted": "附件已删除",
+      "deleteFailedMsg": "删除失败: {msg}"
+    },
+    "stepper": {
+      "closedHint": "软删, 后续可改回其他状态",
+      "current": "当前:"
+    },
+    "flow": {
+      "changedToast": "状态已改为「{status}」",
+      "changeFailed": "改状态失败: {msg}",
+      "doneBlocked": "需要至少一个「实现/测试/部署」任务完成, 才能把需求点标为已完成。",
+      "doneBlockedTitle": "需要至少一个「实现/测试/部署」任务完成",
+      "pickTitle": "点击选择其他需求状态",
+      "updating": "更新中…",
+      "closedHint": "closed = 软删, 后续可改回",
+      "closeTitle": "关闭这个需求点？",
+      "closeMessage": "关闭后状态变为「{status}」，可随时改回。",
+      "closeConfirm": "确认关闭"
+    },
+    "newTask": {
+      "openBtn": "新建任务",
+      "title": "为这个需求点新建任务",
+      "labelTitle": "标题 *",
+      "placeholderTitle": "例: 修复登录页响应式",
+      "labelPrompt": "任务指令 *",
+      "placeholderPrompt": "实际传给 agent 的指令...",
+      "forestHint": "关联到这个需求点后, 后续可拉出\"任务森林\"视图 (含依赖关系).",
+      "labelType": "任务阶段 *",
+      "typeDesignHint": "设计/调研 — 完成不计入「可标完成」前置条件",
+      "typeDevHint": "实现/测试/部署 — 完成计入「可标完成」前置条件",
+      "labelStart": "启动时机",
+      "startNow": "立即启动 (创建后立刻进入调度队列)",
+      "startLater": "只创建待启动 (用户在任务页手动启动)",
+      "labelEffort": "推理强度",
+      "labelMaxTurns": "最大轮次",
+      "labelTools": "允许的工具",
+      "errTitleRequired": "标题必填",
+      "errPromptRequired": "任务指令必填",
+      "createdStarted": "任务已创建并启动: {title} ({status})",
+      "createdStartFailed": "任务已创建但启动失败: {msg} (去任务页手动启)",
+      "createdPending": "任务已创建 (留待启动): {title}",
+      "createFailed": "创建失败",
+      "createFailedMsg": "创建失败: {msg}",
+      "submitStart": "创建并启动",
+      "submitPending": "创建待启动"
+    },
     "new": {
       "backLink": "← 需求点列表",
       "title": "新建需求点",

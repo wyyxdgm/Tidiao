@@ -10,6 +10,7 @@
        场景罕见且一旦出现即稳定, 不构成抖动源. -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { TaskResourceSample } from '@/composables/useTaskResources';
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), { warn: false });
 
+const { t } = useI18n();
+
 const visible = computed(() => !!props.sample);
 const cpu = computed(() => props.sample?.cpuPercent ?? 0);
 const mem = computed(() => props.sample?.memRssMB ?? 0);
@@ -29,10 +32,10 @@ const title = computed(() => {
   if (!props.sample) return '';
   const s = props.sample;
   return [
-    `进程数 ${s.pids.length} (pid ${s.pids.slice(0, 5).join(',')}${s.pids.length > 5 ? '…' : ''})`,
-    `CPU ${s.cpuPercent}% (单核口径, 全机口径 ${s.hostCpuPercent}%)`,
-    `内存 ${s.memRssMB}MB (占全机 ${s.memPercent}%)`,
-    `采样 ${new Date(s.sampledAt).toLocaleTimeString()}`,
+    t('tasks.resource.pidsLine', { n: s.pids.length, list: s.pids.slice(0, 5).join(',') }),
+    t('tasks.resource.cpuLine', { cpu: s.cpuPercent, host: s.hostCpuPercent }),
+    t('tasks.resource.memLine', { mb: s.memRssMB, pct: s.memPercent }),
+    t('tasks.resource.sampledLine', { t: new Date(s.sampledAt).toLocaleTimeString() }),
   ].join('\n');
 });
 

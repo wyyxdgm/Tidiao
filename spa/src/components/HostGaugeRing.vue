@@ -20,10 +20,13 @@
    (对齐 AccountSwitcher dropdown 模式); 磁盘 statfs 不可用 → null →
    该项灰显 '--', 不报错. */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { HostResourceSummary } from '@/composables/useTaskResources';
 import { taskResources, taskResourceTitles } from '@/composables/useTaskResources';
 import { backendHealthy } from '@/composables/useBackendHealth';
 import { buildTaskSegments, segDash, type TaskSeg } from '@/lib/host-task-segments';
+
+const { t } = useI18n();
 
 const props = defineProps<{ host: HostResourceSummary }>();
 
@@ -130,21 +133,21 @@ const gauges = computed(() => {
   const base = [
     {
       key: 'load',
-      label: '负载',
+      label: t('components.gauge.load'),
       pct: h.loadPercent,
       text: `${Math.round(h.loadPercent)}%`,
-      detail: `${load1.toFixed(2)} / ${h.cpuCores}核`,
+      detail: t('components.gauge.loadDetail', { v: load1.toFixed(2), cores: h.cpuCores }),
     },
     {
       key: 'cpu',
       label: 'CPU',
       pct: h.cpuUsedPercent,
       text: `${Math.round(h.cpuUsedPercent)}%`,
-      detail: `共 ${h.cpuCores} 核`,
+      detail: t('components.gauge.cpuDetail', { cores: h.cpuCores }),
     },
     {
       key: 'mem',
-      label: '内存',
+      label: t('components.gauge.mem'),
       pct: pctOf(h.memUsedMB, h.memTotalMB),
       text: `${Math.round(pctOf(h.memUsedMB, h.memTotalMB))}%`,
       detail: `${gb(h.memUsedMB)} / ${gb(h.memTotalMB)} GB`,
@@ -158,7 +161,7 @@ const gauges = computed(() => {
   if (h.disk) {
     rows.push({
       key: 'disk',
-      label: '磁盘',
+      label: t('components.gauge.disk'),
       pct: h.disk.usedPercent,
       text: `${Math.round(h.disk.usedPercent)}%`,
       detail: `${h.disk.usedGB} / ${h.disk.totalGB} GB`,
@@ -168,10 +171,10 @@ const gauges = computed(() => {
   } else {
     rows.push({
       key: 'disk',
-      label: '磁盘',
+      label: t('components.gauge.disk'),
       pct: 0,
       text: '--',
-      detail: '不可用',
+      detail: t('components.gauge.unavailable'),
       color: '#9ca3af',
       dash: dashFor(0, 32),
     });
@@ -208,21 +211,22 @@ function segsOf(key: string): TaskSeg[] {
 const worstKey = computed<string | null>(() => worstGauge.value?.key ?? null);
 /** 分段弧段 hover 文案. */
 function segTip(seg: TaskSeg, metricLabel: string): string {
-  return `任务「${seg.label}」· ${metricLabel} ${seg.value.toFixed(1)}% (全机口径)`;
+  return t('components.gauge.segTip', { label: seg.label, metric: metricLabel, v: seg.value.toFixed(1) });
 }
 /** 后台断开时环置灰 (damo 1011「把连接状态体现在圈圈上」): host 数据停更,
     灰环 = 死数据警示; 呼吸点保留管「连接」语义, 两者不混. */
 const off = computed(() => backendHealthy.value === false);
 
 const triggerTip = computed(() => {
-  const head = off.value ? '后台断开 (数据已停更) · ' : '';
+  const head = off.value ? t('components.gauge.offHead') : '';
   return (
     head +
-    `主机: 负载 ${Math.round(props.host.loadPercent)}% · CPU ${Math.round(
-      props.host.cpuUsedPercent,
-    )}% · 内存 ${Math.round(pctOf(props.host.memUsedMB, props.host.memTotalMB))}% · 磁盘 ${
-      props.host.disk ? `${Math.round(props.host.disk.usedPercent)}%` : '--'
-    } (点击看宝塔式四环)`
+    t('components.gauge.triggerTip', {
+      load: Math.round(props.host.loadPercent),
+      cpu: Math.round(props.host.cpuUsedPercent),
+      mem: Math.round(pctOf(props.host.memUsedMB, props.host.memTotalMB)),
+      disk: props.host.disk ? `${Math.round(props.host.disk.usedPercent)}%` : '--',
+    })
   );
 });
 
@@ -251,13 +255,13 @@ const ringSize = computed(() => RING_SIZE[effRingText.value]);
 
 /** 「环内」选项行: 单环形态 (含窄屏替身) 多「进度条」档 (damo 1026);
     四环态维持三档; 横条形态本身就是进度条, 该行不显示. */
-const RING_TEXT_OPTS: { v: RingText; label: string }[] = [
-  { v: 'none', label: '无数字' },
-  { v: 'num', label: '仅数字' },
-  { v: 'pct', label: '数字+%' },
-  { v: 'bar', label: '进度条' },
-];
-const ringTextOpts = computed(() => (showSingleForm.value ? RING_TEXT_OPTS : RING_TEXT_OPTS.slice(0, 3)));
+const RING_TEXT_OPTS = computed<{ v: RingText; label: string }[]>(() => [
+  { v: 'none', label: t('components.gauge.ringNone') },
+  { v: 'num', label: t('components.gauge.ringNum') },
+  { v: 'pct', label: t('components.gauge.ringPct') },
+  { v: 'bar', label: t('components.gauge.ringBar') },
+]);
+const ringTextOpts = computed(() => (showSingleForm.value ? RING_TEXT_OPTS.value : RING_TEXT_OPTS.value.slice(0, 3)));
 
 function recomputePosition(): void {
   const el = triggerRef.value;
@@ -296,7 +300,7 @@ function toggle(): void {
 
 /** 四环常驻模式的单环 tooltip. */
 function quadTip(g: { label: string; pct: number; detail: string }): string {
-  return `${g.label} ${Math.round(g.pct)}% · ${g.detail} (点击看明细)`;
+  return t('components.gauge.quadTip', { label: g.label, pct: Math.round(g.pct), detail: g.detail });
 }
 
 watch(open, (v) => {
@@ -370,7 +374,7 @@ onBeforeUnmount(() => {
           :stroke="seg.color"
           :stroke-dasharray="segDash(seg, 13).dasharray"
           :stroke-dashoffset="segDash(seg, 13).dashoffset"
-        ><title>{{ segTip(seg, worstKey === 'mem' ? '内存' : 'CPU') }}</title></circle>
+        ><title>{{ segTip(seg, worstKey === 'mem' ? t('components.gauge.mem') : 'CPU') }}</title></circle>
       </svg>
       <span v-if="effRingText !== 'none'" class="hgr-quad-num" :style="{ color: statusColor(worstPct) }">
         <template v-if="effRingText === 'pct'">{{ Math.round(worstPct) }}<span class="hgr-pct-sign">%</span></template>
@@ -457,41 +461,41 @@ onBeforeUnmount(() => {
         <!-- 顶栏形态 / 环内文字 / 显示指标 切换, localStorage 记忆.
              指标至少留 1 个 (toggleMetric 守卫), 防头部入口消失. -->
         <div class="hgr-foot">
-          <span class="hgr-foot-label">指标</span>
+          <span class="hgr-foot-label">{{ t('components.gauge.metrics') }}</span>
           <div class="hgr-chips">
             <button
               v-for="g in gauges"
               :key="g.key"
               type="button"
               :class="['hgr-chip', metricKeys.includes(g.key as MetricKey) && 'hgr-chip-on']"
-              :title="metricKeys.includes(g.key as MetricKey) ? '点击隐藏' : '点击显示'"
+              :title="metricKeys.includes(g.key as MetricKey) ? t('components.gauge.clickHide') : t('components.gauge.clickShow')"
               @click="toggleMetric(g.key as MetricKey)"
             >{{ g.label }}</button>
           </div>
         </div>
         <div class="hgr-foot">
-          <span class="hgr-foot-label">顶栏形态</span>
+          <span class="hgr-foot-label">{{ t('components.gauge.form') }}</span>
           <div class="hgr-seg">
             <button
               type="button"
               :class="['hgr-seg-btn', mode === 'single' && 'hgr-seg-active']"
               @click="mode = 'single'"
-            >单环</button>
+            >{{ t('components.gauge.formSingle') }}</button>
             <button
               type="button"
               :class="['hgr-seg-btn', mode === 'quad' && 'hgr-seg-active']"
               @click="mode = 'quad'"
-            >四环</button>
+            >{{ t('components.gauge.formQuad') }}</button>
             <button
               type="button"
               :class="['hgr-seg-btn', mode === 'bars' && 'hgr-seg-active']"
               @click="mode = 'bars'"
-            >横条</button>
+            >{{ t('components.gauge.formBars') }}</button>
           </div>
           <!-- 环内: 单环形态 (含窄屏替身) 四档 (多「进度条」), 四环态三档;
                横条形态不显示 (本身就是进度条). -->
           <template v-if="showSingleForm || (mode === 'quad' && !isNarrow)">
-            <span class="hgr-foot-label">环内</span>
+            <span class="hgr-foot-label">{{ t('components.gauge.ringText') }}</span>
             <div class="hgr-seg">
               <button
                 v-for="opt in ringTextOpts"

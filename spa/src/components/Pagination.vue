@@ -29,7 +29,10 @@
      仍 emit number 不破坏调用方契约.
    - 不引外部依赖, 原生 <button> + <input type=number>. */
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Select, { type SelectOption } from '@/components/Select.vue';
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -166,21 +169,21 @@ const pageSizeSelectValue = computed<string | null>({
     v-if="shouldRender"
     :class="['pagination', { 'pagination-disabled': disabled }, className]"
     role="navigation"
-    aria-label="分页"
+    :aria-label="t('components.pagination.navAria')"
   >
     <!-- 左: 总数 + 每页数量 -->
     <div class="pagination-left">
       <span class="pagination-total">
-        共 <span class="pagination-total-num">{{ total }}</span> 条
+        {{ t('components.pagination.total') }}<span class="pagination-total-num">{{ total }}</span>{{ t('components.pagination.totalUnit') }}
       </span>
       <div class="pagination-size">
-        <span>每页</span>
+        <span>{{ t('components.pagination.perPage') }}</span>
         <Select
           v-model="pageSizeSelectValue"
           :options="pageSizeSelectOptions"
           :disabled="disabled"
           class-name="pagination-size-select"
-          aria-label="每页条数"
+          :aria-label="t('components.pagination.perPageAria')"
         />
       </div>
     </div>
@@ -191,8 +194,8 @@ const pageSizeSelectValue = computed<string | null>({
         type="button"
         :disabled="disabled || page <= 1"
         class="pagination-btn"
-        title="首页"
-        aria-label="首页"
+        :title="t('components.pagination.first')"
+        :aria-label="t('components.pagination.first')"
         @click="goToPage(1)"
       >
         «
@@ -201,8 +204,8 @@ const pageSizeSelectValue = computed<string | null>({
         type="button"
         :disabled="disabled || page <= 1"
         class="pagination-btn"
-        title="上一页"
-        aria-label="上一页"
+        :title="t('components.pagination.prev')"
+        :aria-label="t('components.pagination.prev')"
         @click="goToPage(page - 1)"
       >
         ‹
@@ -215,7 +218,7 @@ const pageSizeSelectValue = computed<string | null>({
           :max="totalPages"
           :disabled="disabled"
           class="pagination-jump-input"
-          aria-label="跳转到指定页"
+          :aria-label="t('components.pagination.jumpAria')"
           @blur="commitPageInput"
           @keydown="(e) => {
             if (e.key === 'Enter') {
@@ -232,8 +235,8 @@ const pageSizeSelectValue = computed<string | null>({
         type="button"
         :disabled="disabled || page >= totalPages"
         class="pagination-btn"
-        title="下一页"
-        aria-label="下一页"
+        :title="t('components.pagination.next')"
+        :aria-label="t('components.pagination.next')"
         @click="goToPage(page + 1)"
       >
         ›
@@ -242,8 +245,8 @@ const pageSizeSelectValue = computed<string | null>({
         type="button"
         :disabled="disabled || page >= totalPages"
         class="pagination-btn"
-        title="末页"
-        aria-label="末页"
+        :title="t('components.pagination.last')"
+        :aria-label="t('components.pagination.last')"
         @click="goToPage(totalPages)"
       >
         »

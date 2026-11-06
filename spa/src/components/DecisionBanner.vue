@@ -10,6 +10,7 @@
      DecisionBanner, props / emit 形态保持 1:1 对等, 业务可两边互换.
    - pending 状态防止重复点击. 失败 toast.error, 成功 toast.success. */
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { post, HttpError } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 
@@ -37,6 +38,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const toast = useToast();
+const { t } = useI18n();
 const pending = ref<string | null>(null);
 const resolvedMap = ref<Record<string, { label: string; at: string }>>({});
 
@@ -51,18 +53,18 @@ async function handleResolve(decisionId: string, label: string, e: Event): Promi
       { decision_id: decisionId, selected_label: label },
     );
     if (!res || !res.ok) {
-      toast.error('决策失败: 服务端拒绝');
+      toast.error(t('tasks.decision.errRejected'));
       return;
     }
     const now = new Date().toISOString();
     resolvedMap.value = { ...resolvedMap.value, [decisionId]: { label, at: now } };
     if (props.onResolved) props.onResolved(decisionId, label);
-    toast.success(`已选 ${label}`);
+    toast.success(t('tasks.decision.selectedToast', { label }));
   } catch (err: unknown) {
     const msg = err instanceof HttpError
       ? (err.message || `HTTP ${err.status}`)
-      : err instanceof Error ? err.message : '未知错误';
-    toast.error(`决策失败: ${msg}`);
+      : err instanceof Error ? err.message : t('common.unknownError');
+    toast.error(t('tasks.decision.errFailed', { msg }));
   } finally {
     pending.value = null;
   }
@@ -85,7 +87,7 @@ async function handleResolve(decisionId: string, label: string, e: Event): Promi
       <div class="decision-head">
         <div class="decision-question">{{ d.question }}</div>
         <div v-if="decisions.length > 1" class="decision-progress">
-          {{ Object.keys(resolvedMap).length }}/{{ decisions.length }} 已选
+          {{ t('tasks.decision.progress', { done: Object.keys(resolvedMap).length, total: decisions.length }) }}
         </div>
       </div>
       <div class="decision-options">
@@ -110,18 +112,18 @@ async function handleResolve(decisionId: string, label: string, e: Event): Promi
           <span
             v-if="d.recommended === opt.label && resolvedMap[d.decisionId]?.label !== opt.label"
             class="decision-tag"
-          >(推荐)</span>
+          >{{ t('tasks.decision.recommended') }}</span>
           <span
             v-if="resolvedMap[d.decisionId]?.label === opt.label"
             class="decision-tag"
-          >已选</span>
+          >{{ t('tasks.decision.resolved') }}</span>
         </button>
       </div>
       <div
         v-if="d.recommendedReason && !resolvedMap[d.decisionId]"
         class="decision-reason"
       >
-        推荐理由: {{ d.recommendedReason }}
+        {{ t('tasks.decision.reason') }}{{ d.recommendedReason }}
       </div>
     </div>
   </div>

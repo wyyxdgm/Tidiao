@@ -10,6 +10,7 @@
    - prefers-reduced-motion 时呼吸动画降级为静态点 (可访问性).
    - healthy=null (尚未探测) 显示灰色, 探测一次后 (≤5s) 即有真实状态. */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   backendHealthy,
   lastCheckedAt,
@@ -17,6 +18,8 @@ import {
 } from '@/composables/useBackendHealth';
 
 startBackendHealthProbe();
+
+const { t } = useI18n();
 
 const stateClass = computed(() =>
   backendHealthy.value === false
@@ -28,14 +31,12 @@ const stateClass = computed(() =>
 
 const title = computed(() => {
   if (backendHealthy.value === true) {
-    const t = lastCheckedAt.value?.toLocaleTimeString() ?? '';
-    return `后台正常 · ${t}`;
+    return t('components.breath.ok', { t: lastCheckedAt.value?.toLocaleTimeString() ?? '' });
   }
   if (backendHealthy.value === false) {
-    const t = lastCheckedAt.value?.toLocaleTimeString() ?? '';
-    return `后台不可用 · ${t}`;
+    return t('components.breath.down', { t: lastCheckedAt.value?.toLocaleTimeString() ?? '' });
   }
-  return '后台状态探测中…';
+  return t('components.breath.unknown');
 });
 </script>
 

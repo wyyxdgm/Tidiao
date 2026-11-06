@@ -7,6 +7,7 @@
    - dialog 加 tabindex=-1 接收焦点 (键盘 a11y 基础), 但不做完整 focus trap
      —— R5 范围 = "基础对话框", 后续若要嵌套表单再加 trap. */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -30,6 +31,8 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'md',
   closable: true,
 });
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void;
@@ -154,7 +157,7 @@ onBeforeUnmount(() => {
               v-if="closable"
               type="button"
               class="modal-close"
-              aria-label="关闭"
+              :aria-label="t('common.close')"
               @click="close"
             >×</button>
           </header>

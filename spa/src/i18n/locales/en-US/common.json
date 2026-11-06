@@ -28,6 +28,23 @@
     "justNow": "just now",
     "minutesAgo": "{n} min ago",
     "hoursAgo": "{n} hr ago",
-    "daysAgo": "{n} days ago"
+    "daysAgo": "{n} days ago",
+    "retry": "Retry",
+    "retrying": "Retrying…",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "delete": "Delete",
+    "deleted": "Deleted",
+    "edit": "Edit",
+    "loading": "Loading…",
+    "create": "Create",
+    "creating": "Creating…",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "unknownError": "Unknown error",
+    "add": "Add",
+    "toolReviewOff": "Require per-call approval",
+    "toolReviewOn": "Auto-approve (no review)"
   }
 }
