@@ -45,6 +45,9 @@
     "unknownError": "Unknown error",
     "add": "Add",
     "toolReviewOff": "Require per-call approval",
-    "toolReviewOn": "Auto-approve (no review)"
+    "toolReviewOn": "Auto-approve (no review)",
+    "uncategorizedProject": "Uncategorized",
+    "errTimeout30s": "Request timed out (30s) — network or service not responding. You can retry.",
+    "backgroundSyncFailed": "Background sync failed"
   }
 }

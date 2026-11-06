@@ -1,3 +1,4 @@
+import { i18n } from '@/i18n';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { listProjects, listVersions, updateProject, type Project, type Version } from '@/api/projects';
@@ -22,7 +23,7 @@ export const useProjectsStore = defineStore('projects', () => {
       const resp = await listProjects(sort);
       projects.value = resp.projects;
     } catch (e) {
-      error.value = (e as { error?: string }).error || '加载项目失败';
+      error.value = (e as { error?: string }).error || i18n.global.t('projects.errors.loadProjects');
     } finally {
       loading.value = false;
     }
@@ -48,7 +49,7 @@ export const useProjectsStore = defineStore('projects', () => {
         [projectId]: resp.versions,
       };
     } catch (e) {
-      error.value = (e as { error?: string }).error || '加载版本失败';
+      error.value = (e as { error?: string }).error || i18n.global.t('projects.errors.loadVersions');
     }
   }
 
@@ -67,7 +68,7 @@ export const useProjectsStore = defineStore('projects', () => {
       }
       versionsByProject.value = grouped;
     } catch (e) {
-      error.value = (e as { error?: string }).error || '加载版本失败';
+      error.value = (e as { error?: string }).error || i18n.global.t('projects.errors.loadVersions');
     }
   }
 
@@ -169,7 +170,7 @@ export const useProjectsStore = defineStore('projects', () => {
     } catch (e) {
       projects.value = prev;
       throw new Error(
-        (e as { error?: string }).error || '重命名失败',
+        (e as { error?: string }).error || i18n.global.t('projects.errors.renameFailed'),
       );
     }
   }

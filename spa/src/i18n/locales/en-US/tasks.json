@@ -250,7 +250,8 @@
         "info": "Info",
         "waitingReply": "Awaiting reply",
         "suggestion": "Has suggestion",
-        "stuck": "Stuck"
+        "stuck": "Stuck",
+        "default": "Awaiting decision"
       },
       "status": {
         "pending": "Pending",

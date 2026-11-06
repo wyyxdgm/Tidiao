@@ -5,6 +5,7 @@
 //   导致相邻两拍颜色互换, 视觉闪烁).
 // - 超过 MAX 段合并为一枚中性色「其他 N 个」段, 防小环上颜色数爆炸.
 // - value ≤ 0 的任务跳过 (画了也看不见); 累积超过 100 停止 (clamp).
+import { i18n } from '@/i18n';
 export interface TaskResourceLike {
   pids: number[];
   hostCpuPercent: number;
@@ -62,7 +63,7 @@ export function buildTaskSegments(
   if (overflowCount > 0) {
     segs.push({
       id: '__overflow__',
-      label: `其他 ${overflowCount} 个`,
+      label: i18n.global.t('misc.hostTask.overflow', { n: overflowCount }),
       value: Math.min(overflowValue, 100 - acc),
       start: acc,
       color: SEG_OVERFLOW_COLOR,

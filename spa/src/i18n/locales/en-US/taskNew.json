@@ -141,7 +141,8 @@
       "roundsN": "{n} turns",
       "detailInherit": "(inherit defaults)",
       "detailAutoApprove": "auto-approve",
-      "detailNeedReview": "review required"
+      "detailNeedReview": "review required",
+      "scopeOptGlobal": "Global (usable in any project)"
     }
   }
 }

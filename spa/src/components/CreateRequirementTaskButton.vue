@@ -72,6 +72,11 @@ const titleRef = ref<HTMLInputElement | null>(null);
 /*  派生                                                                */
 /* ------------------------------------------------------------------ */
 
+// i18n (W4.5b): TASK_TYPE_OPTIONS label 已改 locale key, 这里 computed 出 t() 后的选项.
+const taskTypeOptions = computed(() =>
+  TASK_TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) })),
+);
+
 const effortOptions: { value: string; label: string }[] = EFFORT_LEVELS.map(
   (e) => ({ value: e, label: e }),
 );
@@ -273,7 +278,7 @@ async function handleSubmit(e: Event): Promise<void> {
           </label>
           <Select
             :model-value="taskType"
-            :options="TASK_TYPE_OPTIONS"
+            :options="taskTypeOptions"
             @update:model-value="
               (v) => (taskType = (v ?? 'dev') as TaskType)
             "
@@ -344,7 +349,7 @@ async function handleSubmit(e: Event): Promise<void> {
               ]"
               @click="allowedTools = [...p.tools]"
             >
-              {{ p.label }}
+              {{ t(p.label) }}
             </button>
           </div>
           <div class="flex flex-wrap gap-2">

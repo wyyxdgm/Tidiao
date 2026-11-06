@@ -24,7 +24,7 @@ import Empty from '@/components/Empty.vue';
 import TaskResourceBadge from '@/components/TaskResourceBadge.vue';
 import type { TaskResourceSample } from '@/composables/useTaskResources';
 import {
-  STATUS_LABELS,
+  statusLabel as sharedStatusLabel,
   DISPLAY_TASK_STATUSES,
   type TaskStatus,
 } from '@/api/tasks';
@@ -82,13 +82,14 @@ const emit = defineEmits<{
 
 /* i18n (W3a): 用户可见字符串走 t('tasks.kanban.*'); 文案源在
    spa/src/i18n/locales/{zh-CN,en-US}/ 下 tasks 域文件 (W3 整合时落盘).
-   te() 兜底: locale 域文件未就绪 / 未知 status 时回落旧 STATUS_LABELS 或原始值. */
+   te() 兜底: locale 域文件未就绪 / 未知 status 时回落原值 (共享 statusLabel). */
 const { t, te } = useI18n();
 
-/** status 列名: 优先走 locale, miss 时回落 STATUS_LABELS (中文) / 原始 key. */
+/** status 列名: 优先走 locale, miss 时回落共享 statusLabel (原值兜底). */
 function statusLabel(s: TaskStatus): string {
   const k = `tasks.kanban.status.${s}`;
-  return te(k) ? t(k) : (STATUS_LABELS[s] || s);
+  // i18n (W4.5b): STATUS_LABELS 值已改 locale key, miss 回落共享 statusLabel (原值兜底).
+  return te(k) ? t(k) : sharedStatusLabel(s);
 }
 
 /* ------------------------------------------------------------------ */

@@ -14,6 +14,7 @@
 //   - check() 内部自己管 ETag 与 304; 这里只负责"什么时候调".
 
 import { computed, onBeforeUnmount, ref } from 'vue';
+import { i18n } from '@/i18n';
 
 /** 单个数据源的运行态 — 供页面渲染"数据新鲜度"提示 (上次同步 / 有新数据 / 出错). */
 export interface SourceState {
@@ -68,7 +69,7 @@ async function probe(src: BackgroundSource): Promise<boolean> {
     });
   } catch (e: unknown) {
     patchState(src.key, {
-      error: e instanceof Error ? e.message : '后台同步失败',
+      error: e instanceof Error ? e.message : i18n.global.t('common.backgroundSyncFailed'),
     });
   } finally {
     inflight.delete(src.key);

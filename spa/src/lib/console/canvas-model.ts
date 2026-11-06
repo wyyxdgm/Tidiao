@@ -11,7 +11,10 @@
    - bucketTask 的优先级: awaiting_owner_review > status 终态判定, 即
      reviewing/await_user 但同时标了 owner review 的任务归 "等我处理".
    - 时区: updatedAt 用 Date.parse, 非法/缺省值按 age=0 处理 (不抛错,
-     画布缺数据降级显示, 与 Requirements.vue 芯片静默兜底同款). */
+     画布缺数据降级显示, 与 Requirements.vue 芯片静默兜底同款).
+   - i18n (W4.5b): 用户可见 label (四象限名 / headline) 走 locale — 非 setup
+     环境用 i18n.global; 单测默认 locale zh-CN, zh 文案与原硬编码一致. */
+import { i18n } from '@/i18n';
 
 /** 画布四区 (F2): focus=近期聚焦 / waiting=等我处理 / queued=排队 / archive=归档. */
 export type CanvasZone = 'focus' | 'waiting' | 'queued' | 'archive';
@@ -19,11 +22,12 @@ export type CanvasZone = 'focus' | 'waiting' | 'queued' | 'archive';
 /** 四象限 key (F3): q1=紧急且重要 / q2=重要不紧急 / q3=紧急不重要 / q4=其他. */
 export type QuadrantKey = 'q1' | 'q2' | 'q3' | 'q4';
 
+/** i18n (W4.5b): 值为 locale key (misc.console.quadrant.*), 渲染走 t(). */
 export const QUADRANT_LABELS: Record<QuadrantKey, string> = {
-  q1: '立刻干',
-  q2: '排计划',
-  q3: '快速清',
-  q4: '少操心',
+  q1: 'misc.console.quadrant.q1',
+  q2: 'misc.console.quadrant.q2',
+  q3: 'misc.console.quadrant.q3',
+  q4: 'misc.console.quadrant.q4',
 };
 
 /** 活跃 task status (R177 分区依据; 终态 = completed/failed/rejected/cancelled). */
@@ -302,12 +306,13 @@ export function buildCanvasModel(
   };
 }
 
-/** 顶部一句话 (F5): ≤24 字动词短语; 全空 = 「全部清空, 喝口水」. */
+/** 顶部一句话 (F5): ≤24 字动词短语; 全空 = 「全部清空, 喝口水」.
+    i18n (W4.5b): 文案走 locale (zh 文案与原硬编码一致, 单测不破). */
 export function buildHeadline(stats: CanvasZoneStat): string {
   const parts: string[] = [];
-  if (stats.focus) parts.push(`${stats.focus} 个在跑`);
-  if (stats.waiting) parts.push(`${stats.waiting} 个等你`);
-  if (stats.queued) parts.push(`${stats.queued} 个排队`);
-  if (!parts.length) return '全部清空 · 喝口水';
+  if (stats.focus) parts.push(i18n.global.t('misc.console.headlineFocus', { n: stats.focus }));
+  if (stats.waiting) parts.push(i18n.global.t('misc.console.headlineWaiting', { n: stats.waiting }));
+  if (stats.queued) parts.push(i18n.global.t('misc.console.headlineQueued', { n: stats.queued }));
+  if (!parts.length) return i18n.global.t('misc.console.headlineClear');
   return parts.join(' · ');
 }

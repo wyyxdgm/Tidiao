@@ -14,6 +14,7 @@
 //   引入未使用导出. 本 helper 仅承担 R33 字面要求.
 
 import { get, post, patch } from './http';
+import { i18n } from '@/i18n';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -56,22 +57,29 @@ export interface UnassignedTask {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-/** 状态中文标签 — 与 master STATUS_LABELS 对齐.
-    rejected: 历史遗留终态（2026-09-15 决策废弃，读路径已映射 cancelled 返回）,
-    标签同步显示「已取消」— 曾误标「等待中」造成幽灵计数 (damo 2026-11-01 反馈). */
+/** 状态 → locale key (W4.5b: 原 zh 硬编码迁 i18n, 渲染层走 statusLabel()/t()).
+    key 复用 tasks.kanban.status.* (W3 已落盘). rejected: 历史遗留终态
+    （2026-09-15 决策废弃，读路径已映射 cancelled 返回）, 标签同步显示「已取消」
+    — 曾误标「等待中」造成幽灵计数 (damo 2026-11-01 反馈). */
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消',
-  cancelled: '已取消',
+  pending: 'tasks.kanban.status.pending',
+  queued: 'tasks.kanban.status.queued',
+  running: 'tasks.kanban.status.running',
+  paused: 'tasks.kanban.status.paused',
+  reviewing: 'tasks.kanban.status.reviewing',
+  verifying: 'tasks.kanban.status.verifying',
+  await_user: 'tasks.kanban.status.await_user',
+  completed: 'tasks.kanban.status.completed',
+  failed: 'tasks.kanban.status.failed',
+  rejected: 'tasks.kanban.status.rejected',
+  cancelled: 'tasks.kanban.status.cancelled',
 };
+
+/** 状态显示标签 (走 i18n; 非 setup 环境用 i18n.global) — 未知 status 兜底显示原始值. */
+export function statusLabel(status: string): string {
+  const key = STATUS_LABELS[status as TaskStatus];
+  return key ? i18n.global.t(key) : status;
+}
 
 /** 11 状态全集, 给 status 过滤 chip 用. 顺序与 BoardPage R14 ACTIVE/TERMINAL 划分一致. */
 export const ALL_TASK_STATUSES: TaskStatus[] = [

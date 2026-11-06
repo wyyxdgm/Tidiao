@@ -674,6 +674,11 @@
       "errConflictingItem": "{port} (project {project})",
       "errPortConflict": "Port conflict: {detail}",
       "errSave": "Failed to save"
+    },
+    "errors": {
+      "loadProjects": "Failed to load projects",
+      "loadVersions": "Failed to load versions",
+      "renameFailed": "Rename failed"
     }
   }
 }

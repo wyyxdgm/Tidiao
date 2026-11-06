@@ -17,7 +17,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { searchTasks, STATUS_LABELS, type TaskSearchHit, type TaskStatus } from '@/api/tasks';
+import { searchTasks, statusLabel, type TaskSearchHit, type TaskStatus } from '@/api/tasks';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <span class="hit-meta">
-            <span class="hit-status">{{ STATUS_LABELS[hit.status] ?? hit.status }}</span>
+            <span class="hit-status">{{ statusLabel(hit.status) }}</span>
             <span class="hit-id" :title="hit.id">{{ shortId(hit.id) }}</span>
           </span>
         </button>

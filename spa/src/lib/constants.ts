@@ -30,17 +30,19 @@ export interface ToolPreset {
   label: string;
   tools: string[];
 }
+// i18n (W4.5b): label 为 locale key (taskNew.preset_* 已有键), 渲染层 t() —
+//   TaskNew/SnapshotManager 早已按 key 自行 t(), CreateRequirementTaskButton W4.5b 跟进.
 export const TOOL_PRESETS: ToolPreset[] = [
-  { key: 'full', label: '全开', tools: [...AVAILABLE_TOOLS] },
-  { key: 'plan', label: '计划', tools: ['Read', 'Glob', 'Grep', 'Agent'] },
+  { key: 'full', label: 'taskNew.preset_full', tools: [...AVAILABLE_TOOLS] },
+  { key: 'plan', label: 'taskNew.preset_plan', tools: ['Read', 'Glob', 'Grep', 'Agent'] },
   {
     key: 'explore',
-    label: '探索',
+    label: 'taskNew.preset_explore',
     tools: ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Agent'],
   },
   {
     key: 'local',
-    label: '本地',
+    label: 'taskNew.preset_local',
     tools: [
       'Read',
       'Write',
@@ -61,9 +63,10 @@ export interface TaskTypeOption {
   value: TaskType;
   label: string;
 }
+// i18n (W4.5b): label 为 locale key (taskNew.type_* 已有键), 渲染层 t().
 export const TASK_TYPE_OPTIONS: TaskTypeOption[] = [
-  { value: 'design', label: '设计 / 调研' },
-  { value: 'dev', label: '实现 / 开发' },
-  { value: 'test', label: '测试' },
-  { value: 'deploy', label: '部署 / 上线' },
+  { value: 'design', label: 'taskNew.type_design' },
+  { value: 'dev', label: 'taskNew.type_dev' },
+  { value: 'test', label: 'taskNew.type_test' },
+  { value: 'deploy', label: 'taskNew.type_deploy' },
 ];

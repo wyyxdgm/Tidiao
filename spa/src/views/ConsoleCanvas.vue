@@ -42,9 +42,8 @@ import { useToast } from '@/composables/useToast';
 import {
   createTask,
   startTask,
+  statusLabel as sharedStatusLabel,
   unsetAwaitingReview,
-  STATUS_LABELS,
-  type TaskStatus,
 } from '@/api/tasks';
 import {
   listRequirements,
@@ -699,15 +698,16 @@ const quadrantGroups = computed(() => {
   const pick = (q: QuadrantNode['quadrant']) =>
     nodes.filter((n) => n.quadrant === q).slice(0, 12);
   return [
-    { key: 'q2', label: QUADRANT_LABELS.q2, hint: t('misc.console.q2Hint'), nodes: pick('q2') },
-    { key: 'q1', label: QUADRANT_LABELS.q1, hint: t('misc.console.q1Hint'), nodes: pick('q1') },
-    { key: 'q4', label: QUADRANT_LABELS.q4, hint: t('misc.console.q4Hint'), nodes: pick('q4') },
-    { key: 'q3', label: QUADRANT_LABELS.q3, hint: t('misc.console.q3Hint'), nodes: pick('q3') },
+    { key: 'q2', label: t(QUADRANT_LABELS.q2), hint: t('misc.console.q2Hint'), nodes: pick('q2') },
+    { key: 'q1', label: t(QUADRANT_LABELS.q1), hint: t('misc.console.q1Hint'), nodes: pick('q1') },
+    { key: 'q4', label: t(QUADRANT_LABELS.q4), hint: t('misc.console.q4Hint'), nodes: pick('q4') },
+    { key: 'q3', label: t(QUADRANT_LABELS.q3), hint: t('misc.console.q3Hint'), nodes: pick('q3') },
   ] as const;
 });
 
 function statusLabel(s: string): string {
-  return STATUS_LABELS[s as TaskStatus] ?? s;
+  // i18n (W4.5b): STATUS_LABELS 值已改 locale key, 走共享 statusLabel() (未知回落原值).
+  return sharedStatusLabel(s);
 }
 
 function taskStatusClass(s: string): string {

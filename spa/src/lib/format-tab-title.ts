@@ -4,7 +4,12 @@
  *
  *  入口只在路由组件 watch 里调 — 不写 localStorage, 不进 store,
  *  纯展示层格式化. applyTitle 内部已尊重 customTitle, 截断后的临时
- *  标题不会覆盖用户手动重命名. */
+ *  标题不会覆盖用户手动重命名.
+ *  i18n (W4.5b): fallback 文案走 locale (非 setup 环境用 i18n.global);
+ *  项目名先过 displayProjectName (「未分类」系统项目显示映射, W4.5c). */
+import { i18n } from '@/i18n';
+import { displayProjectName } from '@/lib/project-display';
+
 export function formatTabPart(
   name: string | null | undefined,
   max: number,
@@ -15,14 +20,15 @@ export function formatTabPart(
 }
 
 export function formatProjectTitle(name: string | null | undefined): string {
-  return formatTabPart(name, 8, '未命名项目');
+  return formatTabPart(displayProjectName(name), 8, i18n.global.t('misc.tab.untitledProject'));
 }
 
 export function formatProjectItemTitle(
   projectName: string | null | undefined,
   itemName: string | null | undefined,
 ): string {
-  return `${formatTabPart(projectName, 8, '未分类')}-${formatTabPart(itemName, 12, '未命名')}`;
+  const p = displayProjectName(projectName);
+  return `${formatTabPart(p, 8, i18n.global.t('common.uncategorizedProject'))}-${formatTabPart(itemName, 12, i18n.global.t('misc.tab.untitled'))}`;
 }
 
 /** 项目前缀 + 静态标签 (例如「未挂版本任务」/「项目看板」/「Wiki」).

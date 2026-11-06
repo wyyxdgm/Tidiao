@@ -1,6 +1,7 @@
 // digest-model 单测 — 分组 / 动作判定 / 罐头消息.
 
 import { describe, expect, it } from "vitest";
+import { i18n } from "@/i18n";
 import {
   CATEGORY_META,
   actionLabel,
@@ -28,7 +29,8 @@ describe("groupDigestItems", () => {
     ]);
     expect(groups.map((g) => g.key)).toEqual(["fix", "iterate", "decision"]);
     expect(groups[0].items).toHaveLength(2);
-    expect(groups[0].label).toBe(CATEGORY_META.fix.label);
+    // i18n (W4.5b): label 走 locale (默认 zh-CN) — 对齐 t(CATEGORY_META.fix.labelKey).
+    expect(groups[0].label).toBe(i18n.global.t(CATEGORY_META.fix.labelKey));
   });
 
   it("组内 high 紧急度排前; 空输入 → 空组", () => {

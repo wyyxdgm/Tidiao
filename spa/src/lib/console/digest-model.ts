@@ -3,6 +3,7 @@
 // 分类/紧急度/建议/是否需拍板); 这里管分组渲染 + 每条目可用的快捷动作判定.
 // 动作本体 (approve / message) 在 ConsoleCanvas.vue, 与等我处理卡共用端点.
 
+import { i18n } from '@/i18n';
 export type DigestCategory =
   | 'fix'
   | 'design'
@@ -31,14 +32,15 @@ export interface DigestGroup {
   items: DigestItem[];
 }
 
-/** 类别元数据 — 顺序即面板分组渲染顺序. */
-export const CATEGORY_META: Record<DigestCategory, { label: string; icon: string }> = {
-  fix: { label: '要修的', icon: '🔧' },
-  design: { label: '设计规划', icon: '🧭' },
-  delivery: { label: '已交付', icon: '📦' },
-  iterate: { label: '功能迭代', icon: '✨' },
-  decision: { label: '等你拍板', icon: '⚖️' },
-  other: { label: '其他', icon: '•' },
+/** 类别元数据 — 顺序即面板分组渲染顺序.
+    i18n (W4.5b): label 为 locale key (misc.console.digest.*), groupDigestItems 出口走 t(). */
+export const CATEGORY_META: Record<DigestCategory, { labelKey: string; icon: string }> = {
+  fix: { labelKey: 'misc.console.digest.fix', icon: '🔧' },
+  design: { labelKey: 'misc.console.digest.design', icon: '🧭' },
+  delivery: { labelKey: 'misc.console.digest.delivery', icon: '📦' },
+  iterate: { labelKey: 'misc.console.digest.iterate', icon: '✨' },
+  decision: { labelKey: 'misc.console.digest.decision', icon: '⚖️' },
+  other: { labelKey: 'misc.console.digest.other', icon: '•' },
 };
 
 /** 高紧急度排前的组内排序权重. */
@@ -59,7 +61,7 @@ export function groupDigestItems(items: DigestItem[]): DigestGroup[] {
     if (!list?.length) continue;
     groups.push({
       key,
-      label: CATEGORY_META[key].label,
+      label: i18n.global.t(CATEGORY_META[key].labelKey),
       icon: CATEGORY_META[key].icon,
       items: [...list].sort(
         (a, b) => URGENCY_ORDER[a.urgency] - URGENCY_ORDER[b.urgency],
@@ -96,22 +98,25 @@ export function digestActionFor(item: DigestItem, t?: ActionTarget): DigestActio
   return 'reply';
 }
 
-export const AGREE_LABEL = '✓ 同意';
-export const APPROVE_LABEL = '✓ 验收';
-export const REPLY_LABEL = '✎ 回复';
+// i18n (W4.5b): 按钮文案走 locale (运行时求值, 语言切换跟新).
+export const AGREE_LABEL = 'misc.console.digest.agree';
+export const APPROVE_LABEL = 'misc.console.digest.approve';
+export const REPLY_LABEL = 'misc.console.digest.reply';
 
 export function actionLabel(a: DigestAction): string {
-  if (a === 'approve') return APPROVE_LABEL;
-  if (a === 'agree') return AGREE_LABEL;
+  if (a === 'approve') return i18n.global.t(APPROVE_LABEL);
+  if (a === 'agree') return i18n.global.t(AGREE_LABEL);
   if (a === 'none') return ''; // R204: 终态惰性, 不出按钮
-  return REPLY_LABEL;
+  return i18n.global.t(REPLY_LABEL);
 }
 
 // 功能: 一键同意的罐头消息 — 带上 AI 建议原文, agent 收到即按建议继续,
 // owner 不用打字. suggestion 为空时退化为纯同意.
 export function buildAgreeMessage(suggestion: string): string {
   const s = suggestion.trim();
-  return s ? `同意，按建议推进：${s}` : '同意，按你的建议继续推进。';
+  return s
+    ? i18n.global.t('misc.console.digest.agreeWithSuggestion', { s })
+    : i18n.global.t('misc.console.digest.agreePlain');
 }
 
 /** 紧急度 → 面板圆点样式类. */

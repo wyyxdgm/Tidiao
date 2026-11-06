@@ -5,9 +5,12 @@
 //   the original request. Refresh failure → throw HttpError(status:401) so
 //   the router guard (sessionState === 'no' branch) can redirect to /login.
 // - Returns parsed JSON or throws HttpError.
+// i18n (W4.5b): 前端自有兜底文案 (超时 message) 走 locale (非 setup 环境用
+//   i18n.global); 后端返回的 error 字段原样透传不翻.
 
 // 关注点: 当前 Next.js 后端（master 分支）未提供 /api/auth/refresh —— 此刻
 // 命中会 404, 401 仍按设计抛给上层。架构就位, 等后端补 endpoint 后无需改本文件。
+import { i18n } from '@/i18n';
 const REFRESH_PATH = '/api/auth/refresh';
 
 // 关注点: 模块级单例 —— 并发 401 共享同一个 refresh Promise, 避免雪崩。
@@ -171,7 +174,7 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       throw new HttpError({
         status: 0,
-        message: '请求超时 (30s)，网络或服务无响应，可重试',
+        message: i18n.global.t('common.errTimeout30s'),
       });
     }
     throw err;

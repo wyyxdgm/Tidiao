@@ -506,7 +506,25 @@
       "phCriteria": "如：2 周内 ≥3 真实询问",
       "labelDeadline": "验证窗口",
       "cancel": "取消",
-      "createBtn": "创建"
+      "createBtn": "创建",
+      "status": {
+        "germinating": "构思中",
+        "exploring": "探索中",
+        "decided": "已定案",
+        "shelved": "搁置",
+        "rejected": "已否定",
+        "landed": "已落地"
+      },
+      "nodeStatus": {
+        "planned": "计划中",
+        "dispatched": "待执行",
+        "running": "执行中",
+        "reviewing": "待审核",
+        "awaitingDecision": "等决策",
+        "blocked": "卡住",
+        "done": "完成",
+        "dropped": "放弃"
+      }
     },
     "console": {
       "tabTitle": "总控制台",
@@ -600,7 +618,42 @@
       "layerPending": "✦ 正在生成总结（首次约半分钟，之后秒开）…",
       "noDetails": "没有可用的细节总结",
       "openFullTask": "打开完整任务页 →",
-      "approving": "验收中…"
+      "approving": "验收中…",
+      "quadrant": {
+        "q1": "立刻干",
+        "q2": "排计划",
+        "q3": "快速清",
+        "q4": "少操心"
+      },
+      "headlineFocus": "{n} 个在跑",
+      "headlineWaiting": "{n} 个等你",
+      "headlineQueued": "{n} 个排队",
+      "headlineClear": "全部清空 · 喝口水",
+      "digest": {
+        "fix": "要修的",
+        "design": "设计规划",
+        "delivery": "已交付",
+        "iterate": "功能迭代",
+        "decision": "等你拍板",
+        "other": "其他",
+        "agree": "✓ 同意",
+        "approve": "✓ 验收",
+        "reply": "✎ 回复",
+        "agreeWithSuggestion": "同意，按建议推进：{s}",
+        "agreePlain": "同意，按你的建议继续推进。"
+      }
+    },
+    "models": {
+      "astronCode": "Astron-Code-Latest (讯飞)",
+      "suffixConfigured": "[已配置]",
+      "suffixUsed": "[历史]"
+    },
+    "tab": {
+      "untitledProject": "未命名项目",
+      "untitled": "未命名"
+    },
+    "hostTask": {
+      "overflow": "其他 {n} 个"
     }
   }
 }

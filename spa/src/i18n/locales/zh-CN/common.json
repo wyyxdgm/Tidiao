@@ -45,6 +45,9 @@
     "unknownError": "未知错误",
     "add": "添加",
     "toolReviewOff": "需要逐个审核",
-    "toolReviewOn": "自动通过（不审核）"
+    "toolReviewOn": "自动通过（不审核）",
+    "uncategorizedProject": "未分类",
+    "errTimeout30s": "请求超时 (30s)，网络或服务无响应，可重试",
+    "backgroundSyncFailed": "后台同步失败"
   }
 }

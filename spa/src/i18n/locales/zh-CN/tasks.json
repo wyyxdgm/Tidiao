@@ -250,7 +250,8 @@
         "info": "提示",
         "waitingReply": "等回复",
         "suggestion": "有建议",
-        "stuck": "卡住"
+        "stuck": "卡住",
+        "default": "等拍板"
       },
       "status": {
         "pending": "待执行",

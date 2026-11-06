@@ -32,6 +32,8 @@ import {
   addIdeaSignal,
   IDEA_STATUS_LABELS,
   NODE_STATUS_LABELS,
+  ideaStatusLabel,
+  nodeStatusLabel,
   ideaStatusColor,
   type IdeaWithCounts,
   type IdeaLink,
@@ -1049,7 +1051,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             @click="openDetail(idea.id)"
           >
             <span class="sl-title">{{ idea.title }}</span>
-            <span class="sl-meta">{{ IDEA_STATUS_LABELS[idea.status] }} · {{ t('misc.ideas.sphereTasks', { n: idea.task_count }) }}</span>
+            <span class="sl-meta">{{ ideaStatusLabel(idea.status) }} · {{ t('misc.ideas.sphereTasks', { n: idea.task_count }) }}</span>
           </div>
         </div>
         <!-- P3 自由摆: 列表浮卡 (拖头部移动, 位置持久化 dashboard_blocks) -->
@@ -1092,7 +1094,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             v-if="detail" :value="detail.idea.status"
             @change="setStatus(detail.idea, ($event.target as HTMLSelectElement).value as IdeaStatus)"
           >
-            <option v-for="(label, key) in IDEA_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+            <option v-for="(label, key) in IDEA_STATUS_LABELS" :key="key" :value="key">{{ t(label) }}</option>
           </select>
           <span v-if="detail?.roi" class="wb-roi">
             {{ t('misc.ideas.wbRoi', { cost: detail.roi.cost_usd.toFixed(2), n: detail.roi.task_count, pay: detail.roi.payment_total }) }}
@@ -1134,7 +1136,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
                   </div>
                   <div v-if="b.node.detail" class="dag-card-detail">{{ shortDetail(b.node.detail) }}</div>
                   <div class="dag-card-foot">
-                    <span class="dag-chip">{{ NODE_STATUS_LABELS[b.node.status] ?? b.node.status }}</span>
+                    <span class="dag-chip">{{ nodeStatusLabel(b.node.status) }}</span>
                     <span class="dag-deps">{{ b.node.depends_on.length ? t('misc.ideas.depsUp', { n: b.node.depends_on.length }) : t('misc.ideas.depsStart') }}</span>
                   </div>
                   <span
@@ -1182,7 +1184,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
               <button class="sm" @click="selectNode(selectedNode!)">✕</button>
             </div>
             <select :value="selectedNode.status" @change="setNodeStatus(selectedNode!, ($event.target as HTMLSelectElement).value)">
-              <option v-for="(label, key) in NODE_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+              <option v-for="(label, key) in NODE_STATUS_LABELS" :key="key" :value="key">{{ t(label) }}</option>
             </select>
             <div class="np-meta">{{ t('misc.ideas.upstreamLabel') }}</div>
             <div v-if="depTitles(selectedNode).length" class="np-deps">

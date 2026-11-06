@@ -141,7 +141,8 @@
       "roundsN": "{n} 轮",
       "detailInherit": "（继承默认）",
       "detailAutoApprove": "自动审批",
-      "detailNeedReview": "需审核"
+      "detailNeedReview": "需审核",
+      "scopeOptGlobal": "全局（任意项目可用）"
     }
   }
 }

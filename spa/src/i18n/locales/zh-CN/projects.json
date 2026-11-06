@@ -674,6 +674,11 @@
       "errConflictingItem": "{port} (项目 {project})",
       "errPortConflict": "端口冲突: {detail}",
       "errSave": "保存失败"
+    },
+    "errors": {
+      "loadProjects": "加载项目失败",
+      "loadVersions": "加载版本失败",
+      "renameFailed": "重命名失败"
     }
   }
 }

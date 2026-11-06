@@ -2,6 +2,7 @@
 // 画布 (IdeasView) + 详情抽屉 + 收益面板全部走这几个函数.
 
 import { get, post, patch, del } from './http';
+import { i18n } from '@/i18n';
 
 /** 构思状态 6 态意图层 — 与 master IDEA_STATUSES 对齐. */
 export const IDEA_STATUSES = [
@@ -9,25 +10,38 @@ export const IDEA_STATUSES = [
 ] as const;
 export type IdeaStatus = (typeof IDEA_STATUSES)[number];
 
+/** i18n (W4.5b): 值为 locale key (misc.ideas.status.*), 渲染走 t()/ideaStatusLabel(). */
 export const IDEA_STATUS_LABELS: Record<IdeaStatus, string> = {
-  germinating: '构思中',
-  exploring: '探索中',
-  decided: '已定案',
-  shelved: '搁置',
-  rejected: '已否定',
-  landed: '已落地',
+  germinating: 'misc.ideas.status.germinating',
+  exploring: 'misc.ideas.status.exploring',
+  decided: 'misc.ideas.status.decided',
+  shelved: 'misc.ideas.status.shelved',
+  rejected: 'misc.ideas.status.rejected',
+  landed: 'misc.ideas.status.landed',
 };
 
+/** i18n (W4.5b): 同上 (misc.ideas.nodeStatus.*). */
 export const NODE_STATUS_LABELS: Record<string, string> = {
-  planned: '计划中',
-  dispatched: '待执行',
-  running: '执行中',
-  reviewing: '待审核',
-  awaiting_decision: '等决策',
-  blocked: '卡住',
-  done: '完成',
-  dropped: '放弃',
+  planned: 'misc.ideas.nodeStatus.planned',
+  dispatched: 'misc.ideas.nodeStatus.dispatched',
+  running: 'misc.ideas.nodeStatus.running',
+  reviewing: 'misc.ideas.nodeStatus.reviewing',
+  awaiting_decision: 'misc.ideas.nodeStatus.awaitingDecision',
+  blocked: 'misc.ideas.nodeStatus.blocked',
+  done: 'misc.ideas.nodeStatus.done',
+  dropped: 'misc.ideas.nodeStatus.dropped',
 };
+
+/** 状态显示标签 (走 i18n) — 未知 status 兜底显示原始值. */
+export function ideaStatusLabel(status: string): string {
+  const key = IDEA_STATUS_LABELS[status as IdeaStatus];
+  return key ? i18n.global.t(key) : status;
+}
+
+export function nodeStatusLabel(status: string): string {
+  const key = NODE_STATUS_LABELS[status];
+  return key ? i18n.global.t(key) : status;
+}
 
 export interface Idea {
   id: string;

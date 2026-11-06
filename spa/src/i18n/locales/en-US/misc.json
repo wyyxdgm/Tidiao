@@ -506,7 +506,25 @@
       "phCriteria": "e.g. ≥3 real inquiries within 2 weeks",
       "labelDeadline": "Validation window",
       "cancel": "Cancel",
-      "createBtn": "Create"
+      "createBtn": "Create",
+      "status": {
+        "germinating": "Germinating",
+        "exploring": "Exploring",
+        "decided": "Decided",
+        "shelved": "Shelved",
+        "rejected": "Rejected",
+        "landed": "Landed"
+      },
+      "nodeStatus": {
+        "planned": "Planned",
+        "dispatched": "Dispatched",
+        "running": "Running",
+        "reviewing": "Reviewing",
+        "awaitingDecision": "Awaiting decision",
+        "blocked": "Blocked",
+        "done": "Done",
+        "dropped": "Dropped"
+      }
     },
     "console": {
       "tabTitle": "Console",
@@ -600,7 +618,42 @@
       "layerPending": "✦ Generating summary (first time takes ~30s, then instant)…",
       "noDetails": "No detail summary available",
       "openFullTask": "Open full task page →",
-      "approving": "Approving…"
+      "approving": "Approving…",
+      "quadrant": {
+        "q1": "Do now",
+        "q2": "Schedule",
+        "q3": "Quick wins",
+        "q4": "Low effort"
+      },
+      "headlineFocus": "{n} running",
+      "headlineWaiting": "{n} waiting for you",
+      "headlineQueued": "{n} queued",
+      "headlineClear": "All clear · take a break",
+      "digest": {
+        "fix": "To fix",
+        "design": "Design & research",
+        "delivery": "Delivered",
+        "iterate": "Feature iteration",
+        "decision": "Awaiting your call",
+        "other": "Other",
+        "agree": "✓ Agree",
+        "approve": "✓ Approve",
+        "reply": "✎ Reply",
+        "agreeWithSuggestion": "Agreed — proceed with the suggestion: {s}",
+        "agreePlain": "Agreed — please continue with your suggestion."
+      }
+    },
+    "models": {
+      "astronCode": "Astron-Code-Latest (iFlytek)",
+      "suffixConfigured": "[configured]",
+      "suffixUsed": "[history]"
+    },
+    "tab": {
+      "untitledProject": "Untitled project",
+      "untitled": "Untitled"
+    },
+    "hostTask": {
+      "overflow": "+{n} more"
     }
   }
 }

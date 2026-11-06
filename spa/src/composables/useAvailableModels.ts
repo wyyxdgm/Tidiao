@@ -15,6 +15,7 @@
 //   - 不暴露 api_key/has_api_key (AvailableLlmConfig 不含, 安全).
 
 import { ref, computed, onMounted, type Ref, type ComputedRef } from 'vue';
+import { i18n } from '@/i18n';
 
 export type ModelOptionSource = 'default' | 'configured' | 'builtin' | 'used';
 
@@ -31,9 +32,10 @@ interface AvailableLlmConfigRaw {
   model?: string | null;
 }
 
-/** MODEL_OPTIONS 常量兜底 — 与 master src/lib/constants.ts MODEL_OPTIONS 对齐. */
-const BUILTIN_MODEL_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'astron-code-latest', label: 'Astron-Code-Latest (讯飞)' },
+/** MODEL_OPTIONS 常量兜底 — 与 master src/lib/constants.ts MODEL_OPTIONS 对齐.
+ *  i18n (W4.5b): label 含中文的走 locale (聚合函数运行时 t(), 语言切换跟新). */
+const BUILTIN_MODEL_OPTIONS: ReadonlyArray<{ value: string; label: string | (() => string) }> = [
+  { value: 'astron-code-latest', label: () => i18n.global.t('misc.models.astronCode') },
   { value: 'glm-5.2', label: 'GLM-5.2' },
   { value: 'glm-latest', label: 'GLM-Latest' },
   { value: 'MiniMax-M3', label: 'MiniMax-M3' },
@@ -51,21 +53,23 @@ export function aggregateModelOptions(
 ): ModelOption[] {
   const seen = new Set<string>();
   const out: ModelOption[] = [
-    { value: '', label: '默认（按解析链）', source: 'default' },
+    // i18n (W4.5b): 复用 misc.templates.llmDefault 同文案 key (模板下拉已用).
+    { value: '', label: i18n.global.t('misc.templates.llmDefault'), source: 'default' },
   ];
   seen.add('');
 
-  const pushUnique = (model: string, source: ModelOptionSource, label?: string) => {
+  const pushUnique = (model: string, source: ModelOptionSource, label?: string | (() => string)) => {
     const m = model?.trim();
     if (!m || seen.has(m)) return;
     seen.add(m);
     const prefix =
-      source === 'configured' ? ' [已配置]'
-      : source === 'used'      ? ' [历史]'
+      source === 'configured' ? ` ${i18n.global.t('misc.models.suffixConfigured')}`
+      : source === 'used'      ? ` ${i18n.global.t('misc.models.suffixUsed')}`
       : '';
+    const labelStr = typeof label === 'function' ? label() : label;
     out.push({
       value: m,
-      label: `${m}${prefix}${label ? ` (${label})` : ''}`,
+      label: `${m}${prefix}${labelStr ? ` (${labelStr})` : ''}`,
       source,
     });
   };
