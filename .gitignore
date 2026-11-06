@@ -1,0 +1,133 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/dist/            # R153: next.config.ts distDir='dist' (Next 16 Standalone output)
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# python (scripts/*.py 工具产物)
+__pycache__/
+*.pyc
+*.pyo
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.local.example
+
+# vercel
+.vercel
+
+# Vue SPA scaffold (v2.0-spa branch). The root-level /node_modules / /dist /
+# /build entries above only match the Next.js app at repo root; this section
+# keeps the SPA's own artifacts out of git.
+/spa/node_modules
+/spa/dist
+/spa/.vite
+/spa/*.local
+
+# R59+ SPA integration: vite build 产物推到 public/, 由 next build 吃进去 (route handler
+# 出 public/index.html). 不能 commit (dist 28MB+ 影响 git 体积 + 部署 SHA 不稳).
+# 例外 public/*.jpg / *.png 是 history 老 tracked 文件, 白名单保留.
+/public/index.html
+/public/assets/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# claude code local state (ignore contents, but share project-level skills and rpa)
+/.claude/*
+
+# R153 docker smoke test throwaway data dir (root-owned from container run)
+/.docker-smoke-data
+
+!/.claude/skills/
+!/.claude/rpa/
+npminstall-debug.log
+
+# WSL 部署机本地密钥（不进 git）
+.env.wsl.secret
+
+# 各部署目录本地专用 pm2 配置（端口/ORCHESTRATOR_HOME 每台每目录不同，不进 git）
+# 用它替代"给 tracked 的 ecosystem.wsl.config.cjs 留本地改动"—— 后者会被 git reset/checkout/rebase 抹掉
+# 注意 pm2 只把 *.config.cjs / *.json / *.yaml 认作 ecosystem 配置，文件名必须带 .config
+ecosystem.local.config.cjs
+
+# 本地 SQLite 测试库（sync-standards.sh 跑时临时落到仓库根的产物，不进 git）
+ao-prod.db
+ao-prod.db-*
+# 仓根误建的空库（在仓库根跑 `sqlite3 orchestrator.db ...` 相对路径时 CLI 自动建空文件，
+# 真库在 ~/.agent-orchestrator/；不 ignore 会挡 deploy 的 dirty 检查）
+orchestrator.db
+
+# 本地临时文件（截图、调试产物，不进 git）
+/.tmp/
+
+# ensure-default-role.sh 用作 role POST body 的临时 JSON（脚本末尾 rm -f；中断 deploy 会残留）
+/scripts/.default-role.json
+ecosystem.local.config.cjs.bak-*
+
+# vitest report output
+reports/
+
+# git 本地 hook (Code Knowledge Index post-commit 由 scripts/setup-git-hooks.sh
+# 装到 .git/hooks/, 不入仓, 每台机器独立 install)
+.git/hooks/post-commit
+
+# ao-session export 临时产物 (scripts/ao-session.sh export 落到 cwd; 旧 demo
+# task 残留, 跟仓库无关). 模式只挡仓根的 ao-session-*, 仓内子目录如有同名
+# 文件不受影响.
+ao-session-*.md
+ao-session-*.jsonl
+
+# 平台上传/导出的运行时附件 (attachments/assets 是 cwd 下的 symlink 容器, 指
+# 向 ~/.agent-orchestrator/uploads/; 不是项目源码). D25-D27 demo 跑出来后
+# 一直残留, 加进 gitignore 防止 git status 噪声.
+/attachments/*
+!/attachments/.gitkeep
+/assets/*
+!/assets/.gitkeep
+
+# 仓根 AI 生成媒体 (image-gen / video-gen 落到 cwd 时的产物, 跟源码无关)
+/*.jpg
+/*.png
+/*.mp4
+!/public/**/*.jpg
+!/public/**/*.png
+.gstack/
+
+# R59 SPA 上线后 pnpm install 残留 (包管理器换 npm, 不需要这两个文件).
+# R72 部署时临时忽略, 不掺无关的原因.
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
+
+# 软著申报本地数据（凭据/浏览器会话）
+docs/ruanzhu/account.local.json
+docs/ruanzhu/browser-profile/
+.~lock.*#

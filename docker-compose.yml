@@ -1,0 +1,55 @@
+# docker-compose.yml — local single-instance stack for the R153 phase 1a image.
+#
+# Usage:
+#   export JWT_SECRET=$(openssl rand -hex 32)
+#   docker compose up -d
+#   curl -s http://localhost:3000/api/auth/login -X POST \
+#     -H 'Content-Type: application/json' \
+#     -d '{"email":"a","password":"b"}'   # → 401
+#
+# Notes:
+#   - The platform uses SQLite by default (better-sqlite3), so DB lives in
+#     the ./data volume — no external MySQL/Redis service is required for
+#     the smoke test or for basic operation. If you switch to MySQL/Redis
+#     in the future, add those services here and pass DATABASE_URL/REDIS_URL
+#     into `app`.
+#   - COOKIE_SECURE=0 because we listen on plain HTTP locally. Production
+#     deployments behind HTTPS should remove this override.
+#   - ANTHROPIC_* vars are only needed when agents actually run tasks; the
+#     login endpoint itself does not touch them.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ao-standalone:latest
+    container_name: ao-standalone
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      COOKIE_SECURE: "0"
+      ORCHESTRATOR_HOME: /app/data
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (openssl rand -hex 32)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO- --post-data='{"email":"healthcheck","password":"x"}'
+          --header='Content-Type: application/json'
+          http://localhost:3000/api/auth/login || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

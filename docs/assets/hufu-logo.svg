@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="提调">
+  <!-- 提调 logo 母版：对半铜符合璧。
+       左半 #2a78d6 = 君符（平台主色 t-series-1），
+       右半 #eb6834 = 将符（虎色 t-series-2），锯齿合缝 = 合符验证。
+       自包含，无外部字体/图片；深浅背景均可用。
+       详细设计说明见 docs/assets/hufu-logo.md -->
+  <!-- 左半符（君） -->
+  <path fill="#2a78d6" d="M16 12 L30.5 12 L22.5 24 L34.5 32 L22.5 40 L30.5 52 L16 52 Q8 52 8 44 L8 20 Q8 12 16 12 Z"/>
+  <!-- 右半符（将，虎贲） -->
+  <path fill="#eb6834" d="M35.5 12 L48 12 Q56 12 56 20 L56 44 Q56 52 48 52 L35.5 52 L27.5 40 L39.5 32 L27.5 24 Z"/>
+  <!-- 虎纹（大尺寸细节，favicon 极简版不带） -->
+  <rect fill="#9a3412" x="42.5" y="25" width="10" height="4" rx="2"/>
+  <rect fill="#9a3412" x="44.5" y="35" width="7.5" height="4" rx="2"/>
+  <!-- 虎纹（左半镜像，符两半同纹） -->
+  <rect fill="#1e3a8a" x="11.5" y="25" width="10" height="4" rx="2"/>
+  <rect fill="#1e3a8a" x="12" y="35" width="7.5" height="4" rx="2"/>
+</svg>

@@ -1,0 +1,64 @@
+# Build context exclusions for `docker build`.
+# Goal: keep the context tarball small + prevent .env*, .git/, src/tests from
+# sneaking into the image even before the builder stage's `COPY . .`.
+
+# Version control
+.git/
+.gitignore
+
+# Build outputs — rebuilt inside the builder stage, no need to ship them.
+.next/
+dist/
+out/
+build/
+
+# Dependencies — installed by `npm ci` inside the builder stage.
+node_modules/
+
+# Source tests — not needed at runtime (AC8); stripped from standalone too.
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.mjs
+coverage/
+
+# Secrets / local env (defense-in-depth on top of .gitignore).
+.env
+.env.local
+.env.*.local
+.env.wsl.secret
+.env.wsl.secret.*
+
+# Tooling / state / docs that should not ship.
+.claude/
+docs/
+scripts/
+data/
+reports/
+boards/
+.tmp/
+.tmp
+.eslintcache
+.npm/
+.eslintignore
+.rework-cache/
+
+# Local artifacts that would otherwise inflate context.
+*.log
+*.tsbuildinfo
+.DS_Store
+attachments/
+assets/
+ao-session-*.md
+ao-session-*.jsonl
+decrypt-test.mjs
+jingyesi-*.jpg
+lushan-waterfall-*.jpg
+npminstall-debug.log
+instrumentation.ts
+
+# Docker meta — never copy back into a build.
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
