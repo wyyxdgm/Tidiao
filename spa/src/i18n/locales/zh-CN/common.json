@@ -1,0 +1,33 @@
+{
+  "common": {
+    "close": "关闭",
+    "confirm": "确认",
+    "cancel": "取消",
+    "clear": "清空",
+    "selectPlaceholder": "请选择",
+    "filterN": "筛选 {n} 项",
+    "clearSelect": "清空选择",
+    "noOptions": "无选项",
+    "searchPlaceholder": "搜索任务 (ID / 名称 / 状态)",
+    "searchAria": "全局搜索任务",
+    "clearSearch": "清空搜索",
+    "searching": "搜索中…",
+    "searchFailed": "搜索失败，稍后再试",
+    "noMatchTasks": "无匹配任务",
+    "theme": "主题",
+    "themeTitle": "主题：{name}",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "随系统",
+    "currentAccount": "当前账号",
+    "switchAccount": "切换账号",
+    "noOtherAccounts": "暂无其他已登录账号",
+    "loginOther": "＋ 登录其他账号",
+    "logout": "退出登录",
+    "removeAccount": "移除 {email}",
+    "justNow": "刚刚",
+    "minutesAgo": "{n} 分钟前",
+    "hoursAgo": "{n} 小时前",
+    "daysAgo": "{n} 天前"
+  }
+}

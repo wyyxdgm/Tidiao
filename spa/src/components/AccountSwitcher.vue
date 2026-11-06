@@ -24,9 +24,13 @@
      cookie 必须硬刷才生效, 与 LoginView 走硬导航同款 (R3-mirror).
    - 401 (token 失效) → removeRecentAccount + 跳 /login (与 master 同款). */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { switchAccount } from '@/api/auth';
+import { getLang } from '@/i18n';
 import { hardNavigate } from '@/lib/hard-navigate';
+
+const { t } = useI18n();
 import {
   getRecentAccounts,
   removeRecentAccount,
@@ -252,13 +256,14 @@ function initial(email: string | null | undefined): string {
 function relTime(ms: number): string {
   const diff = Date.now() - ms;
   const min = Math.floor(diff / 60000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('common.justNow');
+  if (min < 60) return t('common.minutesAgo', { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
+  if (hr < 24) return t('common.hoursAgo', { n: hr });
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day} 天前`;
-  return new Date(ms).toLocaleDateString('zh-CN');
+  if (day < 30) return t('common.daysAgo', { n: day });
+  // 日期格式随当前语言 (zh-CN / en-US).
+  return new Date(ms).toLocaleDateString(getLang());
 }
 </script>
 
@@ -333,7 +338,7 @@ function relTime(ms: number): string {
       >
         <!-- 当前账号区 -->
         <div class="dropdown-header">
-          <div class="dropdown-section-label">当前账号</div>
+          <div class="dropdown-section-label">{{ t('common.currentAccount') }}</div>
           <div class="current-row">
             <span class="avatar avatar-current">{{ initial(currentEmail) }}</span>
             <span class="current-email" :title="currentEmail ?? ''">{{ currentEmail }}</span>
@@ -342,9 +347,9 @@ function relTime(ms: number): string {
 
         <!-- 切换账号列表 -->
         <div class="dropdown-body">
-          <div class="dropdown-section-label">切换账号</div>
+          <div class="dropdown-section-label">{{ t('common.switchAccount') }}</div>
           <div v-if="otherAccounts.length === 0" class="empty-hint">
-            暂无其他已登录账号
+            {{ t('common.noOtherAccounts') }}
           </div>
           <button
             v-for="acc in otherAccounts"
@@ -363,7 +368,7 @@ function relTime(ms: number): string {
               class="remove-btn"
               role="button"
               tabindex="0"
-              :aria-label="`移除 ${acc.email}`"
+              :aria-label="t('common.removeAccount', { email: acc.email })"
               @click="(e) => onRemove(acc, e)"
               @keydown.enter="(e) => onRemove(acc, e as unknown as Event)"
               @keydown.space.prevent="(e) => onRemove(acc, e as unknown as Event)"
@@ -377,7 +382,7 @@ function relTime(ms: number): string {
             :disabled="busy"
             @click="onLoginOther"
           >
-            ＋ 登录其他账号
+            {{ t('common.loginOther') }}
           </button>
         </div>
 
@@ -389,7 +394,7 @@ function relTime(ms: number): string {
             :disabled="busy"
             @click="onLogout"
           >
-            退出登录
+            {{ t('common.logout') }}
           </button>
         </div>
       </div>

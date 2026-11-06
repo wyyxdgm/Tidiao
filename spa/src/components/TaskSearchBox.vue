@@ -16,9 +16,11 @@
      type=email 字段, 刷新后邮箱被自动填进搜索框. 非凭据字段 Chrome 尊重 off. */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { searchTasks, STATUS_LABELS, type TaskSearchHit, type TaskStatus } from '@/api/tasks';
 
 const router = useRouter();
+const { t } = useI18n();
 
 const keyword = ref('');
 // 输入框 DOM ref — 清空后把焦点送回输入框 (R180 迭代).
@@ -154,8 +156,8 @@ onBeforeUnmount(() => {
       autocomplete="off"
       class="search-input"
       :class="{ 'has-clear': keyword }"
-      placeholder="搜索任务 (ID / 名称 / 状态)"
-      aria-label="全局搜索任务"
+      :placeholder="t('common.searchPlaceholder')"
+      :aria-label="t('common.searchAria')"
       @focus="keyword.trim() && results.length > 0 && (open = true)"
       @keydown="onKeydown"
     />
@@ -164,8 +166,8 @@ onBeforeUnmount(() => {
       v-if="keyword"
       type="button"
       class="clear-btn"
-      aria-label="清空搜索"
-      title="清空"
+      :aria-label="t('common.clearSearch')"
+      :title="t('common.clear')"
       @mousedown.prevent
       @click="clearInput"
     >
@@ -174,9 +176,9 @@ onBeforeUnmount(() => {
       </svg>
     </button>
     <div v-if="open" class="search-dropdown" role="listbox">
-      <div v-if="loading" class="hint">搜索中…</div>
-      <div v-else-if="error" class="hint">搜索失败，稍后再试</div>
-      <div v-else-if="results.length === 0" class="hint">无匹配任务</div>
+      <div v-if="loading" class="hint">{{ t('common.searching') }}</div>
+      <div v-else-if="error" class="hint">{{ t('common.searchFailed') }}</div>
+      <div v-else-if="results.length === 0" class="hint">{{ t('common.noMatchTasks') }}</div>
       <template v-else>
         <button
           v-for="(hit, i) in results"

@@ -15,8 +15,19 @@
    - 顶层 confirm() 是 useConfirm().confirm 的简化别名, 调用者不必每次
      写 const { confirm } = useConfirm(). */
 import { createApp, defineComponent, h, reactive, type App as VueApp } from 'vue';
+// i18n: 命令式 host 经 createApp 挂载, 是独立 Vue app (无 i18n 插件) —
+//   useI18n() 在其 setup 内会抛错, 这里走 i18n.global.t 取全局 composer.
+import { i18n } from '@/i18n';
 import Modal from './Modal.vue';
 import Button from './Button.vue';
+
+/** 兜底按钮文案 (调用方未传 confirmText/cancelText 时) — 走当前语言. */
+function defaultConfirmText(): string {
+  return i18n.global.t('common.confirm');
+}
+function defaultCancelText(): string {
+  return i18n.global.t('common.cancel');
+}
 
 export type ConfirmType = 'danger' | 'warning' | 'info';
 
@@ -49,8 +60,8 @@ const state = reactive<ConfirmState>({
   open: false,
   title: '',
   message: '',
-  confirmText: '确认',
-  cancelText: '取消',
+  confirmText: '',
+  cancelText: '',
   type: 'info',
   resolver: null,
 });
@@ -142,8 +153,8 @@ function runConfirm(message: string, options: ConfirmOptions = {}): Promise<bool
   }
   state.title = options.title ?? '';
   state.message = message;
-  state.confirmText = options.confirmText ?? '确认';
-  state.cancelText = options.cancelText ?? '取消';
+  state.confirmText = options.confirmText ?? defaultConfirmText();
+  state.cancelText = options.cancelText ?? defaultCancelText();
   state.type = options.type ?? 'info';
   state.open = true;
   return new Promise<boolean>((resolve) => {
@@ -186,6 +197,7 @@ export function confirm(message: string, options?: ConfirmOptions): Promise<bool
      同一 SFC 编译, scoped 哈希会作用于 <template> 但样式对 host 内的
      h() 元素失效 — 所以本 SFC 用非 scoped <style> + 命名空间前缀). */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 // Modal 与 Button 由上方 <script> 块顶层 import, 此处可直接引用
 // (同 SFC 内 <script> 顶层 binding 对 <script setup> 可见).
 interface Props {
@@ -197,11 +209,18 @@ interface Props {
   type?: ConfirmType;
 }
 
+// props 接口保持不变 (confirmText/cancelText 仍可选 string); 兜底默认值
+// 不再写死中文, 改走 t() — 调用方传了就用调用方的, 全站调用方零改动.
+const { t } = useI18n();
+
 const props = withDefaults(defineProps<Props>(), {
-  confirmText: '确认',
-  cancelText: '取消',
+  confirmText: undefined,
+  cancelText: undefined,
   type: 'info',
 });
+
+const confirmLabel = computed(() => props.confirmText ?? t('common.confirm'));
+const cancelLabel = computed(() => props.cancelText ?? t('common.cancel'));
 
 const emit = defineEmits<{
   (e: 'confirm'): void;
@@ -241,10 +260,10 @@ const confirmVariant = computed(() =>
     <template #footer>
       <div class="confirm-footer">
         <Button variant="secondary" @click="emit('cancel')">
-          {{ cancelText }}
+          {{ cancelLabel }}
         </Button>
         <Button :variant="confirmVariant" @click="emit('confirm')">
-          {{ confirmText }}
+          {{ confirmLabel }}
         </Button>
       </div>
     </template>

@@ -22,6 +22,9 @@
      打开下拉即插入 30px, 把 toolbar / 表单行撑到近两行高 (damo 实测反馈).
      挪进面板后打开关闭零布局位移. */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 export interface SelectOption {
   value: string;
@@ -46,8 +49,9 @@ interface Props {
   className?: string;
 }
 
+// placeholder 保持可选 (props 接口不变); 未传时兜底走 t() (不再写死中文).
 const props = withDefaults(defineProps<Props>(), {
-  placeholder: '请选择',
+  placeholder: undefined,
   disabled: false,
   clearable: false,
   filterable: true,
@@ -69,9 +73,9 @@ const selectedOption = computed<SelectOption | undefined>(() =>
   props.options.find((o) => o.value === props.modelValue),
 );
 
-/** trigger 上显示的文字. 选中 → label; 未选 → placeholder (灰色). */
+/** trigger 上显示的文字. 选中 → label; 未选 → placeholder (灰色, 未传走 t() 兜底). */
 const displayLabel = computed<string>(() =>
-  selectedOption.value ? selectedOption.value.label : props.placeholder,
+  selectedOption.value ? selectedOption.value.label : (props.placeholder ?? t('common.selectPlaceholder')),
 );
 
 /* ------------------------------------------------------------------ */
@@ -314,7 +318,7 @@ onUnmounted(() => {
       v-model="filterInput"
       type="text"
       class="select-filter"
-      :placeholder="`筛选 ${options.length} 项`"
+      :placeholder="t('common.filterN', { n: options.length })"
       :disabled="disabled"
       autocomplete="off"
       @keydown="onListKeydown"
@@ -356,7 +360,7 @@ onUnmounted(() => {
         class="select-clear"
         role="button"
         tabindex="-1"
-        aria-label="清空选择"
+        :aria-label="t('common.clearSelect')"
         @click="clearValue"
       >×</span>
     </button>
@@ -376,14 +380,14 @@ onUnmounted(() => {
         v-model="filterInput"
         type="text"
         class="select-filter"
-        :placeholder="`筛选 ${options.length} 项`"
+        :placeholder="t('common.filterN', { n: options.length })"
         :disabled="disabled"
         autocomplete="off"
         @keydown="onListKeydown"
       />
 
       <!-- Dropdown listbox. 用 <ul role="listbox"> + <li role="option">. -->
-      <ul ref="listRef" role="listbox" :aria-label="placeholder" class="select-list">
+      <ul ref="listRef" role="listbox" :aria-label="displayLabel" class="select-list">
         <li
           v-for="(opt, idx) in filteredOptions"
           :key="opt.value"
@@ -400,7 +404,7 @@ onUnmounted(() => {
           {{ opt.label }}
         </li>
         <li v-if="filteredOptions.length === 0" class="select-option-empty" role="presentation">
-          无选项
+          {{ t('common.noOptions') }}
         </li>
       </ul>
     </div>

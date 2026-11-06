@@ -12,6 +12,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   createConfigSnapshot,
   deleteConfigSnapshot,
@@ -52,6 +53,7 @@ const props = defineProps<{
 
 const toast = useToast();
 const route = useRoute();
+const { t } = useI18n();
 
 const snapshots = ref<Snapshot[]>([]);
 const loading = ref<boolean>(false);
@@ -96,11 +98,12 @@ function emptyForm(): SnapshotForm {
 
 const form = reactive<SnapshotForm>(emptyForm());
 
-const SCOPE_OPTIONS: { value: SnapshotScope; label: string }[] = [
-  { value: 'global', label: '全局' },
-  { value: 'project', label: '项目' },
-  { value: 'version', label: '版本' },
-];
+// 选项 label 走 t() 动态翻译 (语言切换即时生效).
+const SCOPE_OPTIONS = computed<{ value: SnapshotScope; label: string }[]>(() => [
+  { value: 'global', label: t('taskNew.snap.scopeGlobal') },
+  { value: 'project', label: t('taskNew.snap.scopeProject') },
+  { value: 'version', label: t('taskNew.snap.scopeVersion') },
+]);
 
 /** 硬编码 model shortcut — 与 TaskNew.vue MASTER_MODEL_OPTIONS 同源. */
 const MASTER_MODEL_OPTIONS: { value: string; label: string }[] = [
@@ -111,19 +114,24 @@ const MASTER_MODEL_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const EFFORT_OPTIONS = EFFORT_LEVELS.map((e) => ({ value: e, label: e }));
-const AUTO_APPROVE_OPTIONS: { value: '' | 'on' | 'off'; label: string }[] = [
-  { value: '', label: '继承默认' },
-  { value: 'off', label: '需要审核' },
-  { value: 'on', label: '自动通过' },
-];
-const TASK_TYPE_SELECT = [{ value: '', label: '未分类' }, ...TASK_TYPE_OPTIONS];
+const AUTO_APPROVE_OPTIONS = computed<{ value: '' | 'on' | 'off'; label: string }[]>(() => [
+  { value: '', label: t('taskNew.snap.inheritDefault') },
+  { value: 'off', label: t('taskNew.snap.approveOff') },
+  { value: 'on', label: t('taskNew.snap.approveOn') },
+]);
+// TASK_TYPE_OPTIONS 来自共享 constants.ts (中文 label 不改共享文件) — 按 value
+// 映射到 taskNew.type_* key 动态翻译.
+const TASK_TYPE_SELECT = computed<{ value: string; label: string }[]>(() => [
+  { value: '', label: t('taskNew.unclassified') },
+  ...TASK_TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(`taskNew.type_${o.value}`) })),
+]);
 
 const projectOptions = computed(() =>
   props.projects.map((p) => ({ value: p.id, label: p.name })),
 );
 
 const llmConfigOptions = computed(() => [
-  { value: '', label: '默认（按项目/管理员链解析）' },
+  { value: '', label: t('taskNew.snap.llmDefaultChain') },
   ...props.availableLlmConfigs.map((c) => ({ value: c.id, label: c.name })),
 ]);
 
@@ -132,7 +140,7 @@ const modelOptions = computed(() => {
   // 这里只显示硬编码 builtin 列表. 后端解析走 LLM config 而非 model 字符串, 用户
   // 通过 LLM 配置下拉间接选模型.
   return [
-    { value: '', label: '继承默认' },
+    { value: '', label: t('taskNew.snap.inheritDefault') },
     ...MASTER_MODEL_OPTIONS.map((m) => ({ value: m.value, label: m.label })),
   ];
 });
@@ -152,7 +160,7 @@ async function load(): Promise<void> {
   try {
     snapshots.value = await listConfigSnapshots();
   } catch (e) {
-    toast.error(isHttpError(e) ? e.message : '加载快照失败');
+    toast.error(isHttpError(e) ? e.message : t('taskNew.snap.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -206,11 +214,11 @@ function openEdit(snap: Snapshot): void {
 
 async function submit(): Promise<void> {
   if (!form.name.trim()) {
-    toast.error('请填写快照名称');
+    toast.error(t('taskNew.snap.errNameRequired'));
     return;
   }
   if (form.scope === 'version' && !form.projectId) {
-    toast.error('绑定版本需要先选项目');
+    toast.error(t('taskNew.snap.errVersionNeedsProject'));
     return;
   }
   const body: CreateSnapshotBody = {
@@ -231,15 +239,15 @@ async function submit(): Promise<void> {
   try {
     if (modalMode.value === 'create') {
       await createConfigSnapshot(body);
-      toast.success('快照已创建');
+      toast.success(t('taskNew.snap.created'));
     } else if (editingId.value) {
       await updateConfigSnapshot(editingId.value, body);
-      toast.success('快照已更新');
+      toast.success(t('taskNew.snap.updated'));
     }
     modalOpen.value = false;
     await load();
   } catch (e) {
-    toast.error(isHttpError(e) ? e.message : '保存失败');
+    toast.error(isHttpError(e) ? e.message : t('taskNew.snap.saveFailed'));
   }
 }
 
@@ -251,41 +259,45 @@ async function confirmDelete(): Promise<void> {
   if (!pendingDeleteId.value) return;
   try {
     await deleteConfigSnapshot(pendingDeleteId.value);
-    toast.success('快照已删除');
+    toast.success(t('taskNew.snap.deleted'));
     pendingDeleteId.value = null;
     await load();
   } catch (e) {
-    toast.error(isHttpError(e) ? e.message : '删除失败');
+    toast.error(isHttpError(e) ? e.message : t('taskNew.snap.deleteFailed'));
   }
 }
 
 function scopeLabel(s: SnapshotScope): string {
-  return s === 'global' ? '全局' : s === 'project' ? '项目' : '版本';
+  return s === 'global'
+    ? t('taskNew.snap.scopeGlobal')
+    : s === 'project'
+      ? t('taskNew.snap.scopeProject')
+      : t('taskNew.snap.scopeVersion');
 }
 
 function snapshotDetail(s: Snapshot): string {
   const parts: string[] = [];
   if (s.model) parts.push(s.model);
   if (s.effort) parts.push(`effort=${s.effort}`);
-  if (s.max_turns != null) parts.push(`${s.max_turns} 轮`);
-  if (s.auto_approve === 1) parts.push('自动审批');
-  else if (s.auto_approve === 0) parts.push('需审核');
+  if (s.max_turns != null) parts.push(t('taskNew.snap.roundsN', { n: s.max_turns }));
+  if (s.auto_approve === 1) parts.push(t('taskNew.snap.detailAutoApprove'));
+  else if (s.auto_approve === 0) parts.push(t('taskNew.snap.detailNeedReview'));
   const tags = parseJsonStringArray(s.tags);
   if (tags.length) parts.push(`#${tags.join(' #')}`);
-  return parts.join(' · ') || '（继承默认）';
+  return parts.join(' · ') || t('taskNew.snap.detailInherit');
 }
 </script>
 
 <template>
   <div class="snapshots">
     <div class="snapshots-header">
-      <h2>模板配置</h2>
-      <Button variant="primary" @click="openCreate">+ 新建快照</Button>
+      <h2>{{ t('taskNew.snap.title') }}</h2>
+      <Button variant="primary" @click="openCreate">{{ t('taskNew.snap.new') }}</Button>
     </div>
 
-    <div v-if="loading" class="empty">加载中…</div>
+    <div v-if="loading" class="empty">{{ t('taskNew.snap.loading') }}</div>
     <div v-else-if="snapshots.length === 0" class="empty">
-      还没有快照。点击「新建快照」创建第一个；或在「完整配置」填写后点「存为快照」。
+      {{ t('taskNew.snap.empty') }}
     </div>
     <ul v-else class="snap-list">
       <li v-for="snap in snapshots" :key="snap.id" class="snap-item">
@@ -304,26 +316,26 @@ function snapshotDetail(s: Snapshot): string {
           <div class="snap-detail muted-small">{{ snapshotDetail(snap) }}</div>
         </div>
         <div class="snap-actions">
-          <button class="link-btn" @click="openEdit(snap)">编辑</button>
-          <button class="link-btn danger" @click="requestDelete(snap.id)">删除</button>
+          <button class="link-btn" @click="openEdit(snap)">{{ t('taskNew.snap.edit') }}</button>
+          <button class="link-btn danger" @click="requestDelete(snap.id)">{{ t('taskNew.snap.delete') }}</button>
         </div>
       </li>
     </ul>
 
     <!-- 新建/编辑 modal -->
-    <Modal v-model="modalOpen" :title="modalMode === 'create' ? '新建快照' : '编辑快照'">
+    <Modal v-model="modalOpen" :title="modalMode === 'create' ? t('taskNew.snap.modalCreate') : t('taskNew.snap.modalEdit')">
       <div class="form space-y-3">
         <div>
-          <label class="lbl">名称 *</label>
-          <Input v-model="form.name" placeholder="例如：默认开发配置" />
+          <label class="lbl">{{ t('taskNew.snap.nameLabel') }}</label>
+          <Input v-model="form.name" :placeholder="t('taskNew.snap.namePlaceholder')" />
         </div>
         <div>
-          <label class="lbl">描述</label>
-          <Textarea v-model="form.description" :rows="2" placeholder="用途说明（可选）" />
+          <label class="lbl">{{ t('taskNew.snap.descLabel') }}</label>
+          <Textarea v-model="form.description" :rows="2" :placeholder="t('taskNew.snap.descPlaceholder')" />
         </div>
         <div class="grid-2">
           <div>
-            <label class="lbl">作用范围 *</label>
+            <label class="lbl">{{ t('taskNew.snap.scopeLabel') }}</label>
             <Select
               :model-value="form.scope"
               :options="SCOPE_OPTIONS"
@@ -331,23 +343,23 @@ function snapshotDetail(s: Snapshot): string {
             />
           </div>
           <div v-if="form.scope !== 'global'">
-            <label class="lbl">绑定项目</label>
+            <label class="lbl">{{ t('taskNew.snap.bindProject') }}</label>
             <Select
               :model-value="form.projectId"
               :options="projectOptions"
-              placeholder="选择项目"
+              :placeholder="t('taskNew.snap.selectProject')"
               @update:model-value="(v: string | null) => form.projectId = v ?? ''"
             />
           </div>
         </div>
         <div v-if="form.scope === 'version'">
-          <label class="lbl">绑定版本</label>
-          <Input v-model="form.versionId" placeholder="版本 UUID" />
-          <p class="hint-small">必填。从项目 URL 取版本 ID。</p>
+          <label class="lbl">{{ t('taskNew.snap.bindVersion') }}</label>
+          <Input v-model="form.versionId" :placeholder="t('taskNew.snap.versionPlaceholder')" />
+          <p class="hint-small">{{ t('taskNew.snap.versionHint') }}</p>
         </div>
         <div class="grid-2">
           <div>
-            <label class="lbl">LLM 配置</label>
+            <label class="lbl">{{ t('taskNew.snap.llmLabel') }}</label>
             <Select
               :model-value="form.llm_config_id"
               :options="llmConfigOptions"
@@ -355,7 +367,7 @@ function snapshotDetail(s: Snapshot): string {
             />
           </div>
           <div>
-            <label class="lbl">模型</label>
+            <label class="lbl">{{ t('taskNew.snap.modelLabel') }}</label>
             <Select
               :model-value="form.model"
               :options="modelOptions"
@@ -363,25 +375,25 @@ function snapshotDetail(s: Snapshot): string {
             />
           </div>
           <div>
-            <label class="lbl">推理强度</label>
+            <label class="lbl">{{ t('taskNew.effortLabel') }}</label>
             <Select
               :model-value="form.effort"
-              :options="[{ value: '', label: '继承默认' }, ...EFFORT_OPTIONS]"
+              :options="[{ value: '', label: t('taskNew.snap.inheritDefault') }, ...EFFORT_OPTIONS]"
               @update:model-value="(v: string | null) => form.effort = v ?? ''"
             />
           </div>
           <div>
-            <label class="lbl">最大轮次</label>
+            <label class="lbl">{{ t('taskNew.maxRounds') }}</label>
             <Input
               v-model="form.maxTurns"
               type="number"
               :min="1"
-              placeholder="留空=继承"
+              :placeholder="t('taskNew.snap.maxTurnsPlaceholder')"
               class-name="input-num"
             />
           </div>
           <div>
-            <label class="lbl">工具审核</label>
+            <label class="lbl">{{ t('taskNew.approveLabel') }}</label>
             <Select
               :model-value="form.autoApprove"
               :options="AUTO_APPROVE_OPTIONS"
@@ -389,7 +401,7 @@ function snapshotDetail(s: Snapshot): string {
             />
           </div>
           <div>
-            <label class="lbl">任务类型</label>
+            <label class="lbl">{{ t('taskNew.snap.typeLabel') }}</label>
             <Select
               :model-value="form.type"
               :options="TASK_TYPE_SELECT"
@@ -398,17 +410,17 @@ function snapshotDetail(s: Snapshot): string {
           </div>
         </div>
         <div>
-          <label class="lbl">允许的工具</label>
+          <label class="lbl">{{ t('taskNew.toolsLabel') }}</label>
           <div class="preset-row">
             <button
               v-for="p in TOOL_PRESETS"
               :key="p.key"
               type="button"
               class="chip-preset"
-              :class="{ active: p.tools.length === form.allowedTools.length && p.tools.every((t) => form.allowedTools.includes(t)) }"
+              :class="{ active: p.tools.length === form.allowedTools.length && p.tools.every((tool) => form.allowedTools.includes(tool)) }"
               @click="setToolPreset(p.tools)"
             >
-              {{ p.label }}
+              {{ t(`taskNew.preset_${p.key}`) }}
             </button>
           </div>
           <div class="tools-row">
@@ -425,20 +437,20 @@ function snapshotDetail(s: Snapshot): string {
           </div>
         </div>
         <div>
-          <label class="lbl">标签</label>
-          <Input v-model="form.tags" placeholder="bugfix, auth（逗号分隔）" />
+          <label class="lbl">{{ t('taskNew.tagsLabel') }}</label>
+          <Input v-model="form.tags" :placeholder="t('taskNew.snap.tagsPlaceholder')" />
         </div>
       </div>
       <template #footer>
-        <Button variant="primary" @click="submit">保存</Button>
-        <Button variant="secondary" @click="modalOpen = false">取消</Button>
+        <Button variant="primary" @click="submit">{{ t('taskNew.snap.save') }}</Button>
+        <Button variant="secondary" @click="modalOpen = false">{{ t('taskNew.snap.cancel') }}</Button>
       </template>
     </Modal>
 
     <ConfirmDialog
       :open="pendingDeleteId !== null"
-      title="删除快照"
-      message="确认删除？此操作不可撤销。"
+      :title="t('taskNew.snap.deleteTitle')"
+      :message="t('taskNew.snap.deleteMessage')"
       @confirm="confirmDelete"
       @cancel="pendingDeleteId = null"
     />

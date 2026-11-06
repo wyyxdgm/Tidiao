@@ -1,0 +1,33 @@
+{
+  "common": {
+    "close": "Close",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "selectPlaceholder": "Select",
+    "filterN": "Filter {n} items",
+    "clearSelect": "Clear selection",
+    "noOptions": "No options",
+    "searchPlaceholder": "Search tasks (ID / name / status)",
+    "searchAria": "Search tasks globally",
+    "clearSearch": "Clear search",
+    "searching": "Searching…",
+    "searchFailed": "Search failed, try again later",
+    "noMatchTasks": "No matching tasks",
+    "theme": "Theme",
+    "themeTitle": "Theme: {name}",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "currentAccount": "Current account",
+    "switchAccount": "Switch account",
+    "noOtherAccounts": "No other signed-in accounts",
+    "loginOther": "＋ Sign in another account",
+    "logout": "Sign out",
+    "removeAccount": "Remove {email}",
+    "justNow": "just now",
+    "minutesAgo": "{n} min ago",
+    "hoursAgo": "{n} hr ago",
+    "daysAgo": "{n} days ago"
+  }
+}

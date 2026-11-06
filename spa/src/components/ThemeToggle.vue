@@ -6,24 +6,27 @@
    - 点击 trigger / 菜单外 / Escape 关闭; 卸载时清监听.
    - 图标随当前「解析后」主题变化 (system 时按实际亮暗显示日/月). */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useTheme, type ThemePreference } from '@/lib/theme';
 
 const { preference, resolved, setThemePreference } = useTheme();
+const { t } = useI18n();
 
 const open = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
 const triggerRef = ref<HTMLElement | null>(null);
 const dropdownStyle = ref<{ top: string; left: string } | null>(null);
 
-const OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-  { value: 'system', label: '随系统' },
-];
+// label 走 t() 动态翻译 (语言切换即时生效).
+const OPTIONS = computed<{ value: ThemePreference; label: string }[]>(() => [
+  { value: 'light', label: t('common.themeLight') },
+  { value: 'dark', label: t('common.themeDark') },
+  { value: 'system', label: t('common.themeSystem') },
+]);
 
 const triggerTitle = computed(() => {
-  const cur = OPTIONS.find((o) => o.value === preference.value)?.label ?? '主题';
-  return `主题：${cur}`;
+  const cur = OPTIONS.value.find((o) => o.value === preference.value)?.label ?? t('common.theme');
+  return t('common.themeTitle', { name: cur });
 });
 
 function recomputePosition(): void {

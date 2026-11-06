@@ -63,18 +63,27 @@ export function shouldShowSpinner(submitting: boolean): boolean {
 
 /** 三处按钮 (quick / full / snapshot) 共享同一文案口径, 改文案只改这里. loading
     时显示进度文案 (避免宽窄抖动 — 固定文案). snapshot editing 双态决定「保存修改」
-    vs「创建快照」, submitting=true 时盖过 editing. */
+    vs「创建快照」, submitting=true 时盖过 editing.
+    i18n: 文案走 taskNew 域 locale (i18n.global.t 不依赖组件上下文, 纯函数可用). */
+import { i18n } from '@/i18n';
+
 export function getSubmitButtonLabel(
   mode: 'quick' | 'full' | 'snapshot',
   submitting: boolean,
   snapshotEditing: boolean,
 ): string {
   if (submitting) {
-    return mode === 'quick' ? '创建启动中...' : mode === 'full' ? '创建中...' : '保存中...';
+    return mode === 'quick'
+      ? i18n.global.t('taskNew.submitQuickLoading')
+      : mode === 'full'
+        ? i18n.global.t('taskNew.submitFullLoading')
+        : i18n.global.t('taskNew.snap.saving');
   }
-  if (mode === 'quick') return '创建并启动 →';
-  if (mode === 'full') return '创建任务';
-  return snapshotEditing ? '保存修改' : '创建快照';
+  if (mode === 'quick') return i18n.global.t('taskNew.submitQuick');
+  if (mode === 'full') return i18n.global.t('taskNew.submitFull');
+  return snapshotEditing
+    ? i18n.global.t('taskNew.snap.saveChanges')
+    : i18n.global.t('taskNew.snap.modalCreate');
 }
 
 /* ------------------------------------------------------------------ */

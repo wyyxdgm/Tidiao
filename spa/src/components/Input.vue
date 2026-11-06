@@ -14,6 +14,9 @@
    - disabled 时禁用整控件 (含 prefix/suffix 按钮 + clear).
    - 样式对齐 Next tasks/new/page.tsx 表单 input 视觉 (gray 描边 + 蓝聚焦 + 错误红描边). */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -153,7 +156,7 @@ function clearValue(): void {
         v-if="showClear"
         type="button"
         class="input-clear"
-        aria-label="清空"
+        :aria-label="t('common.clear')"
         @click="clearValue"
       >
         ×

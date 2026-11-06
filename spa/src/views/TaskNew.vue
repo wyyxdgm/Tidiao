@@ -41,6 +41,7 @@
      R5 Modal + R6 ConfirmDialog + useToast (R4). */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   createTask,
   startTask,
@@ -95,31 +96,35 @@ import {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
+
 /** Effort 选项 — 与 master EFFORT_LEVELS 同源. */
 const EFFORT_OPTIONS: { value: string; label: string }[] = EFFORT_LEVELS.map((e) => ({
   value: e,
   label: e,
 }));
 
-/** 优先级 3 档 (Next Select 固定, 不引完整 P0-P10). */
-const PRIORITY_OPTIONS: { value: string; label: string }[] = [
-  { value: '0', label: '低 (0)' },
-  { value: '5', label: '中 (5)' },
-  { value: '10', label: '高 (10)' },
-];
+/** 优先级 3 档 (Next Select 固定, 不引完整 P0-P10). label 走 t() 动态翻译. */
+const PRIORITY_OPTIONS = computed<{ value: string; label: string }[]>(() => [
+  { value: '0', label: t('taskNew.priorityLow') },
+  { value: '5', label: t('taskNew.priorityMid') },
+  { value: '10', label: t('taskNew.priorityHigh') },
+]);
 
 /** 自动审批 2 档 — full 模式 (无「继承默认」档). */
-const AUTO_APPROVE_OPTIONS_FULL: { value: string; label: string }[] = [
-  { value: 'off', label: '需要逐个审核' },
-  { value: 'on', label: '自动通过（不审核）' },
-];
+const AUTO_APPROVE_OPTIONS_FULL = computed<{ value: string; label: string }[]>(() => [
+  { value: 'off', label: t('taskNew.approveOff') },
+  { value: 'on', label: t('taskNew.approveOn') },
+]);
 
 /** 自动审批 3 档 — snapshot 编辑表单 (含「继承默认」sentinel). */
-const AUTO_APPROVE_OPTIONS_SNAP: { value: string; label: string }[] = [
-  { value: '', label: '继承默认' },
-  { value: 'off', label: '需要逐个审核' },
-  { value: 'on', label: '自动通过（不审核）' },
-];
+const AUTO_APPROVE_OPTIONS_SNAP = computed<{ value: string; label: string }[]>(() => [
+  { value: '', label: t('taskNew.snap.inheritDefault') },
+  { value: 'off', label: t('taskNew.approveOff') },
+  { value: 'on', label: t('taskNew.approveOn') },
+]);
 
 /** Scope 选项. */
 const SCOPE_OPTIONS: { value: SnapshotScope; label: string }[] = [
@@ -134,9 +139,6 @@ const DEFAULT_ALLOWED_TOOLS = [...AVAILABLE_TOOLS];
 /* ------------------------------------------------------------------ */
 /*  URL / Router                                                       */
 /* ------------------------------------------------------------------ */
-
-const route = useRoute();
-const router = useRouter();
 
 /** URL prefill — 与 Next useSearchParams 同口径, hash 路由 useRoute().query. */
 const urlProject = computed<string>(() => stringQuery(route.query.project));
@@ -277,33 +279,35 @@ const depInputRef = useTemplateRef<InstanceType<typeof Input>>('depInputRef');
 /* ------------------------------------------------------------------ */
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '请选择项目' },
+  { value: '', label: t('taskNew.selectProject') },
   ...projects.value.map((p) => ({ value: p.id, label: p.name })),
 ]);
 
 const versionOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '其他任务（无版本）' },
+  { value: '', label: t('taskNew.noVersionTask') },
   ...versions.value.map((v) => ({ value: v.id, label: v.name })),
 ]);
 
 const llmConfigOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '默认 (按解析链)' },
+  { value: '', label: t('taskNew.llmDefaultChain') },
   ...availableLlmConfigs.value.map((c) => ({
     value: c.id,
-    label: `${c.source === 'self' ? '我的' : '平台'} · ${c.name}${c.is_default ? ' (默认)' : ''}`,
+    label: `${c.source === 'self' ? t('taskNew.llmMine') : t('taskNew.llmPlatform')} · ${c.name}${c.is_default ? t('taskNew.llmDefaultSuffix') : ''}`,
   })),
 ]);
 
+// TASK_TYPE_OPTIONS 来自共享 constants.ts (中文 label 不改共享文件) — 这里按
+// value 映射到 taskNew.type_* key 动态翻译.
 const taskTypeOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '未分类' },
-  ...TASK_TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label })),
+  { value: '', label: t('taskNew.unclassified') },
+  ...TASK_TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(`taskNew.type_${o.value}`) })),
 ]);
 
 /** 常用 model shortcut + 用户 LLM 配置的 model + 历史 task.model 聚合 (与
     master useAvailableModels 同口径). SPA 没 React hook, 这里 inline. 拉不到
     时退化为只显示常用模型. */
 const modelOptions = computed<{ value: string; label: string }[]>(() => {
-  const opts: { value: string; label: string }[] = [{ value: '', label: '默认（按解析链）' }];
+  const opts: { value: string; label: string }[] = [{ value: '', label: t('taskNew.modelDefaultChain') }];
   const seen = new Set<string>(['']);
   // configured 优先
   for (const c of availableLlmConfigs.value) {
@@ -312,7 +316,7 @@ const modelOptions = computed<{ value: string; label: string }[]>(() => {
     // 模型解析走 LLM config 而非 model 字符串).
   }
   // builtin (MASTER MODEL_OPTIONS)
-  for (const m of MASTER_MODEL_OPTIONS) {
+  for (const m of MASTER_MODEL_OPTIONS.value) {
     if (m.value && !seen.has(m.value)) {
       seen.add(m.value);
       opts.push({ value: m.value, label: m.label });
@@ -335,8 +339,9 @@ const canSubmitFull = computed<boolean>(
 /*  Master model options (内联)                                          */
 /* ------------------------------------------------------------------ */
 
-const MASTER_MODEL_OPTIONS: { value: string; label: string }[] = [
-  { value: 'astron-code-latest', label: 'Astron-Code-Latest (讯飞)' },
+// label 走 t() (仅 Astron 带「讯飞」厂商注记需要翻译, 其余为模型名原文).
+const MASTER_MODEL_OPTIONS = computed<{ value: string; label: string }[]>(() => [
+  { value: 'astron-code-latest', label: t('taskNew.modelAstron') },
   { value: 'glm-5.2', label: 'GLM-5.2' },
   { value: 'glm-latest', label: 'GLM-Latest' },
   { value: 'MiniMax-M3', label: 'MiniMax-M3' },
@@ -344,7 +349,7 @@ const MASTER_MODEL_OPTIONS: { value: string; label: string }[] = [
   { value: 'doubao-seed-2.1-turbo', label: 'Doubao-Seed-2.1-Turbo' },
   { value: 'doubao-seed-2.0-pro', label: 'Doubao-Seed-2.0-Pro' },
   { value: 'doubao-seed-2.0-lite', label: 'Doubao-Seed-2.0-Lite' },
-];
+]);
 
 /* ------------------------------------------------------------------ */
 /*  SnapshotConfig (跨组件传值)                                          */
@@ -447,10 +452,10 @@ watch(projectId, async (next) => {
 });
 
 const roleSelectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '不使用角色' },
+  { value: '', label: t('taskNew.noRole') },
   ...availableRoles.value.map((r) => ({
     value: r.id,
-    label: r.project_id ? `${r.name}（本项目）` : r.name,
+    label: r.project_id ? t('taskNew.roleProjectTag', { name: r.name }) : r.name,
   })),
 ]);
 
@@ -557,7 +562,7 @@ const depCandidates = computed<DepTaskItem[]>(() => {
 });
 
 const depEmptyMessage = computed<string>(() =>
-  depSearch.value ? '无匹配任务' : '无可选任务（仅显示待执行/已完成）',
+  depSearch.value ? t('taskNew.depEmptySearch') : t('taskNew.depEmptyNone'),
 );
 
 /* ------------------------------------------------------------------ */
@@ -625,7 +630,7 @@ async function handleQuickSubmit(): Promise<void> {
     router.push(`/tasks/${taskId}`);
   } catch (err) {
     console.error(err);
-    const msg = err instanceof Error ? err.message : '创建失败';
+    const msg = err instanceof Error ? err.message : t('taskNew.createFailed');
     toast.error(isHttpError(err) ? (err as HttpError).message : msg);
   } finally {
     submitting.value = false;
@@ -676,7 +681,7 @@ async function handleFullSubmit(): Promise<void> {
     router.push(`/tasks/${taskId}`);
   } catch (err) {
     console.error(err);
-    toast.error(isHttpError(err) ? (err as HttpError).message : '创建失败');
+    toast.error(isHttpError(err) ? (err as HttpError).message : t('taskNew.createFailed'));
   } finally {
     submitting.value = false;
     submitLock.value = false;
@@ -770,7 +775,7 @@ watch(
 function onSaveAsSnapshot(): void {
   const maxTurnsNum = fullForm.maxTurns.trim() ? Number(fullForm.maxTurns) : undefined;
   snapPrefillConfig.value = {
-    name: fullForm.title || '未命名快照',
+    name: fullForm.title || t('taskNew.unnamedSnapshot'),
     description: fullForm.description || undefined,
     scope: 'global',
     model: fullForm.model || undefined,
@@ -804,23 +809,44 @@ onBeforeUnmount(() => {
 /*  Template-used inline helpers (R23 / R107 / R143)                   */
 /* ------------------------------------------------------------------ */
 
-/** Mode tabs. */
-const MODE_TABS: { key: 'quick' | 'full' | 'snapshots'; label: string }[] = [
-  { key: 'quick', label: '快速模式' },
-  { key: 'full', label: '完整配置' },
-  { key: 'snapshots', label: '模板配置' },
-];
+/** Mode tabs. label 走 t() 动态翻译. */
+const MODE_TABS = computed<{ key: 'quick' | 'full' | 'snapshots'; label: string }[]>(() => [
+  { key: 'quick', label: t('taskNew.tabQuick') },
+  { key: 'full', label: t('taskNew.tabFull') },
+  { key: 'snapshots', label: t('taskNew.tabSnapshots') },
+]);
 
 /** Snapshot select options — quick 模式. */
 const snapshotSelectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '默认配置（自动审批 · high · 200 轮）' },
+  { value: '', label: t('taskNew.defaultConfigOption') },
   ...applicableSnapshots.value.map((s) => ({
     value: s.id,
     label: `${s.name}${
-      s.scope === 'version' ? '（版本）' : s.scope === 'project' ? '（项目）' : '（全局）'
+      s.scope === 'version'
+        ? t('taskNew.scopeTagVersion')
+        : s.scope === 'project'
+          ? t('taskNew.scopeTagProject')
+          : t('taskNew.scopeTagGlobal')
     }`,
   })),
 ]);
+
+/** quick 模式当前配置提示 (选了快照 vs 默认). 文案走 t() 拼装. */
+const configTipText = computed<string>(() => {
+  const s = selectedSnapshot.value;
+  if (!s) return t('taskNew.configTipDefault');
+  const approve =
+    s.auto_approve === 1 || s.auto_approve === null || s.auto_approve === undefined
+      ? t('taskNew.autoApprove')
+      : t('taskNew.needReview');
+  return t('taskNew.configTipSnapshot', {
+    name: s.name,
+    model: s.model || t('taskNew.defaultModel'),
+    effort: s.effort || 'high',
+    rounds: s.max_turns || 200,
+    approve,
+  });
+});
 
 function onSnapshotChange(id: string | null): void {
   selectedSnapshot.value = id
@@ -864,18 +890,18 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
 <template>
   <div class="page">
     <header class="page-header">
-      <button type="button" class="link-back" @click="router.back()">← 返回</button>
-      <h1>新建任务</h1>
+      <button type="button" class="link-back" @click="router.back()">{{ t('taskNew.back') }}</button>
+      <h1>{{ t('taskNew.title') }}</h1>
       <div class="mode-tabs">
         <button
-          v-for="t in MODE_TABS"
-          :key="t.key"
+          v-for="tab in MODE_TABS"
+          :key="tab.key"
           type="button"
           class="mode-tab"
-          :class="{ active: mode === t.key }"
-          @click="mode = t.key"
+          :class="{ active: mode === tab.key }"
+          @click="mode = tab.key"
         >
-          {{ t.label }}
+          {{ tab.label }}
         </button>
       </div>
     </header>
@@ -892,16 +918,16 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
       >
         <div class="grid-2">
           <div>
-            <label class="lbl">项目 *</label>
+            <label class="lbl">{{ t('taskNew.projectLabel') }}</label>
             <Select
               :model-value="projectId"
               :options="projectOptions"
-              placeholder="请选择项目"
+              :placeholder="t('taskNew.selectProject')"
               @update:model-value="onProjectChange"
             />
           </div>
           <div>
-            <label class="lbl">版本</label>
+            <label class="lbl">{{ t('taskNew.versionLabel') }}</label>
             <Select
               :model-value="versionId"
               :options="versionOptions"
@@ -912,7 +938,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
         </div>
 
         <div>
-          <label class="lbl">配置</label>
+          <label class="lbl">{{ t('taskNew.configLabel') }}</label>
           <Select
             :model-value="selectedSnapshot?.id ?? ''"
             :options="snapshotSelectOptions"
@@ -922,11 +948,11 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
         </div>
 
         <div>
-          <label class="lbl">任务指令 *</label>
+          <label class="lbl">{{ t('taskNew.promptLabel') }}</label>
           <Textarea
             v-model="quickPrompt"
             :rows="10"
-            placeholder="直接输入 agent 指令，例如：&#10;优化这个项目的 README 文档，补充使用示例&#10;&#10;将自动审批，创建后立即启动，模型用系统配置"
+            :placeholder="t('taskNew.quickPromptPlaceholder')"
             class-name="ta ta-tall font-mono"
           />
         </div>
@@ -940,49 +966,49 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
           >
             <span>{{ quickGoalOpen ? '▾' : '▸' }}</span>
             <span>{{
-              quickGoalOpen ? '收起完成条件' : '设置完成条件（goal loop，自动循环直到满足）'
+              quickGoalOpen ? t('taskNew.goalCollapse') : t('taskNew.goalExpand')
             }}</span>
           </button>
           <div v-if="quickGoalOpen" class="goal-block">
             <Textarea
               v-model="quickGoalText"
               :rows="4"
-              placeholder="例：docs/foo.md 第一段第一个词是 'bar'（且其他内容不变）"
+              :placeholder="t('taskNew.goalPlaceholder')"
               class-name="ta font-mono"
             />
             <div class="goal-rounds-row">
-              <label class="lbl-inline">最大轮次</label>
+              <label class="lbl-inline">{{ t('taskNew.maxRounds') }}</label>
               <Input
                 v-model="quickGoalRounds"
                 type="number"
                 :min="0"
                 :max="1000"
                 :disabled="!quickGoalText.trim()"
-                placeholder="留空=默认 20, 0=不限"
+                :placeholder="t('taskNew.maxRoundsPlaceholder')"
                 class-name="input-num font-mono"
               />
-              <span class="muted-small">范围 [0, 1000], 0=不限</span>
+              <span class="muted-small">{{ t('taskNew.maxRoundsRange') }}</span>
               <span
                 v-if="!quickGoalText.trim() && quickGoalRounds.trim()"
                 class="warn-small"
-              >⚠ goal_text 为空, 该数字无效</span>
+              >{{ t('taskNew.goalEmptyWarn') }}</span>
             </div>
             <p class="hint-small">
-              提交时会拼成 <code>&lt;goal&gt;...&lt;/goal&gt;</code> 追加到指令末尾。grader（小模型）每轮判定 done / not_done / impossible，agent 也可在 goal_report 写 impossible 主动早停。最多 20 轮（默认）。
+              {{ t('taskNew.goalHintPre') }} <code>&lt;goal&gt;...&lt;/goal&gt;</code>{{ t('taskNew.goalHintPostQuick') }}
             </p>
           </div>
         </div>
 
         <!-- Attachments -->
         <div>
-          <label class="lbl">附件</label>
+          <label class="lbl">{{ t('taskNew.attachLabel') }}</label>
           <div
             class="dropzone"
             @dragover.prevent
             @drop="handleDrop"
             @click="fileInputRef?.open()"
           >
-            拖拽文件到此处，或点击选择（创建任务后自动上传，agent 按路径读取）
+            {{ t('taskNew.dropzone') }}
           </div>
           <FileInput
             ref="fileInputRef"
@@ -1006,20 +1032,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
         </div>
 
         <div class="config-tip">
-          <template v-if="selectedSnapshot">
-            当前快照：{{ selectedSnapshot.name }} · {{ selectedSnapshot.model || '默认模型' }} ·
-            effort={{ selectedSnapshot.effort || 'high' }} · {{ selectedSnapshot.max_turns || 200 }} 轮 ·
-            {{
-              selectedSnapshot.auto_approve === 1
-                ? '自动审批'
-                : selectedSnapshot.auto_approve === 0
-                  ? '需审核'
-                  : '自动审批'
-            }}
-          </template>
-          <template v-else>
-            默认配置：自动审批 · effort=high · 200 轮 · 工作目录自动隔离 · 模型用个人/项目配置或环境变量 ANTHROPIC_MODEL
-          </template>
+          {{ configTipText }}
         </div>
 
         <!-- R59+: 提交按钮 block (100% width) — 用户反馈「可以占一行」,
@@ -1046,16 +1059,16 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
       >
         <div class="grid-2">
           <div>
-            <label class="lbl">项目 *</label>
+            <label class="lbl">{{ t('taskNew.projectLabel') }}</label>
             <Select
               :model-value="projectId"
               :options="projectOptions"
-              placeholder="请选择项目"
+              :placeholder="t('taskNew.selectProject')"
               @update:model-value="onProjectChange"
             />
           </div>
           <div>
-            <label class="lbl">版本</label>
+            <label class="lbl">{{ t('taskNew.versionLabel') }}</label>
             <Select
               :model-value="versionId"
               :options="versionOptions"
@@ -1066,71 +1079,71 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
         </div>
 
         <div>
-          <label class="lbl">标题 *</label>
+          <label class="lbl">{{ t('taskNew.titleLabel') }}</label>
           <Input
             v-model="fullForm.title"
-            placeholder="修复 auth 模块登录 Bug"
+            :placeholder="t('taskNew.titlePlaceholder')"
           />
         </div>
 
         <div>
-          <label class="lbl">Prompt *</label>
+          <label class="lbl">{{ t('taskNew.promptFieldLabel') }}</label>
           <Textarea
             v-model="fullForm.prompt"
             :rows="10"
-            placeholder="实际传给 agent 的指令..."
+            :placeholder="t('taskNew.promptPlaceholder')"
             class="font-mono"
           />
         </div>
 
         <div>
-          <label class="lbl">完成条件（goal loop，可选）</label>
+          <label class="lbl">{{ t('taskNew.goalLabel') }}</label>
           <Textarea
             v-model="fullForm.goal_text"
             :rows="4"
-            placeholder="例：docs/foo.md 第一段第一个词是 'bar'（且其他内容不变）"
+            :placeholder="t('taskNew.goalPlaceholder')"
             class="font-mono"
           />
           <div class="goal-rounds-row">
-            <label class="lbl-inline">最大轮次</label>
+            <label class="lbl-inline">{{ t('taskNew.maxRounds') }}</label>
             <Input
               v-model="fullForm.goal_rounds"
               type="number"
               :min="0"
               :max="1000"
               :disabled="!fullForm.goal_text.trim()"
-              placeholder="留空=默认 20, 0=不限"
+              :placeholder="t('taskNew.maxRoundsPlaceholder')"
               class-name="input-num font-mono"
             />
-            <span class="muted-small">范围 [0, 1000], 0=不限</span>
+            <span class="muted-small">{{ t('taskNew.maxRoundsRange') }}</span>
             <span
               v-if="!fullForm.goal_text.trim() && fullForm.goal_rounds.trim()"
               class="warn-small"
-            >⚠ goal_text 为空, 该数字无效</span>
+            >{{ t('taskNew.goalEmptyWarn') }}</span>
           </div>
           <p class="hint-small">
-            非空 → agent 跑完后 grader 小模型判定 done/not_done/impossible, 未达成自动续跑（最多 20 轮, 见 settings.goal_*）。详见 docs/usage/18-goal-loop.md。
+            {{ t('taskNew.goalHintPostFull') }}
           </p>
         </div>
 
         <div>
-          <label class="lbl">描述</label>
+          <label class="lbl">{{ t('taskNew.descLabel') }}</label>
           <Input
             v-model="fullForm.description"
-            placeholder="任务说明（可选，不传给 agent）"
+            :placeholder="t('taskNew.descPlaceholder')"
           />
         </div>
 
         <div class="grid-2">
           <div>
-            <label class="lbl">工作目录</label>
+            <label class="lbl">{{ t('taskNew.cwdLabel') }}</label>
             <Input
               v-model="fullForm.cwd"
-              placeholder="留空=自动隔离"
+              :placeholder="t('taskNew.cwdPlaceholder')"
             />
           </div>
           <div>
-            <label class="lbl">任务类型</label>
+            <label class="lbl">{{ t('taskNew.typeLabel') }}</label>
             <Select
               :model-value="fullForm.type"
               :options="taskTypeOptions"
@@ -1138,27 +1151,27 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
             />
           </div>
           <div>
-            <label class="lbl">LLM 配置</label>
+            <label class="lbl">{{ t('taskNew.llmLabel') }}</label>
             <Select
               :model-value="fullForm.llm_config_id"
               :options="llmConfigOptions"
               @update:model-value="(v: string | null) => fullForm.llm_config_id = v ?? ''"
             />
             <p class="hint-small">
-              选「默认」按管理员/项目默认链解析；从下拉选具体配置即固定用该份。
+              {{ t('taskNew.llmHint') }}
             </p>
           </div>
           <div>
-            <label class="lbl">模型覆盖 (高级)</label>
+            <label class="lbl">{{ t('taskNew.modelLabel') }}</label>
             <Select
               :model-value="fullForm.model"
               :options="modelOptions"
-              placeholder="留空使用 LLM 配置里的 model"
+              :placeholder="t('taskNew.modelPlaceholder')"
               @update:model-value="(v: string | null) => fullForm.model = v ?? ''"
             />
           </div>
           <div>
-            <label class="lbl">推理强度</label>
+            <label class="lbl">{{ t('taskNew.effortLabel') }}</label>
             <Select
               :model-value="fullForm.effort"
               :options="EFFORT_OPTIONS"
@@ -1166,7 +1179,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
             />
           </div>
           <div>
-            <label class="lbl">优先级</label>
+            <label class="lbl">{{ t('taskNew.priorityLabel') }}</label>
             <Select
               :model-value="fullForm.priority"
               :options="PRIORITY_OPTIONS"
@@ -1177,7 +1190,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
 
         <div class="grid-2">
           <div>
-            <label class="lbl">最大轮次</label>
+            <label class="lbl">{{ t('taskNew.maxRounds') }}</label>
             <Input
               v-model="fullForm.maxTurns"
               type="number"
@@ -1186,7 +1199,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
             />
           </div>
           <div>
-            <label class="lbl">工具审核</label>
+            <label class="lbl">{{ t('taskNew.approveLabel') }}</label>
             <Select
               :model-value="fullForm.autoApprove ? 'on' : 'off'"
               :options="AUTO_APPROVE_OPTIONS_FULL"
@@ -1200,42 +1213,42 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
              后端仍 400 AUTO_COMPLETE_REQUIRES_DAG 兜底. -->
         <div class="grid-2">
           <div>
-            <label class="lbl">角色预设</label>
+            <label class="lbl">{{ t('taskNew.roleLabel') }}</label>
             <Select
               :model-value="fullForm.roleId"
               :options="roleSelectOptions"
               @update:model-value="(v: string | null) => fullForm.roleId = v ?? ''"
             />
             <p class="hint-small">
-              可在 设置 → 角色 里维护；选中后任务继承角色的 system_prompt 与默认参数。
+              {{ t('taskNew.roleHint') }}
             </p>
           </div>
           <div>
-            <label class="lbl">自动验收</label>
+            <label class="lbl">{{ t('taskNew.autoAcceptLabel') }}</label>
             <Checkbox
               :model-value="fullForm.autoComplete"
               :disabled="!currentProjectIsDag"
-              label="reviewing 时自动验收翻 completed（仅 DAG 项目）"
+              :label="t('taskNew.autoAcceptCheckbox')"
               @update:model-value="(v: boolean) => fullForm.autoComplete = v"
             />
             <p v-if="!currentProjectIsDag" class="hint-small">
-              当前项目未开启 DAG 拓扑调度，不可用。
+              {{ t('taskNew.autoAcceptHint') }}
             </p>
           </div>
         </div>
 
         <div>
-          <label class="lbl">允许的工具</label>
+          <label class="lbl">{{ t('taskNew.toolsLabel') }}</label>
           <div class="preset-row">
             <button
               v-for="p in TOOL_PRESETS"
               :key="p.key"
               type="button"
               class="chip-preset"
-              :class="{ active: p.tools.length === fullForm.allowedTools.length && p.tools.every((t) => fullForm.allowedTools.includes(t)) }"
+              :class="{ active: p.tools.length === fullForm.allowedTools.length && p.tools.every((tool) => fullForm.allowedTools.includes(tool)) }"
               @click="setToolPreset(p.tools)"
             >
-              {{ p.label }}
+              {{ t(`taskNew.preset_${p.key}`) }}
             </button>
           </div>
           <div class="tools-row">
@@ -1253,15 +1266,15 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
         </div>
 
         <div>
-          <label class="lbl">标签</label>
+          <label class="lbl">{{ t('taskNew.tagsLabel') }}</label>
           <Input
             v-model="fullForm.tags"
-            placeholder="bugfix, auth（逗号分隔）"
+            :placeholder="t('taskNew.tagsPlaceholder')"
           />
         </div>
 
         <div>
-          <label class="lbl">依赖任务</label>
+          <label class="lbl">{{ t('taskNew.depLabel') }}</label>
           <div class="relative">
             <div class="dep-bar">
               <span
@@ -1281,7 +1294,7 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
                 v-model="depSearch"
                 type="text"
                 class-name="dep-input"
-                :placeholder="fullForm.dependsOn.length === 0 ? '输入任务ID或搜索...' : ''"
+                :placeholder="fullForm.dependsOn.length === 0 ? t('taskNew.depSearchPlaceholder') : ''"
                 @focus="depDropdownOpen = true"
               />
             </div>
@@ -1305,19 +1318,19 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
               </div>
             </template>
           </div>
-          <p class="hint-small">依赖任务完成后才会启动此任务</p>
+          <p class="hint-small">{{ t('taskNew.depHint') }}</p>
         </div>
 
         <!-- Attachments -->
         <div>
-          <label class="lbl">附件</label>
+          <label class="lbl">{{ t('taskNew.attachLabel') }}</label>
           <div
             class="dropzone"
             @dragover.prevent
             @drop="handleDrop"
             @click="fileInputRef?.open()"
           >
-            拖拽文件到此处，或点击选择（创建任务后自动上传，agent 按路径读取）
+            {{ t('taskNew.dropzone') }}
           </div>
           <FileInput
             ref="fileInputRef"
@@ -1362,12 +1375,12 @@ import SnapshotManager from './taskNew/SnapshotManager.vue';
               type="button"
               variant="secondary"
               @click="router.back()"
-            >取消</Button>
+            >{{ t('taskNew.cancel') }}</Button>
             <Button
               type="button"
               variant="ghost"
               @click="onSaveAsSnapshot"
-            >存为快照</Button>
+            >{{ t('taskNew.saveSnapshot') }}</Button>
           </div>
         </div>
       </form>

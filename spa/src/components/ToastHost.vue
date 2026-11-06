@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { useToastStore, type ToastVariant } from '@/stores/toast';
+
+const { t } = useI18n();
 
 const store = useToastStore();
 
@@ -21,19 +24,19 @@ const SYMBOL: Record<ToastVariant, string> = {
     <div class="toast-host" aria-live="polite" aria-atomic="false">
       <transition-group name="toast" tag="div" class="toast-stack">
         <div
-          v-for="t in store.toasts"
-          :key="t.id"
+          v-for="item in store.toasts"
+          :key="item.id"
           class="toast-item"
-          :class="`toast-${t.variant}`"
+          :class="`toast-${item.variant}`"
           role="status"
         >
-          <span class="toast-symbol" aria-hidden="true">{{ SYMBOL[t.variant] }}</span>
-          <span class="toast-message">{{ t.message }}</span>
+          <span class="toast-symbol" aria-hidden="true">{{ SYMBOL[item.variant] }}</span>
+          <span class="toast-message">{{ item.message }}</span>
           <button
             type="button"
             class="toast-close"
-            aria-label="关闭"
-            @click="store.dismiss(t.id)"
+            :aria-label="t('common.close')"
+            @click="store.dismiss(item.id)"
           >×</button>
         </div>
       </transition-group>
