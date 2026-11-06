@@ -1,0 +1,21 @@
+{
+  "residual": {
+    "scopeBadge": {
+      "all": "全部用户",
+      "mine": "仅我的",
+      "owner": "仅该用户",
+      "ownerEmail": "仅 {email}"
+    },
+    "projectRedirect": {
+      "loadingLabel": "加载项目",
+      "loading": "加载中…",
+      "loadFailedTitle": "项目加载失败",
+      "errNotFound": "项目不存在或无权限",
+      "errForbidden": "无权限访问该项目",
+      "errHttp": "请求失败 (HTTP {status})",
+      "errNetwork": "网络异常: {msg}",
+      "errGeneric": "加载失败",
+      "backToProjects": "返回项目列表"
+    }
+  }
+}

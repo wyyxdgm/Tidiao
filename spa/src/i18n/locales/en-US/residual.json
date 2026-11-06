@@ -1,0 +1,21 @@
+{
+  "residual": {
+    "scopeBadge": {
+      "all": "All users",
+      "mine": "Mine only",
+      "owner": "This user only",
+      "ownerEmail": "Only {email}"
+    },
+    "projectRedirect": {
+      "loadingLabel": "Loading project",
+      "loading": "Loading…",
+      "loadFailedTitle": "Failed to load project",
+      "errNotFound": "Project not found or no access",
+      "errForbidden": "No permission to access this project",
+      "errHttp": "Request failed (HTTP {status})",
+      "errNetwork": "Network error: {msg}",
+      "errGeneric": "Load failed",
+      "backToProjects": "Back to projects"
+    }
+  }
+}

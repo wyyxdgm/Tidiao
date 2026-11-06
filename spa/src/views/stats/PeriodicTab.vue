@@ -23,9 +23,12 @@
    与 Next 端 1:1 复刻:
    - 4 stat 卡 (项目数 / 有聚合报告 / 聚合文件总数 / 无 aggregated/ 目录).
    - 每个项目卡片: 标题 + "N 个文件" + 桶 label + chip 链接 (跳 wiki).
-   - 底部: projectsNoData 提示. */
+   - 底部: projectsNoData 提示.
+   - i18n (W4b): 用户可见文案走 t('misc.stats.periodicTab.*'); BUCKET_LABEL
+     中文 label 改走 bucketLabel() 动态翻译 (语言切换即时生效). */
 
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get } from '@/api/http';
 import { listProjects, type Project } from '@/api/projects';
 import {
@@ -52,13 +55,14 @@ interface ProjectAggregate {
 
 const PREFIX = 'docs/stats/aggregated';
 
-const BUCKET_LABEL: Record<PeriodicBucket, string> = {
-  daily: '日报',
-  weekly: '周报',
-  monthly: '月报',
-  yearly: '年报',
-  other: '其他',
-};
+const { t } = useI18n();
+
+const BUCKETS: PeriodicBucket[] = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
+
+/** 桶 label 走 t() 动态翻译 (语言切换即时生效) — 原 BUCKET_LABEL 常量表. */
+function bucketLabel(b: PeriodicBucket): string {
+  return t(`misc.stats.periodicTab.bucket${b.charAt(0).toUpperCase()}${b.slice(1)}`);
+}
 
 /* ------------------------------------------------------------------ */
 /*  state                                                                */
@@ -135,45 +139,45 @@ function fileHref(projectId: string, filePath: string): string {
 <template>
   <div class="periodic-tab">
     <!-- 错误态 -->
-    <div v-if="err" class="text-sm text-red-600">加载失败：{{ err }}</div>
+    <div v-if="err" class="text-sm text-red-600">{{ t('misc.stats.periodicTab.loadFailed', { msg: err }) }}</div>
 
     <!-- 加载态 -->
     <div
       v-else-if="isLoading"
       class="min-h-[200px] flex items-center justify-center text-gray-400"
     >
-      加载中…
+      {{ t('misc.stats.periodicTab.loading') }}
     </div>
 
     <template v-else>
       <div class="card">
-        <h2 class="card-title">周期总结</h2>
+        <h2 class="card-title">{{ t('misc.stats.periodicTab.title') }}</h2>
         <p class="card-desc">
-          按 C4 拍板：汇总产物落项目仓 <code>&lt;project&gt;/docs/stats/aggregated/</code>，主 partner 不集中汇总。本 tab 仅渲染路径清单，点击跳项目 wiki 查阅正文。
+          {{ t('misc.stats.periodicTab.descA') }} <code>&lt;project&gt;/docs/stats/aggregated/</code>{{ t('misc.stats.periodicTab.descB') }}
         </p>
 
         <div class="stat-grid">
           <div class="stat-card-soft">
-            <div class="stat-card-label">项目数</div>
+            <div class="stat-card-label">{{ t('misc.stats.periodicTab.statProjects') }}</div>
             <div class="stat-card-value">{{ aggregates?.length ?? 0 }}</div>
           </div>
           <div class="stat-card-soft">
-            <div class="stat-card-label">有聚合报告</div>
+            <div class="stat-card-label">{{ t('misc.stats.periodicTab.statWithReports') }}</div>
             <div class="stat-card-value">{{ projectsWithFiles.length }}</div>
           </div>
           <div class="stat-card-soft">
-            <div class="stat-card-label">聚合文件总数</div>
+            <div class="stat-card-label">{{ t('misc.stats.periodicTab.statTotalFiles') }}</div>
             <div class="stat-card-value">{{ totalFiles }}</div>
           </div>
           <div class="stat-card-soft">
-            <div class="stat-card-label">无 aggregated/ 目录</div>
+            <div class="stat-card-label">{{ t('misc.stats.periodicTab.statNoDir') }}</div>
             <div class="stat-card-value">{{ projectsNoData }}</div>
           </div>
         </div>
 
         <template v-if="projectsWithFiles.length === 0">
           <p class="empty-state">
-            本账号下项目都还没维护 <code>docs/stats/aggregated/</code>。项目 partner 写聚合 md 后将出现在这里。
+            {{ t('misc.stats.periodicTab.emptyA') }} <code>docs/stats/aggregated/</code>{{ t('misc.stats.periodicTab.emptyB') }}
           </p>
         </template>
 
@@ -185,13 +189,13 @@ function fileHref(projectId: string, filePath: string): string {
           >
             <div class="project-card-header">
               <h3 class="project-name">{{ agg.project.name }}</h3>
-              <span class="muted-tiny">{{ agg.files.length }} 个文件</span>
+              <span class="muted-tiny">{{ t('misc.stats.periodicTab.filesCount', { n: agg.files.length }) }}</span>
             </div>
             <div class="bucket-list">
-              <template v-for="b in (Object.keys(BUCKET_LABEL) as PeriodicBucket[])" :key="b">
+              <template v-for="b in BUCKETS" :key="b">
                 <div v-if="groupByBucket(agg.files)[b].length > 0" class="bucket-block">
                   <div class="bucket-label">
-                    {{ BUCKET_LABEL[b] }}（{{ groupByBucket(agg.files)[b].length }}）
+                    {{ bucketLabel(b) }}（{{ groupByBucket(agg.files)[b].length }}）
                   </div>
                   <div class="file-chips">
                     <router-link
@@ -212,7 +216,7 @@ function fileHref(projectId: string, filePath: string): string {
       </div>
 
       <p v-if="projectsNoData > 0" class="muted-tiny">
-        提示：{{ projectsNoData }} 个项目暂无 <code>docs/stats/aggregated/</code> 目录（CWD 不存在或目录未建）。
+        {{ t('misc.stats.periodicTab.noDataHintA', { n: projectsNoData }) }} <code>docs/stats/aggregated/</code>{{ t('misc.stats.periodicTab.noDataHintB') }}
       </p>
     </template>
   </div>

@@ -22,9 +22,12 @@
    与 Next 端 1:1 复刻:
    - 4 卡 (总花费/带 dim task/唯一 dim 数/采样 task 数).
    - dim 行: canonical chip + name + task·cost + 双层 bar.
-   - 底部提示: "深色 = 花费占比 · 浅色 = 任务数占比" + "采样 N 个 task". */
+   - 底部提示: "深色 = 花费占比 · 浅色 = 任务数占比" + "采样 N 个 task".
+   - i18n (W4b): 用户可见文案走 t('misc.stats.dimensionsTab.*'), 代码内嵌
+     <code> 元素按 BoardPage createTip1/2 模式拆 A/B 两段. */
 
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get } from '@/api/http';
 import type { CostBreakdown } from '@/api/stats';
 import { aggregateDimensions, type DimAgg } from '@/lib/stats/dimensions-aggregate';
@@ -35,6 +38,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  state                                                                */
@@ -98,45 +103,45 @@ function countPct(d: DimAgg): number {
 <template>
   <div class="dimensions-tab">
     <!-- 错误态 -->
-    <div v-if="err" class="text-sm text-red-600">加载失败：{{ err }}</div>
+    <div v-if="err" class="text-sm text-red-600">{{ t('misc.stats.dimensionsTab.loadFailed', { msg: err }) }}</div>
 
     <!-- 加载态 -->
     <div
       v-else-if="isLoading"
       class="min-h-[200px] flex items-center justify-center text-gray-400"
     >
-      加载中…
+      {{ t('misc.stats.dimensionsTab.loading') }}
     </div>
 
     <template v-else>
       <div class="card">
-        <h2 class="card-title">维度分布（dim:*）</h2>
+        <h2 class="card-title">{{ t('misc.stats.dimensionsTab.title') }}</h2>
         <p class="card-desc">
-          按 <code>dim:*</code> 命名空间聚合（backend / frontend / infra / 沟通）。一个 task 可同时打多个维度，按出现次数累加。
+          {{ t('misc.stats.dimensionsTab.descA') }} <code>dim:*</code> {{ t('misc.stats.dimensionsTab.descB') }}
         </p>
 
         <template v-if="!hasData">
           <p class="muted-small">
-            暂无 dim:* 标签数据。给 task 打 <code>--tags dim:backend</code> 后将出现在这里。
+            {{ t('misc.stats.dimensionsTab.emptyA') }} <code>--tags dim:backend</code> {{ t('misc.stats.dimensionsTab.emptyB') }}
           </p>
         </template>
 
         <template v-else>
           <div class="stat-grid">
             <div class="stat-card-soft">
-              <div class="stat-card-label">总花费 (dim:*)</div>
+              <div class="stat-card-label">{{ t('misc.stats.dimensionsTab.statTotalCost') }}</div>
               <div class="stat-card-value">{{ formatCost(totalCost) }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">带 dim 标签的 task</div>
+              <div class="stat-card-label">{{ t('misc.stats.dimensionsTab.statTaggedTasks') }}</div>
               <div class="stat-card-value">{{ totalTaggedTasks }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">唯一 dim 维度数</div>
+              <div class="stat-card-label">{{ t('misc.stats.dimensionsTab.statUniqueDims') }}</div>
               <div class="stat-card-value">{{ dims.filter((d) => d.taskCount > 0).length }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">采样 task 数</div>
+              <div class="stat-card-label">{{ t('misc.stats.dimensionsTab.statSampledTasks') }}</div>
               <div class="stat-card-value">{{ tasks?.length ?? 0 }} (limit=200)</div>
             </div>
           </div>
@@ -146,7 +151,7 @@ function countPct(d: DimAgg): number {
               <div class="dim-row-label">
                 <span class="dim-row-name">
                   <span :class="d.isCanonical ? 'chip-canonical' : 'chip-other'">
-                    {{ d.isCanonical ? 'canonical' : '其他' }}
+                    {{ d.isCanonical ? 'canonical' : t('misc.stats.dimensionsTab.chipOther') }}
                   </span>
                   <code>dim:{{ d.name }}</code>
                 </span>
@@ -156,25 +161,25 @@ function countPct(d: DimAgg): number {
                 <div
                   class="dim-bar-cost"
                   :style="{ width: Math.max(costPct(d), 1) + '%' }"
-                  :title="`花费 ${formatCost(d.costUsd)}`"
+                  :title="t('misc.stats.dimensionsTab.barCostTitle', { cost: formatCost(d.costUsd) })"
                 />
                 <div
                   class="dim-bar-count"
                   :style="{ width: Math.max(countPct(d), 1) + '%' }"
-                  :title="`任务数 ${d.taskCount}`"
+                  :title="t('misc.stats.dimensionsTab.barCountTitle', { n: d.taskCount })"
                 />
               </div>
             </div>
           </div>
 
           <p class="muted-tiny mt-4">
-            深色 = 花费占比 · 浅色 = 任务数占比。任务数可能因 limit=200 截断，超过部分未计入。
+            {{ t('misc.stats.dimensionsTab.legendTruncated') }}
           </p>
         </template>
       </div>
 
       <p class="muted-tiny">
-        提示：本账号共 {{ tasks?.length ?? 0 }} 个采样 task，其中至少 {{ totalTaggedTasks }} 个打了 dim:* 标签。
+        {{ t('misc.stats.dimensionsTab.hintSampled', { n: tasks?.length ?? 0, tagged: totalTaggedTasks }) }}
       </p>
     </template>
   </div>

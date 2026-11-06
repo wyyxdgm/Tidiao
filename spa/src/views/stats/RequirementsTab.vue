@@ -22,9 +22,12 @@
    与 Next 端 1:1 复刻:
    - 4 stat 卡 (唯一需求数 / 带 req task 数 / commit 数 / 总花费).
    - 表格 6 列: 需求名 / task 数 / 完成 / 失败 / commit 数 / 花费.
-   - 底部提示: 采样 N task + commit 数说明. */
+   - 底部提示: 采样 N task + commit 数说明.
+   - i18n (W4b): 用户可见文案走 t('misc.stats.requirementsTab.*'), 内嵌
+     <code> 元素按 A/B 两段拆分. */
 
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get } from '@/api/http';
 import { aggregateRequirements, type ReqAgg } from '@/lib/stats/requirements-aggregate';
 import Input from '@/components/Input.vue';
@@ -50,6 +53,8 @@ interface TaskRow {
 const tasks = ref<TaskRow[] | null>(null);
 const err = ref<string | null>(null);
 const filter = ref<string>('');
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  fetch                                                                */
@@ -102,54 +107,54 @@ function formatCost(v: number): string {
 <template>
   <div class="requirements-tab">
     <!-- 错误态 -->
-    <div v-if="err" class="text-sm text-red-600">加载失败：{{ err }}</div>
+    <div v-if="err" class="text-sm text-red-600">{{ t('misc.stats.requirementsTab.loadFailed', { msg: err }) }}</div>
 
     <!-- 加载态 -->
     <div
       v-else-if="isLoading"
       class="min-h-[200px] flex items-center justify-center text-gray-400"
     >
-      加载中…
+      {{ t('misc.stats.requirementsTab.loading') }}
     </div>
 
     <template v-else>
       <div class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">需求聚合（req:*）</h2>
+            <h2 class="card-title">{{ t('misc.stats.requirementsTab.title') }}</h2>
             <p class="card-desc">
-              按 <code>req:*</code> 命名空间聚合（重名合并）。双轨 = task 数（打过该 req 的 task）+ commit 数（这些 task 的 head/base commit 去重）。
+              {{ t('misc.stats.requirementsTab.descA') }} <code>req:*</code> {{ t('misc.stats.requirementsTab.descB') }}
             </p>
           </div>
           <Input
             type="search"
-            placeholder="过滤需求名..."
+            :placeholder="t('misc.stats.requirementsTab.filterPlaceholder')"
             v-model="filter"
           />
         </div>
 
         <template v-if="aggs.length === 0">
           <p class="empty-state">
-            暂无 req:* 标签数据。给 task 打 <code>--tags req:R122</code> 后将出现在这里。
+            {{ t('misc.stats.requirementsTab.emptyA') }} <code>--tags req:R122</code> {{ t('misc.stats.requirementsTab.emptyB') }}
           </p>
         </template>
 
         <template v-else>
           <div class="stat-grid">
             <div class="stat-card-soft">
-              <div class="stat-card-label">唯一需求数</div>
+              <div class="stat-card-label">{{ t('misc.stats.requirementsTab.statUniqueReqs') }}</div>
               <div class="stat-card-value">{{ aggs.length }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">带 req 标签的 task</div>
+              <div class="stat-card-label">{{ t('misc.stats.requirementsTab.statTaggedTasks') }}</div>
               <div class="stat-card-value">{{ totalTasks }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">关联 commit 数（去重）</div>
+              <div class="stat-card-label">{{ t('misc.stats.requirementsTab.statCommits') }}</div>
               <div class="stat-card-value">{{ totalCommits }}</div>
             </div>
             <div class="stat-card-soft">
-              <div class="stat-card-label">总花费</div>
+              <div class="stat-card-label">{{ t('misc.stats.requirementsTab.statTotalCost') }}</div>
               <div class="stat-card-value">{{ formatCost(totalCost) }}</div>
             </div>
           </div>
@@ -158,12 +163,12 @@ function formatCost(v: number): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="text-left">需求名</th>
-                  <th class="text-right">task 数</th>
-                  <th class="text-right">完成</th>
-                  <th class="text-right">失败</th>
-                  <th class="text-right">commit 数</th>
-                  <th class="text-right">花费</th>
+                  <th class="text-left">{{ t('misc.stats.requirementsTab.thName') }}</th>
+                  <th class="text-right">{{ t('misc.stats.requirementsTab.thTasks') }}</th>
+                  <th class="text-right">{{ t('misc.stats.requirementsTab.thCompleted') }}</th>
+                  <th class="text-right">{{ t('misc.stats.requirementsTab.thFailed') }}</th>
+                  <th class="text-right">{{ t('misc.stats.requirementsTab.thCommits') }}</th>
+                  <th class="text-right">{{ t('misc.stats.requirementsTab.thCost') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -180,13 +185,13 @@ function formatCost(v: number): string {
           </div>
 
           <p v-if="filtered.length === 0 && filter" class="empty-state">
-            无匹配 "{{ filter }}" 的需求。
+            {{ t('misc.stats.requirementsTab.noMatch', { filter }) }}
           </p>
         </template>
       </div>
 
       <p class="muted-tiny">
-        提示：采样 {{ tasks?.length ?? 0 }} task (limit=200)。commit 数 = 这些 task 的 base/head commit 去重计数，未与飞书行 R{"{N}"} 关联（总方案 §4 T2.2 二期接入）。
+        {{ t('misc.stats.requirementsTab.hintSampled', { n: tasks?.length ?? 0 }) }}
       </p>
     </template>
   </div>

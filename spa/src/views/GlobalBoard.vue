@@ -42,9 +42,14 @@
      (chat list 多会话切换 / opencode 模型选择 留 R55+); (2) ViewSwitcher
      不抽组件, 用 inline button group (本视图专用, 不抽到 components/
      避免 L0 范围漂移); (3) R59 起 chat 模式 chrome 可折叠 (R56-B7 老特性
-     恢复, 折叠按钮从 ChatView pill 挪到 chrome 自己 view-switcher 旁边). */
+     恢复, 折叠按钮从 ChatView pill 挪到 chrome 自己 view-switcher 旁边).
+   - i18n (W4b): 用户可见文案走 t(); 状态/类型/按钮 label 复用 tasks.board.*
+     (与 BoardPage 同源同文案), GlobalBoard 专属 key 落 globalBoard 域
+     (locales/{zh-CN,en-US}/globalBoard.json). 常量 label 表改 computed 包
+     t() — 语言切换即时刷新 (照 BoardPage W3a 模式). */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, post, del, HttpError } from '@/api/http';
 import CategoryBoardView from '@/components/CategoryBoardView.vue';
 import Empty from '@/components/Empty.vue';
@@ -170,21 +175,25 @@ type ViewMode = 'cards' | 'list' | 'grouped' | 'kanban' | 'chat' | 'category';
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
+const { t } = useI18n();
+
+/** 状态标签 (i18n W4b): computed 包 t() — 语言切换即时刷新 (照 BoardPage 模式).
+    文案复用 tasks.board.* (与 BoardPage 同源同文案). */
+const STATUS_LABELS = computed<Record<TaskStatus, string>>(() => ({
+  pending: t('tasks.board.statusPending'),
+  queued: t('tasks.board.statusQueued'),
+  running: t('tasks.board.statusRunning'),
+  paused: t('tasks.board.statusPaused'),
+  reviewing: t('tasks.board.statusReviewing'),
+  verifying: t('tasks.board.statusVerifying'),
+  await_user: t('tasks.board.statusAwaitUser'),
+  completed: t('tasks.board.statusCompleted'),
+  failed: t('tasks.board.statusFailed'),
   // 历史 rejected 显示兼容 (2026-09-15 决策): 读路径已映射 cancelled, 标签同步
   // 显示「已取消」— 曾误标「等待中」产生幽灵计数 (damo 2026-11-01 反馈).
-  rejected: '已取消',
-  cancelled: '已取消',
-};
+  rejected: t('tasks.board.statusCancelled'),
+  cancelled: t('tasks.board.statusCancelled'),
+}));
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
   pending: 'gb-status-pending',
@@ -200,12 +209,13 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
   cancelled: 'gb-status-cancelled',
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  design: '设计',
-  dev: '开发',
-  test: '测试',
-  deploy: '部署',
-};
+/** type 标签 (i18n W4b): computed 包 t(), 文案复用 tasks.board.type*. */
+const TYPE_LABELS = computed<Record<string, string>>(() => ({
+  design: t('tasks.board.typeDesign'),
+  dev: t('tasks.board.typeDev'),
+  test: t('tasks.board.typeTest'),
+  deploy: t('tasks.board.typeDeploy'),
+}));
 
 const TYPE_COLORS: Record<string, string> = {
   design: 'gb-type-design',
@@ -230,13 +240,14 @@ const COLUMN_ORDER: TaskStatus[] = [
 ];
 
 // awaiting marker → chip 样式 (与 Next global-board.tsx TYPE_META 同源).
-const AWAITING_TYPE_META: Record<string, { color: string; cn: string }> = {
-  review: { color: 'gb-marker-review', cn: '需拍板' },
-  choice: { color: 'gb-marker-choice', cn: '等选' },
-  info: { color: 'gb-marker-info', cn: '提示' },
-  waiting_reply: { color: 'gb-marker-waiting', cn: '等回复' },
-  suggestion: { color: 'gb-marker-suggestion', cn: '有建议' },
-  stuck: { color: 'gb-marker-stuck', cn: '卡住' },
+// i18n W4b: cn 字段改 labelKey (locale key), 渲染时经 t() 翻译.
+const AWAITING_TYPE_META: Record<string, { color: string; labelKey: string }> = {
+  review: { color: 'gb-marker-review', labelKey: 'globalBoard.awaitingReview' },
+  choice: { color: 'gb-marker-choice', labelKey: 'globalBoard.awaitingChoice' },
+  info: { color: 'gb-marker-info', labelKey: 'globalBoard.awaitingInfo' },
+  waiting_reply: { color: 'gb-marker-waiting', labelKey: 'globalBoard.awaitingWaitingReply' },
+  suggestion: { color: 'gb-marker-suggestion', labelKey: 'globalBoard.awaitingSuggestion' },
+  stuck: { color: 'gb-marker-stuck', labelKey: 'globalBoard.awaitingStuck' },
 };
 
 // 状态 → 行内操作按钮 (R122 第三轮 #3 全状态核对, R131 加 await_user).
@@ -246,31 +257,32 @@ interface ActionBtn {
   tone: 'primary' | 'danger' | 'normal';
 }
 
-const STATUS_BUTTONS: Record<TaskStatus, ActionBtn[]> = {
+// i18n W4b: label 改 computed 包 t() — 语言切换即时刷新 (照 BoardPage 模式).
+const STATUS_BUTTONS = computed<Record<TaskStatus, ActionBtn[]>>(() => ({
   // R164 追加 (damo): pending/queued 也给「取消 + 删除」— 派发洪水时在列表上
   // 直接止血, 不用进详情页/改库. queued 软删后 schedule() 出队 `!task -> continue` 跳过.
-  pending:   [{ key: 'start', label: '启动', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  queued:    [{ key: 'start', label: '启动', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  running:   [{ key: 'pause', label: '暂停', tone: 'normal' }, { key: 'cancel', label: '取消', tone: 'danger' }],
-  paused:    [{ key: 'resume', label: '恢复', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }],
+  pending:   [{ key: 'start', label: t('tasks.board.btnStart'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  queued:    [{ key: 'start', label: t('tasks.board.btnStart'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  running:   [{ key: 'pause', label: t('tasks.board.btnPause'), tone: 'normal' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
+  paused:    [{ key: 'resume', label: t('tasks.board.btnResume'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
   reviewing: [
-    { key: 'approve', label: '完成', tone: 'primary' },
-    { key: 'refine', label: '继续干', tone: 'primary' },
-    { key: 'restart', label: '🔄 清空重来', tone: 'danger' },
-    { key: 'cancel', label: '取消', tone: 'danger' },
+    { key: 'approve', label: t('tasks.board.btnApprove'), tone: 'primary' },
+    { key: 'refine', label: t('tasks.board.btnRefine'), tone: 'primary' },
+    { key: 'restart', label: t('tasks.board.btnRestart'), tone: 'danger' },
+    { key: 'cancel', label: t('common.cancel'), tone: 'danger' },
   ],
-  verifying: [{ key: 'cancel', label: '取消', tone: 'danger' }],
+  verifying: [{ key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
   await_user: [
-    { key: 'approve', label: '完成', tone: 'primary' },
-    { key: 'unawait', label: '继续执行', tone: 'primary' },
-    { key: 'cancel', label: '取消', tone: 'danger' },
+    { key: 'approve', label: t('tasks.board.btnApprove'), tone: 'primary' },
+    { key: 'unawait', label: t('tasks.board.btnUnawait'), tone: 'primary' },
+    { key: 'cancel', label: t('common.cancel'), tone: 'danger' },
   ],
-  completed: [{ key: 'delete', label: '删除', tone: 'danger' }],
-  failed:    [{ key: 'start', label: '重试', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
+  completed: [{ key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  failed:    [{ key: 'start', label: t('tasks.board.btnRetry'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
   // rejected 显示已并入 cancelled (2026-09-15 决策), 行内按钮同口径 (重启/删除).
-  rejected:  [{ key: 'start', label: '重启', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  cancelled: [{ key: 'start', label: '重启', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
-};
+  rejected:  [{ key: 'start', label: t('tasks.board.btnRestartTask'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  cancelled: [{ key: 'start', label: t('tasks.board.btnRestartTask'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+}));
 
 /* ------------------------------------------------------------------ */
 /*  Router                                                             */
@@ -301,6 +313,19 @@ const viewMode = computed<ViewMode>(() => {
      从未点选过才回落 viewport 缺省. 优先级: URL ?mode > 缓存 > viewport 缺省. */
   return readGlobalBoardMode() ?? currentDefaultMode();
 });
+
+/** i18n (W4b): 视图模式 label 走 t() — view-switcher 渲染用 (语言切换即时生效). */
+function viewLabel(m: ViewMode): string {
+  const keyMap: Record<ViewMode, string> = {
+    cards: 'viewCards',
+    list: 'viewList',
+    grouped: 'viewGrouped',
+    kanban: 'viewKanban',
+    category: 'viewCategory',
+    chat: 'viewChat',
+  };
+  return t(`globalBoard.${keyMap[m]}`);
+}
 
 /** R51 (B095) 同步配置: scope=当前 global 单 key / account=全平台共享.
     镜像 BoardPage 3 级 scope/project/account, 但 global board 没有 project 维度,
@@ -667,11 +692,11 @@ async function loadTerminal(offset: number): Promise<void> {
 
 function setError(e: unknown): void {
   if (e instanceof HttpError) {
-    error.value = e.message || `请求失败 (HTTP ${e.status})`;
+    error.value = e.message || t('tasks.board.errRequestFailed', { status: e.status });
   } else if (e instanceof Error) {
-    error.value = `网络异常: ${e.message}`;
+    error.value = t('tasks.board.errNetwork', { msg: e.message });
   } else {
-    error.value = '加载失败';
+    error.value = t('tasks.board.loadFailed');
   }
 }
 
@@ -747,7 +772,7 @@ const versionOptions = computed<{ value: string; label: string }[]>(() => {
   //   仅选中项目时出现 (与 Assets 一致; 后端 unversioned=true 也要求 project),
   //   标签按级联格式拼 → 如「taoke / 其他版本」。
   const opts: { value: string; label: string }[] = [
-    { value: '', label: '全部版本' },
+    { value: '', label: t('globalBoard.allVersions') },
     ...list.map((v) => ({
       value: v.id,
       label: `${projectNames.value[v.project_id] || '?'} / ${v.name}`,
@@ -756,14 +781,14 @@ const versionOptions = computed<{ value: string; label: string }[]>(() => {
   if (projectFilter.value) {
     opts.push({
       value: 'null',
-      label: `${projectNames.value[projectFilter.value] || '?'} / 其他版本`,
+      label: `${projectNames.value[projectFilter.value] || '?'} / ${t('globalBoard.otherVersions')}`,
     });
   }
   return opts;
 });
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '全部项目' },
+  { value: '', label: t('globalBoard.allProjects') },
   ...projects.value.map((p) => ({ value: p.id, label: p.name })),
 ]);
 
@@ -771,7 +796,7 @@ const modelOptions = computed<{ value: string; label: string }[]>(() => {
   const m = new Set<string>();
   for (const t of [...activeTasks.value, ...terminalTasks.value]) if (t.model) m.add(t.model);
   const list = Array.from(m).sort();
-  return [{ value: '', label: '全部模型' }, ...list.map((x) => ({ value: x, label: x }))];
+  return [{ value: '', label: t('tasks.board.allModels') }, ...list.map((x) => ({ value: x, label: x }))];
 });
 
 const tagOptions = computed<{ value: string; label: string }[]>(() => {
@@ -781,7 +806,7 @@ const tagOptions = computed<{ value: string; label: string }[]>(() => {
     for (const x of arr) tags.add(x);
   }
   const list = Array.from(tags).sort();
-  return [{ value: '', label: '全部标签' }, ...list.map((x) => ({ value: x, label: x }))];
+  return [{ value: '', label: t('tasks.board.allTags') }, ...list.map((x) => ({ value: x, label: x }))];
 });
 
 const filterPredicate = (t: TaskTrimmed): boolean => {
@@ -841,7 +866,7 @@ const buckets = computed<Bucket[]>(() => {
   }
   const arr: Bucket[] = Array.from(map.entries()).map(([key, ts]) => ({
     key,
-    label: key === '__unassigned__' ? '未分类' : (projectNames.value[key] || key.slice(0, 8)),
+    label: key === '__unassigned__' ? t('tasks.category.unassigned') : (projectNames.value[key] || key.slice(0, 8)),
     isUnassigned: key === '__unassigned__',
     tasks: ts,
   }));
@@ -885,7 +910,7 @@ async function runAction(taskId: string, action: string, body?: Record<string, u
       : `/api/tasks/${taskId}/${action}`;
     const data = await post<{ status?: TaskStatus }>(url, body);
     if (action === 'start' && data?.status === 'queued') {
-      toast.warn('已加入排队, 并发已满, 等槽位空闲后自动运行');
+      toast.warn(t('tasks.board.queuedToast'));
     } else if (action === 'restore') {
       patchTask(taskId, { deleted_at: null });
     } else if (data?.status) {
@@ -893,11 +918,11 @@ async function runAction(taskId: string, action: string, body?: Record<string, u
     }
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      toast.error(`${action} 失败: ${e.message || `HTTP ${e.status}`}`);
+      toast.error(t('tasks.board.actionFailedMsg', { action, msg: e.message || `HTTP ${e.status}` }));
     } else if (e instanceof Error) {
-      toast.error(`网络错误: ${e.message}`);
+      toast.error(t('tasks.board.errNetworkToast', { msg: e.message }));
     } else {
-      toast.error(`${action} 失败`);
+      toast.error(t('tasks.board.actionFailed', { action }));
     }
   }
 }
@@ -957,7 +982,7 @@ function canDeleteTask(status: TaskStatus, deletedAt: string | null): boolean {
 
 function handleListAction(task: TaskTrimmed, action: string): void {
   if (action === 'delete' && !canDeleteTask(task.status, task.deleted_at)) {
-    toast.error('无法删除此任务');
+    toast.error(t('globalBoard.errCannotDelete'));
     return;
   }
   if (action === 'refine') {
@@ -1004,17 +1029,17 @@ function parseAwaitingMarkers(json: string | null, awaitingOwnerReview: number):
       const parsed = JSON.parse(json) as Array<{ type?: string; desc?: string | null }>;
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((m) => {
-          const t = (m.type || 'review').toLowerCase();
-          const meta = AWAITING_TYPE_META[t] || {
+          const ty = (m.type || 'review').toLowerCase();
+          const meta = AWAITING_TYPE_META[ty] || {
             color: 'gb-marker-default',
-            cn: t || '需拍板',
+            labelKey: '',
           };
           const descSnippet = m.desc
             ? ` · ${m.desc.slice(0, 20)}${m.desc.length > 20 ? '…' : ''}`
             : '';
           return {
-            label: `${meta.cn}${descSnippet}`,
-            title: m.desc ? `${t}: ${m.desc}` : `awaiting marker (type=${t})`,
+            label: `${meta.labelKey ? t(meta.labelKey) : ty || t('globalBoard.awaitingFallback')}${descSnippet}`,
+            title: m.desc ? `${ty}: ${m.desc}` : `awaiting marker (type=${ty})`,
             color: meta.color,
           };
         });
@@ -1025,8 +1050,8 @@ function parseAwaitingMarkers(json: string | null, awaitingOwnerReview: number):
   }
   if (awaitingOwnerReview === 1) {
     return [{
-      label: '需拍板',
-      title: 'Agent 标了需拍板 — 需先调 unset-awaiting-review 才能 approve',
+      label: t('globalBoard.awaitingOwnerReviewLabel'),
+      title: t('globalBoard.awaitingOwnerReviewTitle'),
       color: 'gb-marker-review',
     }];
   }
@@ -1038,15 +1063,15 @@ function requirementChip(task: TaskTrimmed): { label: string; title: string; col
   // pending / in_progress / done / cancelled.
   const r = task.requirement_status;
   if (!r) return null;
-  const map: Record<string, { label: string; color: string }> = {
-    pending: { label: '需求待办', color: 'gb-req-pending' },
-    in_progress: { label: '需求进行中', color: 'gb-req-in-progress' },
-    done: { label: '需求完成', color: 'gb-req-done' },
-    cancelled: { label: '需求取消', color: 'gb-req-cancelled' },
+  const map: Record<string, { labelKey: string; color: string }> = {
+    pending: { labelKey: 'globalBoard.reqPending', color: 'gb-req-pending' },
+    in_progress: { labelKey: 'globalBoard.reqInProgress', color: 'gb-req-in-progress' },
+    done: { labelKey: 'globalBoard.reqDone', color: 'gb-req-done' },
+    cancelled: { labelKey: 'globalBoard.reqCancelled', color: 'gb-req-cancelled' },
   };
   const meta = map[r];
   if (!meta) return null;
-  return { label: meta.label, title: `requirement_status: ${r}`, color: meta.color };
+  return { label: t(meta.labelKey), title: `requirement_status: ${r}`, color: meta.color };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1089,10 +1114,12 @@ watch(projectFilter, (v) => {
 const showSyncMenu = ref<boolean>(false);
 const syncMenuRef = ref<HTMLElement | null>(null);
 
-const SYNC_META: Record<SyncLevel, { label: string; hint: string }> = {
-  scope: { label: '不同步', hint: '配置仅应用于当前 global board (本浏览器)' },
-  project: { label: '弱同步', hint: 'global board 无 project 维度, 等同不同步' },
-  account: { label: '强同步', hint: '所有浏览器 / 设备共享同一偏好' },
+// i18n W4b: label 复用 tasks.board.sync*Label (与 BoardPage 同文案), hint 走
+// globalBoard 域 (global board 无 project 维度, hint 文案与 BoardPage 不同).
+const SYNC_META: Record<SyncLevel, { labelKey: string; hintKey: string }> = {
+  scope: { labelKey: 'tasks.board.syncScopeLabel', hintKey: 'globalBoard.syncScopeHint' },
+  project: { labelKey: 'tasks.board.syncProjectLabel', hintKey: 'globalBoard.syncProjectHint' },
+  account: { labelKey: 'tasks.board.syncAccountLabel', hintKey: 'globalBoard.syncAccountHint' },
 };
 
 /** 同步级别 localStorage key — 与 BoardPage (ao-board-sync-level) 区分, 各自独立. */
@@ -1468,16 +1495,16 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
     <header v-if="topHeaderOpen" class="gb-header">
       <div class="gb-header-text">
         <div class="gb-breadcrumb">
-          <router-link to="/" class="gb-breadcrumb-link">项目</router-link>
+          <router-link to="/" class="gb-breadcrumb-link">{{ t('globalBoard.crumbProjects') }}</router-link>
           <span class="gb-breadcrumb-sep">›</span>
-          <span class="gb-breadcrumb-current">全局看板</span>
+          <span class="gb-breadcrumb-current">{{ t('tasks.board.titleGlobal') }}</span>
         </div>
         <!-- R217v7 (damo): 大字「全局看板」h1 删 — 面包屑已有「全局看板」,
              大标题重复占一行. header 高度随之收一截. -->
       </div>
       <!-- R236 (damo): 「活跃/历史」segmented 从 header 挪进下方状态 chip 行
            头部 (语义改为状态分组快捷键), header 只留 view-switcher. -->
-      <div class="gb-view-switcher" role="tablist" aria-label="视图模式">
+      <div class="gb-view-switcher" role="tablist" :aria-label="t('globalBoard.viewModeAria')">
         <button
           v-for="m in (['kanban', 'cards', 'list', 'grouped', 'category', 'chat'] as ViewMode[])"
           :key="m"
@@ -1534,7 +1561,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
               </svg>
             </template>
           </span>
-          <span class="gb-view-label">{{ m === 'cards' ? '卡片' : m === 'list' ? '列表' : m === 'grouped' ? '分组' : m === 'kanban' ? '看板' : m === 'category' ? '分类' : '聊天' }}</span>
+          <span class="gb-view-label">{{ viewLabel(m) }}</span>
         </button>
       </div>
       <!-- R59: chrome 折叠按钮 — 之前仅 chat 模式显示 (其他模式 chrome 常驻).
@@ -1544,15 +1571,15 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
       <button
         type="button"
         class="gb-chrome-toggle"
-        :title="topHeaderOpen ? '收起' : '展开'"
+        :title="topHeaderOpen ? t('globalBoard.collapse') : t('globalBoard.expand')"
         :aria-expanded="topHeaderOpen"
-        aria-label="切换折叠"
+        :aria-label="t('globalBoard.toggleFoldAria')"
         @click="handleToggleTopHeader"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
           <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
         </svg>
-        <span>{{ topHeaderOpen ? '收起' : '展开' }}</span>
+        <span>{{ topHeaderOpen ? t('globalBoard.collapse') : t('globalBoard.expand') }}</span>
       </button>
     </header>
 
@@ -1567,14 +1594,14 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
       <button
         type="button"
         class="gb-chrome-fab"
-        :title="'展开'"
-        aria-label="展开"
+        :title="t('globalBoard.expand')"
+        :aria-label="t('globalBoard.expand')"
         @click="handleToggleTopHeader"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
           <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
         </svg>
-        <span>展开</span>
+        <span>{{ t('globalBoard.expand') }}</span>
       </button>
     </div>
 
@@ -1588,32 +1615,32 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
         <Select
           v-model="projectSelect"
           :options="projectOptions"
-          placeholder="全部项目"
+          :placeholder="t('globalBoard.allProjects')"
           class-name="gb-filter-select"
         />
         <Select
           v-model="versionSelect"
           :options="versionOptions"
-          placeholder="全部版本"
+          :placeholder="t('globalBoard.allVersions')"
           class-name="gb-filter-select-wide"
         />
-        <span class="gb-filter-label">状态</span>
+        <span class="gb-filter-label">{{ t('tasks.board.filterStatusLabel') }}</span>
         <!-- R236 (damo) + R248: 全部/活跃/历史 = 状态分组快捷键 (chip 宏) — 点
              「活跃」= 全选 7 个活跃态 + 反选全部终态 (等效把已完成/失败逐个点掉
              的一次点击版); 点「全部」= 11 态全集 (双段同拉, damo: 默认全部).
              高亮判据 = 当前 chip 选择恰等于该组全集 (自定义混选时都不亮, 此时
              按钮语义 = 一键回到该组全集). filter 行五视图
              (kanban/cards/list/grouped/chat) 共享 → 任意模式下都成立. -->
-        <div class="gb-segmented gb-segmented-inline" role="tablist" aria-label="状态分组快捷键">
+        <div class="gb-segmented gb-segmented-inline" role="tablist" :aria-label="t('tasks.board.statusGroupAria')">
           <button
             type="button"
             role="tab"
             :aria-selected="allPresetOn"
             :class="['seg-btn', { 'seg-btn-active': allPresetOn }]"
-            :title="allPresetOn ? '再点一次 = 全不选，然后点单个状态可只看该状态' : '全选全部状态'"
+            :title="allPresetOn ? t('tasks.board.allMacroToggleTitle') : t('tasks.board.allMacroTitle')"
             @click="setStatusGroup('all')"
           >
-            全部
+            {{ t('tasks.board.groupAll') }}
           </button>
           <button
             type="button"
@@ -1622,7 +1649,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             :class="['seg-btn', { 'seg-btn-active': activePresetOn }]"
             @click="setStatusGroup('active')"
           >
-            活跃
+            {{ t('tasks.board.groupActive') }}
           </button>
           <button
             type="button"
@@ -1631,7 +1658,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             :class="['seg-btn', { 'seg-btn-active': terminalPresetOn }]"
             @click="setStatusGroup('terminal')"
           >
-            历史
+            {{ t('tasks.board.groupHistory') }}
           </button>
         </div>
         <!-- R56-A1: chip 行拖拽重排 — 镜像 BoardPage onChipDrag* (HTML5 原生 drag/drop).
@@ -1671,7 +1698,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
           <button
             type="button"
             class="gb-sync-menu-trigger"
-            title="同步配置"
+            :title="t('tasks.board.syncSettingsTitle')"
             :aria-expanded="showSyncMenu"
             @click="showSyncMenu = !showSyncMenu"
           >
@@ -1680,7 +1707,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             </svg>
           </button>
           <div v-if="showSyncMenu" class="gb-sync-menu">
-            <div class="gb-sync-menu-title">同步级别</div>
+            <div class="gb-sync-menu-title">{{ t('tasks.board.syncLevelTitle') }}</div>
             <label
               v-for="(meta, lvl) in SYNC_META"
               :key="lvl"
@@ -1693,8 +1720,8 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 @update:model-value="(v) => setSyncLevel(v as SyncLevel)"
               />
               <span class="gb-sync-menu-text">
-                <span class="gb-sync-menu-label">{{ meta.label }}</span>
-                <span class="gb-sync-menu-hint">{{ meta.hint }}</span>
+                <span class="gb-sync-menu-label">{{ t(meta.labelKey) }}</span>
+                <span class="gb-sync-menu-hint">{{ t(meta.hintKey) }}</span>
               </span>
             </label>
           </div>
@@ -1705,19 +1732,19 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
         <Select
           v-model="modelSelect"
           :options="modelOptions"
-          placeholder="全部模型"
+          :placeholder="t('tasks.board.allModels')"
           class-name="gb-filter-select"
         />
         <Select
           v-model="tagSelect"
           :options="tagOptions"
-          placeholder="全部标签"
+          :placeholder="t('tasks.board.allTags')"
           class-name="gb-filter-select"
         />
         <div class="gb-filter-search">
           <Input
             v-model="searchText"
-            placeholder="搜索标题、指令、结果、标签、ID..."
+            :placeholder="t('globalBoard.searchPlaceholder')"
             clearable
           />
         </div>
@@ -1726,7 +1753,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             :model-value="showDeleted"
             @update:model-value="(v: boolean) => (showDeleted = v)"
           />
-          <span>显示已删除</span>
+          <span>{{ t('tasks.board.showDeleted') }}</span>
         </label>
         <label class="gb-filter-toggle gb-filter-toggle-fav" :class="{ 'gb-filter-toggle-fav-on': favoriteOnly }">
           <Checkbox
@@ -1734,7 +1761,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             @update:model-value="(v: boolean) => (favoriteOnly = v)"
           />
           <span :class="favoriteOnly ? 'gb-star-on' : ''">★</span>
-          <span>只看收藏</span>
+          <span>{{ t('globalBoard.favOnly') }}</span>
         </label>
       </div>
     </div>
@@ -1744,13 +1771,13 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
       <!-- Initial loading -->
       <div v-if="initialLoading" class="gb-loading">
         <Loading size="lg" />
-        <p class="gb-loading-text">加载中…</p>
+        <p class="gb-loading-text">{{ t('tasks.board.loading') }}</p>
       </div>
 
       <!-- Error -->
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('tasks.board.loadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -1761,11 +1788,11 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
       <Empty
         v-else-if="currentGroupTasks.length === 0"
         :title="(activeTasks.length === 0 && terminalTasks.length === 0)
-          ? '暂无任务'
-          : '没有匹配筛选条件的任务'"
+          ? t('tasks.board.emptyAll')
+          : t('tasks.board.emptyFiltered')"
         :description="(activeTasks.length === 0 && terminalTasks.length === 0)
-          ? '新建任务后会出现在这里'
-          : '试试调整筛选条件或清除搜索'"
+          ? t('tasks.board.emptyCreateHint')
+          : t('tasks.board.emptyFilterHint')"
         illustration="inbox"
       />
 
@@ -1776,7 +1803,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
              保留: active 多 await/checkpoint 标记, terminal 多 delete/restore). -->
         <section v-if="neededActive && filteredActive.length > 0">
           <h2 class="gb-section-title">
-            活跃 <span class="gb-section-count">({{ activeTotal }})</span>
+            {{ t('tasks.board.groupActive') }} <span class="gb-section-count">({{ activeTotal }})</span>
           </h2>
           <div class="gb-grid">
             <article
@@ -1802,7 +1829,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 >
                   {{ requirementChip(t)!.label }}
                 </span>
-                <span v-if="t.dispatched_by_task_id" class="gb-by-chip" :title="`由 ${t.dispatched_by_task_id.slice(0, 8)} 派发`">
+                <span v-if="t.dispatched_by_task_id" class="gb-by-chip" :title="$t('tasks.kanban.byTitle', { id: t.dispatched_by_task_id.slice(0, 8) })">
                   [by]{{ t.dispatched_by_task_id.slice(0, 8) }}
                 </span>
                 <span v-if="t.latest_checkpoint_status" class="gb-sub-status" :title="`sub-status: ${t.latest_checkpoint_status}`">
@@ -1815,7 +1842,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                   {{ TYPE_LABELS[t.type] || t.type }}
                 </span>
                 <span v-if="t.priority > 0" class="gb-priority">P{{ t.priority }}</span>
-                <span v-if="t.deleted_at" class="gb-deleted-badge">已删除</span>
+                <span v-if="t.deleted_at" class="gb-deleted-badge">{{ $t('tasks.board.deletedBadge') }}</span>
               </div>
 
               <div class="gb-scope">
@@ -1853,7 +1880,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                      (前 8 位 + 等宽字体 chip), 让用户一眼能区分 200 张卡片
                      实际是不同的 task. 卡片链接 = /tasks/{t.id}, 短哈希仅
                      提供视觉锚点 (复制完整 ID 仍走详情页 ⧉ 按钮). -->
-                <span class="gb-card-id" :title="`任务 ID: ${t.id}`">{{ t.id.slice(0, 8) }}</span>
+                <span class="gb-card-id" :title="$t('globalBoard.taskIdTitle', { id: t.id })">{{ t.id.slice(0, 8) }}</span>
                 <span class="gb-card-model" :title="t.resolved_model || t.model || '(default)'">
                   {{ t.resolved_model || t.model || '(default)' }}
                 </span>
@@ -1869,7 +1896,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
         <!-- Terminal 段 -->
         <section v-if="neededTerminal && filteredTerminal.length > 0">
           <h2 class="gb-section-title">
-            历史 <span class="gb-section-count">({{ terminalTotal }})</span>
+            {{ t('tasks.board.groupHistory') }} <span class="gb-section-count">({{ terminalTotal }})</span>
           </h2>
           <div class="gb-grid">
             <article
@@ -1882,7 +1909,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 v-if="t.deleted_at"
                 type="button"
                 class="gb-card-action gb-card-action-restore"
-                title="恢复任务"
+                :title="$t('tasks.detail.restoreTask')"
                 @click="handleRestoreClick(t, $event)"
               >
                 ↩
@@ -1891,7 +1918,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 v-else-if="(STATUS_COLORS[t.status] && ['pending','queued','completed','failed','rejected','cancelled'].includes(t.status)) || t.deleted_at"
                 type="button"
                 class="gb-card-action gb-card-action-delete"
-                title="删除任务"
+                :title="$t('tasks.board.deleteTaskTitle')"
                 @click="handleDeleteClick(t, $event)"
               >
                 🗑
@@ -1905,7 +1932,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 <span v-if="t.type" :class="['gb-type', TYPE_COLORS[t.type] || 'gb-type-default']">
                   {{ TYPE_LABELS[t.type] || t.type }}
                 </span>
-                <span v-if="t.deleted_at" class="gb-deleted-badge">已删除</span>
+                <span v-if="t.deleted_at" class="gb-deleted-badge">{{ $t('tasks.board.deletedBadge') }}</span>
               </div>
               <div class="gb-scope">
                 <span v-if="t.project_id">{{ projectNames[t.project_id] || '?' }}</span>
@@ -1923,7 +1950,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                 </p>
               </router-link>
               <div class="gb-card-meta">
-                <span class="gb-card-id" :title="`任务 ID: ${t.id}`">{{ t.id.slice(0, 8) }}</span>
+                <span class="gb-card-id" :title="$t('globalBoard.taskIdTitle', { id: t.id })">{{ t.id.slice(0, 8) }}</span>
                 <span class="gb-card-time">{{ formatUpdatedAt(t.updated_at) }}</span>
               </div>
             </article>
@@ -1951,13 +1978,13 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
           <table class="gb-list-table">
             <thead>
               <tr>
-                <th class="gb-list-th-title">标题</th>
-                <th class="gb-list-th-proj">项目</th>
-                <th class="gb-list-th-ver">版本</th>
-                <th class="gb-list-th-status">状态</th>
-                <th class="gb-list-th-type">类型</th>
-                <th class="gb-list-th-time">更新时间</th>
-                <th class="gb-list-th-actions">操作</th>
+                <th class="gb-list-th-title">{{ t('tasks.board.thTitle') }}</th>
+                <th class="gb-list-th-proj">{{ t('globalBoard.thProject') }}</th>
+                <th class="gb-list-th-ver">{{ t('globalBoard.thVersion') }}</th>
+                <th class="gb-list-th-status">{{ t('tasks.board.thStatus') }}</th>
+                <th class="gb-list-th-type">{{ t('tasks.board.thType') }}</th>
+                <th class="gb-list-th-time">{{ t('tasks.board.thUpdatedAt') }}</th>
+                <th class="gb-list-th-actions">{{ t('tasks.board.thActions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -2001,7 +2028,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                   <div class="gb-list-action-row">
                     <template v-if="task.deleted_at">
                       <button class="gb-action-btn gb-action-primary" @click="handleRestoreClick(task, $event)">
-                        恢复
+                        {{ t('tasks.board.btnRestore') }}
                       </button>
                     </template>
                     <template v-else>
@@ -2024,7 +2051,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
               </tr>
             </tbody>
           </table>
-          <div v-if="currentGroupTasks.length === 0" class="gb-list-empty">📭 暂无任务</div>
+          <div v-if="currentGroupTasks.length === 0" class="gb-list-empty">📭 {{ t('tasks.board.emptyAll') }}</div>
         </div>
 
         <!-- Pagination — R59: 按当前段 total, 跳页只重拉当前段 -->
@@ -2083,7 +2110,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
                   <span class="gb-grouped-card-time">{{ formatUpdatedAt(task.updated_at) }}</span>
                 </div>
               </router-link>
-              <div v-if="bucket.tasks.length === 0" class="gb-grouped-col-empty">该列无任务</div>
+              <div v-if="bucket.tasks.length === 0" class="gb-grouped-col-empty">{{ t('globalBoard.colEmpty') }}</div>
             </div>
           </section>
         </div>
@@ -2101,7 +2128,7 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
             @update:page-size="onPageSizeChange"
           />
         </div>
-        <div v-if="currentGroupTasks.length === 0" class="gb-list-empty">📭 暂无任务</div>
+        <div v-if="currentGroupTasks.length === 0" class="gb-list-empty">📭 {{ t('tasks.board.emptyAll') }}</div>
       </div>
 
       <!-- KANBAN VIEW (R48: 4 模式 — cards/list/grouped/kanban) -->
@@ -2158,10 +2185,10 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
     <!-- Delete confirm dialog -->
     <ConfirmDialog
       :open="!!deleteConfirm"
-      title="删除任务"
-      :message="`确定删除「${deleteConfirm?.taskTitle || ''}」？删除后可通过「显示已删除」恢复。`"
-      confirm-label="删除"
-      cancel-label="取消"
+      :title="t('tasks.board.deleteTaskTitle')"
+      :message="t('tasks.board.deleteConfirmMsg', { title: deleteConfirm?.taskTitle || '' })"
+      :confirm-label="t('tasks.board.btnDelete')"
+      :cancel-label="t('common.cancel')"
       variant="danger"
       @confirm="confirmDelete"
       @cancel="deleteConfirm = null"
@@ -2171,27 +2198,27 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
          string message, 不支持 default slot, 这里直接用 Modal + Textarea 自建. -->
     <Modal
       :model-value="!!refineDialog"
-      title="让 agent 接着干"
+      :title="t('tasks.board.refineTitle')"
       size="sm"
       @update:model-value="(v: boolean) => { if (!v) { refineDialog = null; refineMessage = ''; } }"
     >
       <div class="gb-refine-body">
         <p class="gb-refine-hint">
-          任务 <strong>{{ refineDialog?.taskTitle }}</strong> 从 reviewing 切回 running, agent 会按新指示继续. 消息可选.
+          {{ t('tasks.board.refineHint', { title: refineDialog?.taskTitle }) }}
         </p>
         <Textarea
           v-model="refineMessage"
           :rows="4"
-          placeholder="(可选) 给 agent 的继续消息"
+          :placeholder="t('tasks.board.refinePlaceholder')"
           class-name="gb-refine-textarea"
         />
       </div>
       <template #footer>
         <Button variant="secondary" @click="() => { refineDialog = null; refineMessage = ''; }">
-          取消
+          {{ t('common.cancel') }}
         </Button>
         <Button variant="primary" @click="submitRefine">
-          ↻ 继续干
+          {{ t('tasks.board.refineSubmit') }}
         </Button>
       </template>
     </Modal>
@@ -2210,8 +2237,8 @@ useTaskEventSource('/api/events', onGlobalEvent, () => {
     <button
       type="button"
       class="gb-fab-new"
-      title="新建任务 (对话式, Enter 发送)"
-      aria-label="新建任务"
+      :title="t('globalBoard.fabNewTitle')"
+      :aria-label="t('tasks.board.newTask')"
       @click="quickCreateOpen = true"
     >
       <!-- R233 Round7: 文本「+」字形受字体基线影响视觉偏下, 换 SVG 十字几何居中. -->

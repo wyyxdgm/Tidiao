@@ -19,9 +19,11 @@
      - admin / 非 admin 鉴权: SPA 走 /api/projects/[id], 后端自动按 owner_id
        过滤 (R17 已验证). 401/403 走 ErrorView; 404 → "项目不存在".
      - 历史行为 (跳 /projects/[id]/versions/[current]) 回滚: git reset 本
-       commit -- spa/src/views/ProjectDetail.vue. */
+       commit -- spa/src/views/ProjectDetail.vue.
+     - i18n (W4b): 用户可见文案走 t('residual.projectRedirect.*'). */
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, HttpError } from '@/api/http';
 import ErrorView from '@/components/ErrorView.vue';
 import Loading from '@/components/Loading.vue';
@@ -50,6 +52,7 @@ interface Project {
 const route = useRoute();
 const router = useRouter();
 const toast = useToastStore();
+const { t } = useI18n();
 
 /** 路由参数 :projectId (Next.js [projectId] 1:1 镜像). 强转 string 兜底
     (Vue Router 4 params 类型推断为 string | string[]). */
@@ -88,16 +91,16 @@ async function redirect(): Promise<void> {
     if (e instanceof HttpError) {
       if (e.status === 404) {
         // Next.js 跳 /?error=project_not_found; SPA 跳 /projects + toast.
-        error.value = '项目不存在或无权限';
+        error.value = t('residual.projectRedirect.errNotFound');
       } else if (e.status === 401 || e.status === 403) {
-        error.value = '无权限访问该项目';
+        error.value = t('residual.projectRedirect.errForbidden');
       } else {
-        error.value = e.message || `请求失败 (HTTP ${e.status})`;
+        error.value = e.message || t('residual.projectRedirect.errHttp', { status: e.status });
       }
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('residual.projectRedirect.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('residual.projectRedirect.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -125,21 +128,21 @@ watch(
   <div class="project-detail">
     <!-- loading: 在 redirect 完成前占位, 不让用户看到空帧. -->
     <div v-if="loading" class="state-block">
-      <Loading size="lg" label="加载项目" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('residual.projectRedirect.loadingLabel')" />
+      <p class="state-text muted">{{ t('residual.projectRedirect.loading') }}</p>
     </div>
 
     <!-- 错误态: 404 / 401 / 403 / 网络异常等. show-retry=false 因 retry
          会再次跑同样 404, 没意义; 给"返回项目列表"按钮作逃生口. -->
     <ErrorView
       v-else-if="error"
-      title="项目加载失败"
+      :title="t('residual.projectRedirect.loadFailedTitle')"
       :description="error"
       variant="error"
       :show-retry="false"
     >
       <button type="button" class="action-btn" @click="goProjects">
-        返回项目列表
+        {{ t('residual.projectRedirect.backToProjects') }}
       </button>
     </ErrorView>
   </div>

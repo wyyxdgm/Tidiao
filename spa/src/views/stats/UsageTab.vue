@@ -16,9 +16,11 @@
    - 近 7 天 bar (UTC today 起倒序 7 天, 缺失补 0, max 防 0 除 0 兜底 0.01).
    - tag conic-gradient + 图例 + 占比%.
    - model 横向 bar (降序, 颜色 i+1 错开 tag).
-   - 异常态: tagEntries/modelEntries 空 → "暂无数据". */
+   - 异常态: tagEntries/modelEntries 空 → "暂无数据".
+   - i18n (W4b): 用户可见文案走 t('misc.stats.usageTab.*'). */
 
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { CostByDay } from '@/api/stats';
 
 interface Props {
@@ -34,6 +36,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  配色                                                                */
@@ -146,26 +150,26 @@ function tagPct(cost: number): string {
     <!-- 4 卡片 -->
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="stat-card-label">总花费</div>
+        <div class="stat-card-label">{{ t('misc.stats.usageTab.statTotalCost') }}</div>
         <div class="stat-card-value">{{ compactCost(stats.cost.total) }}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-label">总任务数</div>
+        <div class="stat-card-label">{{ t('misc.stats.usageTab.statTotalTasks') }}</div>
         <div class="stat-card-value">{{ totalTasks }}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-label">平均每任务</div>
+        <div class="stat-card-label">{{ t('misc.stats.usageTab.statAvgCost') }}</div>
         <div class="stat-card-value">{{ formatCost(avgCost) }}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-label">今日花费</div>
+        <div class="stat-card-label">{{ t('misc.stats.usageTab.statTodayCost') }}</div>
         <div class="stat-card-value">{{ formatCost(todayCost) }}</div>
       </div>
     </div>
 
     <!-- 7 天 bar -->
     <section class="card">
-      <h2 class="card-title">近 7 天花费</h2>
+      <h2 class="card-title">{{ t('misc.stats.usageTab.last7Title') }}</h2>
       <div class="day-chart">
         <div
           v-for="d in last7"
@@ -185,8 +189,8 @@ function tagPct(cost: number): string {
     <!-- Tag pie + Model bars (两列) -->
     <div class="two-col">
       <section class="card">
-        <h2 class="card-title">按标签花费</h2>
-        <p v-if="tagEntries.length === 0" class="muted-small">暂无数据</p>
+        <h2 class="card-title">{{ t('misc.stats.usageTab.byTagTitle') }}</h2>
+        <p v-if="tagEntries.length === 0" class="muted-small">{{ t('misc.stats.usageTab.noData') }}</p>
         <div v-else class="tag-pie-row">
           <div
             class="tag-pie"
@@ -210,8 +214,8 @@ function tagPct(cost: number): string {
       </section>
 
       <section class="card">
-        <h2 class="card-title">按模型花费</h2>
-        <p v-if="modelEntries.length === 0" class="muted-small">暂无数据</p>
+        <h2 class="card-title">{{ t('misc.stats.usageTab.byModelTitle') }}</h2>
+        <p v-if="modelEntries.length === 0" class="muted-small">{{ t('misc.stats.usageTab.noData') }}</p>
         <div v-else class="model-list">
           <div
             v-for="([model, cost], i) in modelEntries"
