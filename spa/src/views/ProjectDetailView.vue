@@ -29,6 +29,7 @@ import { useI18n } from 'vue-i18n';
 import { get, HttpError, isHttpError } from '@/api/http';
 import { listVersions, updateProject, updateVersion, type Version } from '@/api/projects';
 import { getScopeCounts, type ScopeCounts } from '@/api/stats';
+import { displayProjectName } from '@/lib/project-display';
 import { parseDbTime } from '@/lib/datetime';
 import { useToast } from '@/composables/useToast';
 import Empty from '@/components/Empty.vue';
@@ -497,7 +498,7 @@ watch(
         <h3 class="section-title">{{ t('projects.detail.metaTitle') }}</h3>
         <dl class="meta-grid">
           <dt class="muted">{{ t('projects.detail.fName') }}</dt>
-          <dd class="meta-value">{{ project.name }}</dd>
+          <dd class="meta-value">{{ displayProjectName(project.name) }}</dd>
 
           <dt class="muted">{{ t('projects.detail.fDesc') }}</dt>
           <dd class="meta-value">

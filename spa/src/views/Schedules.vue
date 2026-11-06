@@ -40,6 +40,7 @@ import { isHttpError } from '@/api/http';
 import { useProjectsStore } from '@/stores/projects';
 import { useToast } from '@/composables/useToast';
 import { parseDbTime } from '@/lib/datetime';
+import { displayProjectName } from '@/lib/project-display';
 import Button from '@/components/Button.vue';
 import Modal from '@/components/Modal.vue';
 import Input from '@/components/Input.vue';
@@ -691,7 +692,7 @@ watch(() => projectsStore.projects, (next) => {
             <Select
               :model-value="filter.projectId || null"
               @update:model-value="(v: string | null) => onFilterChange({ projectId: v || '' })"
-              :options="[{ value: '', label: t('misc.schedules.allProjects') }, ...projects.map(p => ({ value: p.id, label: p.name }))]"
+              :options="[{ value: '', label: t('misc.schedules.allProjects') }, ...projects.map(p => ({ value: p.id, label: displayProjectName(p.name) }))]"
               :placeholder="t('misc.schedules.allProjects')"
             />
           </div>
@@ -1087,7 +1088,7 @@ watch(() => projectsStore.projects, (next) => {
             <Select
               :model-value="createForm.project_id || null"
               @update:model-value="(v: string | null) => createForm.project_id = v || ''"
-              :options="projects.map(p => ({ value: p.id, label: p.name }))"
+              :options="projects.map(p => ({ value: p.id, label: displayProjectName(p.name) }))"
               :placeholder="projects.length === 0 ? t('misc.schedules.noProjects') : t('misc.schedules.selectProject')"
             />
           </div>

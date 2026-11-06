@@ -42,6 +42,7 @@ import ForkModal from '@/components/ForkModal.vue';
 import TaskEvaluationBar from '@/components/TaskEvaluationBar.vue';
 import TaskMetaChips from '@/components/TaskMetaChips.vue';
 import { parseDbTime } from '@/lib/datetime';
+import { displayProjectName } from '@/lib/project-display';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -266,7 +267,7 @@ function onCtxVersionChange(v: string | null): void {
 }
 
 const ctxProjectOptions = computed<{ value: string; label: string }[]>(() =>
-  ctxProjects.value.map((p) => ({ value: p.id, label: p.name })),
+  ctxProjects.value.map((p) => ({ value: p.id, label: displayProjectName(p.name) })),
 );
 
 /** 版本级联 — 版本名跨项目重名常见 (master/v1), label 拼项目名前缀消歧.

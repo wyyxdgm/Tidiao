@@ -18,6 +18,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { searchTasks, statusLabel, type TaskSearchHit, type TaskStatus } from '@/api/tasks';
+import { displayProjectName } from '@/lib/project-display';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -198,9 +199,9 @@ onBeforeUnmount(() => {
             <span
               v-if="hit.project_name || hit.version_name"
               class="hit-scope"
-              :title="[hit.project_name, hit.version_name].filter(Boolean).join(' · ')"
+              :title="[displayProjectName(hit.project_name), hit.version_name].filter(Boolean).join(' · ')"
             >
-              <span v-if="hit.project_name" class="hit-project">{{ hit.project_name }}</span>
+              <span v-if="hit.project_name" class="hit-project">{{ displayProjectName(hit.project_name) }}</span>
               <span v-if="hit.project_name && hit.version_name" class="hit-sep">·</span>
               <span v-if="hit.version_name" class="hit-version">{{ hit.version_name }}</span>
             </span>

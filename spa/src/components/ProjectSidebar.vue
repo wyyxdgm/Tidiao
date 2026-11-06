@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ConfirmDialog.vue';
 import { useToast } from '@/composables/useToast';
 import { getScopeCounts, type ScopeCounts } from '@/api/stats';
 import { get } from '@/api/http';
+import { displayProjectName, UNCATEGORIZED_NAME } from '@/lib/project-display';
 import { resolveProjectExpanded } from '@/lib/resolve-project-expanded';
 import { useSidebarDrawer } from '@/composables/useSidebarDrawer';
 import { useTaskEventSource, type GlobalEvent } from '@/composables/useTaskEventSource';
@@ -401,7 +402,7 @@ const sidebarStyle = computed(() => ({ width: `${sidebarWidth.value}px` }));
    只过滤自己 + 是未分类 + 无 version + 无 unversioned task 三件套. 入口仍可
    通过 /uncategorized 路由访问, 不破 master 一致 (master 侧栏也有同问题,
    但本 fix 只动 SPA, master 跟进是后续 task). */
-const UNCATEGORIZED_NAME = '未分类';
+// i18n (W4.5c): 「未分类」DB 名比较用共享 UNCATEGORIZED_NAME, 显示走 displayProjectName.
 
 function isProjectEmpty(p: Project): boolean {
   if (p.name !== UNCATEGORIZED_NAME) return false;
@@ -522,7 +523,7 @@ async function openProject(id: string, name: string) {
   // toggle() 已内部判 loadVersions 缓存, 重复展开不重发 fetch.
   toggle(id);
   const tagName = `project-${id}`;
-  tags.visit({ name: tagName, title: name, path: `/projects/${id}` });
+  tags.visit({ name: tagName, title: displayProjectName(name), path: `/projects/${id}` });
   await router.push(`/projects/${id}`);
 }
 
@@ -977,11 +978,11 @@ onBeforeUnmount(() => {
       v-for="p in ownedProjects"
       :key="p.id"
       class="sidebar-project-circle"
-      :title="p.name"
+      :title="displayProjectName(p.name)"
       :href="p.current_version_id ? `/${p.id}/${p.current_version_id}` : `/${p.id}/unversioned`"
       @click.prevent="openProject(p.id, p.name)"
       @contextmenu.prevent="openContextMenu($event, p)"
-    >{{ p.name.slice(0, 2) }}</a>
+    >{{ displayProjectName(p.name).slice(0, 2) }}</a>
     <AccountSwitcher v-if="auth.user" variant="sidebar-collapsed" />
     <!-- R232 Round6: 折叠态维护指示 — 右缘琥珀条 (master NavSidebar.tsx:377-383 同款). -->
     <div
@@ -1129,7 +1130,7 @@ onBeforeUnmount(() => {
                   @keydown.esc.prevent="cancelRename"
                   @blur="submitRename"
                 />
-                <span v-else class="project-name" @click="openProject(p.id, p.name)">{{ p.name }}</span>
+                <span v-else class="project-name" @click="openProject(p.id, p.name)">{{ displayProjectName(p.name) }}</span>
                 <!-- 版本数常驻 — onMounted 已 loadAllVersions 一次拿全 (跟 master 同口径),
                     折叠态也显示. 无版本时显示 (0), 跟 master 一致. -->
                 <span

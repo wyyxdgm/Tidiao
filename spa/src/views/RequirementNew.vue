@@ -35,6 +35,7 @@ import { useI18n } from 'vue-i18n';
 import { listVersions, type Version } from '@/api/projects';
 import { listProjects, type Project } from '@/api/projects';
 import { getMyProfile } from '@/api/user';
+import { displayProjectName } from '@/lib/project-display';
 import {
   createRequirement,
   type CreateRequirementBody,
@@ -124,7 +125,7 @@ const visibleProjects = computed<Project[]>(() =>
 );
 
 const projectOptions = computed<{ value: string; label: string }[]>(() =>
-  visibleProjects.value.map((p) => ({ value: p.id, label: p.name })),
+  visibleProjects.value.map((p) => ({ value: p.id, label: displayProjectName(p.name) })),
 );
 
 const selectedProject = computed<Project | null>(

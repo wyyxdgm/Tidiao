@@ -48,6 +48,7 @@ import {
 import { listProjects, listVersions, type Project, type Version } from '@/api/projects';
 import { getCliImportState, startCliImport, type CliImportState } from '@/api/cli-import';
 import { isHttpError } from '@/api/http';
+import { displayProjectName } from '@/lib/project-display';
 import { useToast } from '@/composables/useToast';
 import Button from '@/components/Button.vue';
 import Select from '@/components/Select.vue';
@@ -99,7 +100,7 @@ const result = ref<{ imported: number; errors?: string[] } | null>(null);
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
   { value: '', label: t('projects.import.phProject') },
-  ...projects.value.map((p) => ({ value: p.id, label: p.name })),
+  ...projects.value.map((p) => ({ value: p.id, label: displayProjectName(p.name) })),
 ]);
 
 const versionOptions = computed<{ value: string; label: string }[]>(() => [

@@ -20,6 +20,7 @@ import { useProjectsStore } from '@/stores/projects';
 import { createProject, deleteProject as apiDeleteProject, deleteVersion as apiDeleteVersion, listAvailablePorts, listProjectTemplates, updateProject as apiUpdateProject, updateVersion as apiUpdateVersion, type CreateProjectBody, type Project, type ProjectTemplate, type Version } from '@/api/projects';
 import { isHttpError } from '@/api/http';
 import { getScopeCounts, type ScopeCounts } from '@/api/stats';
+import { displayProjectName } from '@/lib/project-display';
 import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/components/ConfirmDialog.vue';
 import Button from '@/components/Button.vue';
@@ -240,7 +241,7 @@ async function deleteProject(p: Project): Promise<void> {
   if (!ok) return;
   try {
     await apiDeleteProject(p.id);
-    toast.success(t('projects.list.deletedToast', { name: p.name }));
+    toast.success(t('projects.list.deletedToast', { name: displayProjectName(p.name) }));
     await projectsStore.load(true, sort.value);
   } catch (e: unknown) {
     if (isHttpError(e)) {
@@ -585,7 +586,7 @@ function toggleArchivedOpen(): void {
 async function unarchiveProject(p: Project): Promise<void> {
   try {
     await projectsStore.unarchiveProject(p.id);
-    toast.success(t('projects.list.restoredToast', { name: p.name }));
+    toast.success(t('projects.list.restoredToast', { name: displayProjectName(p.name) }));
   } catch {
     toast.error(t('projects.list.restoreFailed'));
   }
@@ -594,13 +595,13 @@ async function unarchiveProject(p: Project): Promise<void> {
 async function deleteArchivedProject(p: Project): Promise<void> {
   const ok = await confirmDialog(
     t('projects.list.deleteConfirmMsg'),
-    { title: t('projects.list.deleteNamedTitle', { name: p.name }), type: 'danger', confirmText: t('projects.list.confirmDelete') },
+    { title: t('projects.list.deleteNamedTitle', { name: displayProjectName(p.name) }), type: 'danger', confirmText: t('projects.list.confirmDelete') },
   );
   if (!ok) return;
   try {
     await apiDeleteProject(p.id);
     projectsStore.removeProjectLocally(p.id);
-    toast.success(t('projects.list.deletedToast', { name: p.name }));
+    toast.success(t('projects.list.deletedToast', { name: displayProjectName(p.name) }));
   } catch (e: unknown) {
     if (isHttpError(e)) {
       toast.error(t('projects.list.deleteFailedWith', { msg: e.message }));
@@ -759,7 +760,7 @@ onMounted(() => {
           <div class="project-main">
             <div class="project-name">
               <span v-if="p.pinned === 1" class="pin-badge" :title="t('projects.list.pinnedTitle')">📌</span>
-              {{ p.name }}
+              {{ displayProjectName(p.name) }}
             </div>
             <div v-if="p.description" class="muted project-desc">{{ p.description }}</div>
             <div v-if="projectMetaText(p)" class="muted project-meta">
@@ -987,7 +988,7 @@ onMounted(() => {
       <div v-if="archivedOpen" class="archived-items">
         <div v-for="p in archivedList" :key="p.id" class="archived-item">
           <div class="archived-item-name">
-            {{ p.name }}
+            {{ displayProjectName(p.name) }}
           </div>
           <div class="muted archived-item-desc">{{ p.description || t('projects.list.noDesc') }}</div>
           <div class="archived-item-actions">

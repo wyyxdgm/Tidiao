@@ -54,6 +54,7 @@ import {
 import { listProjects, listVersions, type Project, type Version } from '@/api/projects';
 import { listRoles, type Role } from '@/api/roles';
 import { listAvailableLlmConfigs, type AvailableLlmConfig } from '@/api/templates';
+import { displayProjectName } from '@/lib/project-display';
 import {
   createConfigSnapshot,
   deleteConfigSnapshot,
@@ -126,12 +127,12 @@ const AUTO_APPROVE_OPTIONS_SNAP = computed<{ value: string; label: string }[]>((
   { value: 'on', label: t('taskNew.approveOn') },
 ]);
 
-/** Scope 选项. */
-const SCOPE_OPTIONS: { value: SnapshotScope; label: string }[] = [
-  { value: 'global', label: '全局（任意项目可用）' },
-  { value: 'project', label: '绑定项目' },
-  { value: 'version', label: '绑定版本' },
-];
+/** Scope 选项. i18n (W4.5c): 原中文硬编码迁 locale (taskNew.snap.*). */
+const SCOPE_OPTIONS = computed<{ value: SnapshotScope; label: string }[]>(() => [
+  { value: 'global', label: t('taskNew.snap.scopeOptGlobal') },
+  { value: 'project', label: t('taskNew.snap.bindProject') },
+  { value: 'version', label: t('taskNew.snap.bindVersion') },
+]);
 
 /** 默认 allowed_tools — 与 master DEFAULT_TOOLS 对齐 (全开). */
 const DEFAULT_ALLOWED_TOOLS = [...AVAILABLE_TOOLS];
@@ -280,7 +281,7 @@ const depInputRef = useTemplateRef<InstanceType<typeof Input>>('depInputRef');
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
   { value: '', label: t('taskNew.selectProject') },
-  ...projects.value.map((p) => ({ value: p.id, label: p.name })),
+  ...projects.value.map((p) => ({ value: p.id, label: displayProjectName(p.name) })),
 ]);
 
 const versionOptions = computed<{ value: string; label: string }[]>(() => [

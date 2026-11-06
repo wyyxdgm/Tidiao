@@ -51,6 +51,7 @@ import {
   type RecentTaskItem,
 } from '@/api/assets';
 import { isHttpError } from '@/api/http';
+import { displayProjectName } from '@/lib/project-display';
 import { useToast } from '@/composables/useToast';
 import Button from '@/components/Button.vue';
 import Input from '@/components/Input.vue';
@@ -195,7 +196,7 @@ const projectOptions = computed<{ value: string; label: string }[]>(() => [
   { value: '', label: t('projects.assets.projectAll') },
   ...filtersData.value.projects.map((p: FilterProject) => ({
     value: p.id,
-    label: `${p.name} (${p.count})`,
+    label: `${displayProjectName(p.name)} (${p.count})`,
   })),
 ]);
 

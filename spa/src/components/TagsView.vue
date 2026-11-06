@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useTagsStore } from '@/stores/tags';
+import { displayProjectName } from '@/lib/project-display';
 import Modal from '@/components/Modal.vue';
 import Button from '@/components/Button.vue';
 
@@ -305,7 +306,7 @@ onBeforeUnmount(() => {
       >
         <span v-if="tg.closable === false" class="tag-pin" :aria-label="t('components.tags.pinned')">📌</span>
         <!-- i18n (W4.5a): titleKey 存在走 locale (语言切换即时跟新), title 作 zh 兜底 -->
-        <span class="tag-title">{{ tg.titleKey ? t(tg.titleKey) : tg.title }}</span>
+        <span class="tag-title">{{ tg.titleKey ? t(tg.titleKey) : displayProjectName(tg.title) }}</span>
         <button
           v-if="tg.closable !== false"
           class="tag-close"
