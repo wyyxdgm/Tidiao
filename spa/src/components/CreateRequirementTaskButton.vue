@@ -16,7 +16,8 @@
    - type 字段是 R78 W1 §4.3 invariant 前置: 弹窗必须让用户标 workflow 阶段,
      否则下游 invariant 检查无数据可用. */
 
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { post } from '@/api/http';
 import { HttpError } from '@/api/http';
 import Button from '@/components/Button.vue';
@@ -51,6 +52,7 @@ const emit = defineEmits<{
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
 const open = ref<boolean>(false);
 const submitting = ref<boolean>(false);
 const formError = ref<string | null>(null);
@@ -74,20 +76,20 @@ const effortOptions: { value: string; label: string }[] = EFFORT_LEVELS.map(
   (e) => ({ value: e, label: e }),
 );
 
-const autoStartOptions: { value: string; label: string }[] = [
-  { value: 'now', label: '立即启动 (创建后立刻进入调度队列)' },
-  { value: 'later', label: '只创建待启动 (用户在任务页手动启动)' },
-];
+const autoStartOptions = computed(() => [
+  { value: 'now', label: t('requirements.newTask.startNow') },
+  { value: 'later', label: t('requirements.newTask.startLater') },
+]);
 
-const autoApproveOptions: { value: string; label: string }[] = [
-  { value: 'off', label: '需要逐个审核' },
-  { value: 'on', label: '自动通过（不审核）' },
-];
+const autoApproveOptions = computed(() => [
+  { value: 'off', label: t('common.toolReviewOff') },
+  { value: 'on', label: t('common.toolReviewOn') },
+]);
 
 const taskTypeHint = (): string =>
   taskType.value === 'design'
-    ? '设计/调研 — 完成不计入「可标完成」前置条件'
-    : '实现/测试/部署 — 完成计入「可标完成」前置条件';
+    ? t('requirements.newTask.typeDesignHint')
+    : t('requirements.newTask.typeDevHint');
 
 /* ------------------------------------------------------------------ */
 /*  Esc 关弹窗                                                          */
@@ -146,11 +148,11 @@ async function handleSubmit(e: Event): Promise<void> {
   e.preventDefault();
   formError.value = null;
   if (!title.value.trim()) {
-    formError.value = '标题必填';
+    formError.value = t('requirements.newTask.errTitleRequired');
     return;
   }
   if (!prompt.value.trim()) {
-    formError.value = '任务指令必填';
+    formError.value = t('requirements.newTask.errPromptRequired');
     return;
   }
   submitting.value = true;
@@ -180,7 +182,7 @@ async function handleSubmit(e: Event): Promise<void> {
           {},
         )) as { status: string };
         toast.success(
-          `任务已创建并启动: ${task.title} (${started.status})`,
+          t('requirements.newTask.createdStarted', { title: task.title, status: started.status }),
         );
       } catch (startErr: unknown) {
         const msg =
@@ -189,10 +191,10 @@ async function handleSubmit(e: Event): Promise<void> {
             : startErr instanceof Error
               ? startErr.message
               : String(startErr);
-        toast.error(`任务已创建但启动失败: ${msg} (去任务页手动启)`);
+        toast.error(t('requirements.newTask.createdStartFailed', { msg }));
       }
     } else {
-      toast.success(`任务已创建 (留待启动): ${task.title}`);
+      toast.success(t('requirements.newTask.createdPending', { title: task.title }));
     }
 
     open.value = false;
@@ -204,9 +206,9 @@ async function handleSubmit(e: Event): Promise<void> {
         ? `${err.message}${err.code ? ` [${err.code}]` : ''}`
         : err instanceof Error
           ? err.message
-          : '创建失败';
+          : t('requirements.newTask.createFailed');
     formError.value = msg;
-    toast.error(`创建失败: ${msg}`);
+    toast.error(t('requirements.newTask.createFailedMsg', { msg }));
   } finally {
     submitting.value = false;
   }
@@ -214,7 +216,7 @@ async function handleSubmit(e: Event): Promise<void> {
 </script>
 
 <template>
-  <Button variant="primary" size="sm" @click="openModal"> + 新建任务 </Button>
+  <Button variant="primary" size="sm" @click="openModal"> + {{ t('requirements.newTask.openBtn') }} </Button>
 
   <Teleport to="body">
     <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -228,7 +230,7 @@ async function handleSubmit(e: Event): Promise<void> {
         class="relative bg-white rounded-xl shadow-2xl w-[560px] max-w-[92vw] max-h-[90vh] overflow-y-auto p-6 space-y-4"
         @submit="handleSubmit"
       >
-        <h3 class="text-lg font-semibold text-gray-900">为这个需求点新建任务</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ t('requirements.newTask.title') }}</h3>
 
         <div
           v-if="formError"
@@ -239,35 +241,35 @@ async function handleSubmit(e: Event): Promise<void> {
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            标题 *
+            {{ t('requirements.newTask.labelTitle') }}
           </label>
           <input
             ref="titleRef"
             v-model="title"
             type="text"
             maxlength="200"
-            placeholder="例: 修复登录页响应式"
+            :placeholder="t('requirements.newTask.placeholderTitle')"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            任务指令 *
+            {{ t('requirements.newTask.labelPrompt') }}
           </label>
           <Textarea
             v-model="prompt"
             :rows="6"
-            placeholder="实际传给 agent 的指令..."
+            :placeholder="t('requirements.newTask.placeholderPrompt')"
           />
           <p class="mt-1 text-xs text-gray-500">
-            关联到这个需求点后, 后续可拉出"任务森林"视图 (含依赖关系).
+            {{ t('requirements.newTask.forestHint') }}
           </p>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            任务阶段 *
+            {{ t('requirements.newTask.labelType') }}
           </label>
           <Select
             :model-value="taskType"
@@ -281,7 +283,7 @@ async function handleSubmit(e: Event): Promise<void> {
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            启动时机
+            {{ t('requirements.newTask.labelStart') }}
           </label>
           <Select
             :model-value="autoStart ? 'now' : 'later'"
@@ -293,7 +295,7 @@ async function handleSubmit(e: Event): Promise<void> {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              推理强度
+              {{ t('requirements.newTask.labelEffort') }}
             </label>
             <Select
               v-model="effort"
@@ -302,7 +304,7 @@ async function handleSubmit(e: Event): Promise<void> {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              最大轮次
+              {{ t('requirements.newTask.labelMaxTurns') }}
             </label>
             <input
               v-model="maxTurns"
@@ -315,7 +317,7 @@ async function handleSubmit(e: Event): Promise<void> {
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            工具审核
+            {{ t('tasks.resume.toolReviewLabel') }}
           </label>
           <Select
             :model-value="autoApprove ? 'on' : 'off'"
@@ -326,7 +328,7 @@ async function handleSubmit(e: Event): Promise<void> {
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            允许的工具
+            {{ t('requirements.newTask.labelTools') }}
           </label>
           <div class="flex flex-wrap gap-2 mb-2">
             <button
@@ -369,7 +371,7 @@ async function handleSubmit(e: Event): Promise<void> {
             :disabled="submitting"
             @click="closeModal"
           >
-            取消
+            {{ t('common.cancel') }}
           </Button>
           <Button
             type="submit"
@@ -377,7 +379,7 @@ async function handleSubmit(e: Event): Promise<void> {
             :loading="submitting"
             :disabled="!title.trim() || !prompt.trim()"
           >
-            {{ submitting ? '创建中…' : autoStart ? '创建并启动' : '创建待启动' }}
+            {{ submitting ? t('common.creating') : autoStart ? t('requirements.newTask.submitStart') : t('requirements.newTask.submitPending') }}
           </Button>
         </div>
       </form>

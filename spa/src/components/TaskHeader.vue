@@ -7,6 +7,7 @@
    - 状态/上下文/成本/超时剩余通过 SSE 流式刷新 (父组件传入).
    - awaiting_markers JSON 解析失败静默回退到 awaiting_owner_review (R61+R39). */
 import { computed, onUnmounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { patch, post, del, HttpError } from '@/api/http';
 import { parseAwaitingMarkers } from '@/lib/awaiting-markers';
 import QueuedReasonHint from './QueuedReasonHint.vue';
@@ -17,6 +18,7 @@ import Button from './Button.vue';
 import { useToast } from '@/composables/useToast';
 
 const toast = useToast();
+const { t } = useI18n();
 
 interface Props {
   taskId: string;
@@ -93,11 +95,12 @@ const emit = defineEmits<{
 /*  Display labels & colors                                            */
 /* ------------------------------------------------------------------ */
 
+// i18n: label 存 locale key, 渲染时 t() — 复用 tasks.kanban.type.* 四键.
 const TYPE_LABELS: Record<string, string> = {
-  design: '设计',
-  dev: '开发',
-  test: '测试',
-  deploy: '部署',
+  design: 'tasks.kanban.type.design',
+  dev: 'tasks.kanban.type.dev',
+  test: 'tasks.kanban.type.test',
+  deploy: 'tasks.kanban.type.deploy',
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -112,7 +115,7 @@ const TYPE_COLORS: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 
 const typeText = computed<string | null>(() =>
-  props.type ? TYPE_LABELS[props.type] || props.type : null,
+  props.type ? (TYPE_LABELS[props.type] ? t(TYPE_LABELS[props.type]) : props.type) : null,
 );
 const typeClass = computed<string | null>(() =>
   props.type ? TYPE_COLORS[props.type] || 'type-default' : null,
@@ -126,7 +129,7 @@ const markers = computed(() =>
 );
 
 const resolvedModelLabel = computed<string>(
-  () => props.resolvedModel || props.model || '默认',
+  () => props.resolvedModel || props.model || t('tasks.meta.default'),
 );
 
 /* ------------------------------------------------------------------ */
@@ -155,9 +158,9 @@ async function commitTitle(): Promise<void> {
     emit('title-updated', next);
   } catch (e) {
     if (e instanceof HttpError) {
-      toast.error(`保存失败: ${e.message}`);
+      toast.error(t('tasks.header.saveFailedMsg', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('tasks.header.saveFailed'));
     }
   } finally {
     titleSaving.value = false;
@@ -186,7 +189,7 @@ async function copyId(): Promise<void> {
       copied.value = false;
     }, 1500);
   } catch {
-    toast.error('复制失败');
+    toast.error(t('common.copyFailed'));
   }
 }
 
@@ -214,9 +217,9 @@ async function toggleFavorite(): Promise<void> {
   } catch (e) {
     emit('favorite-changed', props.favorite);
     if (e instanceof HttpError) {
-      toast.error(`收藏失败: ${e.message}`);
+      toast.error(t('tasks.header.favFailedMsg', { msg: e.message }));
     } else {
-      toast.error('收藏失败');
+      toast.error(t('tasks.header.favFailed'));
     }
   } finally {
     favBusy.value = false;
@@ -251,7 +254,7 @@ async function saveTimeout(): Promise<void> {
     } else {
       const n = Number(timeoutInput.value);
       if (!Number.isFinite(n) || n <= 0) {
-        toast.warn('请输入正整数分钟');
+        toast.warn(t('tasks.header.invalidMinutes'));
         return;
       }
       nextMinutes = Math.floor(n);
@@ -261,9 +264,9 @@ async function saveTimeout(): Promise<void> {
     showTimeoutEdit.value = false;
   } catch (e) {
     if (e instanceof HttpError) {
-      toast.error(`保存失败: ${e.message}`);
+      toast.error(t('tasks.header.saveFailedMsg', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('tasks.header.saveFailed'));
     }
   } finally {
     timeoutSaving.value = false;
@@ -289,14 +292,14 @@ watch(
         v-if="projectId"
         :to="`/${projectId}`"
         class="breadcrumb-link"
-      >{{ projectName || '其他任务' }}</router-link>
+      >{{ projectName || t('tasks.header.otherTasks') }}</router-link>
       <span v-if="versionId && versionName && versionName !== projectName" class="sep">›</span>
       <router-link
         v-if="versionId && versionName && versionName !== projectName"
         :to="`/projects/${projectId}/versions/${versionId}`"
         class="breadcrumb-link"
       >{{ versionName }}</router-link>
-      <span v-if="!projectId" class="breadcrumb-current">其他任务</span>
+      <span v-if="!projectId" class="breadcrumb-current">{{ t('tasks.header.otherTasks') }}</span>
       <span v-if="projectId" class="breadcrumb-hash">
         ({{ projectId.slice(0, 8) }}…<template v-if="versionId">/{{ versionId.slice(0, 8) }}…</template>)
       </span>
@@ -307,7 +310,7 @@ watch(
       <div class="title-left">
         <h2 v-if="!isEditing" class="task-title" :class="{ deleted: isDeleted }" @click="startEdit">
           {{ title }}
-          <span v-if="!isDeleted" class="edit-hint">点击编辑</span>
+          <span v-if="!isDeleted" class="edit-hint">{{ t('tasks.header.clickToEdit') }}</span>
         </h2>
         <div v-else class="title-edit">
           <input
@@ -319,13 +322,13 @@ watch(
             @keydown.esc.prevent="cancelEdit"
             @blur="commitTitle"
           />
-          <span v-if="titleSaving" class="title-saving">保存中…</span>
+          <span v-if="titleSaving" class="title-saving">{{ t('common.saving') }}</span>
         </div>
 
         <div class="meta-row">
           <span v-if="typeText" :class="['type-chip', typeClass]">{{ typeText }}</span>
           <span v-if="priorityText" class="priority-chip">{{ priorityText }}</span>
-          <span v-if="isDeleted" class="deleted-badge">已删除</span>
+          <span v-if="isDeleted" class="deleted-badge">{{ t('common.deleted') }}</span>
           <!-- v531 续: 排队原因详情页同款显示 (列表/看板已有, 这里补齐详情页). -->
           <QueuedReasonHint :status="status" :reason="queuedReason" />
         </div>
@@ -348,7 +351,7 @@ watch(
           class="icon-btn fav-btn"
           :class="{ active: favorite }"
           :disabled="favBusy"
-          :title="favorite ? '取消收藏' : '收藏任务'"
+          :title="favorite ? t('tasks.header.unfavorite') : t('tasks.header.favorite')"
           @click="toggleFavorite"
         >
           {{ favorite ? '★' : '☆' }}
@@ -357,7 +360,7 @@ watch(
           type="button"
           class="icon-btn"
           :class="{ active: copied }"
-          :title="copied ? '已复制' : '复制 ID'"
+          :title="copied ? t('common.copied') : t('tasks.header.copyId')"
           @click="copyId"
         >
           {{ copied ? '✓' : '⧉' }}
@@ -387,8 +390,8 @@ watch(
         v-if="!isDeleted"
         type="button"
         class="icon-btn"
-        title="编辑单任务超时"
-        aria-label="编辑超时"
+        :title="t('tasks.header.editTimeout')"
+        :aria-label="t('tasks.header.editTimeoutAria')"
         @click="openTimeoutEdit"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5">
@@ -400,7 +403,7 @@ watch(
     <!-- 超时编辑弹窗 -->
     <Modal
       :model-value="showTimeoutEdit"
-      title="编辑超时时长"
+      :title="t('tasks.header.editTimeoutTitle')"
       size="sm"
       @update:model-value="(v: boolean) => (showTimeoutEdit = v)"
       @close="showTimeoutEdit = false"
@@ -408,10 +411,10 @@ watch(
       <div class="timeout-form">
         <label class="checkbox-line">
           <input v-model="timeoutClear" type="checkbox" />
-          <span>使用项目/全局默认值 (不覆盖)</span>
+          <span>{{ t('tasks.header.useDefaultTimeout') }}</span>
         </label>
         <div v-if="!timeoutClear" class="timeout-input-line">
-          <span class="muted">分钟:</span>
+          <span class="muted">{{ t('tasks.header.minutes') }}</span>
           <!-- class-name="timeout-input-num" 给 Input 一个 max-width, 避免
                .input-wrap 默认 width: 100% 在 flex 父容器里把整行撑满,
                导致 "分钟:" 标签被挤到下一行垂直显示. -->
@@ -424,12 +427,12 @@ watch(
           />
         </div>
         <p class="muted small">
-          当前覆盖: {{ timeoutOverrideMinutes ?? '无' }}; 默认: {{ defaultTimeoutMinutes ?? 60 }} 分钟
+          {{ t('tasks.header.timeoutSummary', { override: timeoutOverrideMinutes ?? t('tasks.header.none'), def: defaultTimeoutMinutes ?? 60 }) }}
         </p>
       </div>
       <template #footer>
-        <Button variant="ghost" @click="showTimeoutEdit = false">取消</Button>
-        <Button variant="primary" :loading="timeoutSaving" @click="saveTimeout">保存</Button>
+        <Button variant="ghost" @click="showTimeoutEdit = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="timeoutSaving" @click="saveTimeout">{{ t('common.save') }}</Button>
       </template>
     </Modal>
   </header>

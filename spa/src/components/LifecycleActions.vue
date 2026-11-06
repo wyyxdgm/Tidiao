@@ -34,6 +34,7 @@
      渲染空集合. verifying 期间 UI 显示 Loading 由父组件负责.
    - 不引入新依赖. 复用 R7 Button + R6 ConfirmDialog + R4 Toast + R2 http. */
 import { computed, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Button from '@/components/Button.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import IconSvg from '@/components/IconSvg.vue';
@@ -128,51 +129,51 @@ function actionsFor(status: TaskStatus): ActionDef[] {
   switch (status) {
     case 'pending':
       return [
-        { key: 'start', icon: 'play', label: '启动', variant: 'primary', dangerous: false, success: '已启动' },
+        { key: 'start', icon: 'play', label: t('tasks.board.btnStart'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.started') },
       ];
     case 'queued':
       return [
-        { key: 'cancel', icon: 'x', label: '取消', variant: 'danger', dangerous: true, success: '已取消' },
+        { key: 'cancel', icon: 'x', label: t('common.cancel'), variant: 'danger', dangerous: true, success: t('tasks.lifecycle.cancelled') },
       ];
     case 'running':
       return [
-        { key: 'await', icon: 'pause', label: '等用户介入', variant: 'ghost', dangerous: true, success: '已切到等用户介入' },
-        { key: 'pause', icon: 'pause', label: '暂停', variant: 'secondary', dangerous: false, success: '已暂停' },
-        { key: 'cancel', icon: 'x', label: '取消', variant: 'danger', dangerous: true, success: '已取消' },
+        { key: 'await', icon: 'pause', label: t('tasks.kanban.status.await_user'), variant: 'ghost', dangerous: true, success: t('tasks.lifecycle.switchedAwait') },
+        { key: 'pause', icon: 'pause', label: t('tasks.board.btnPause'), variant: 'secondary', dangerous: false, success: t('tasks.lifecycle.paused') },
+        { key: 'cancel', icon: 'x', label: t('common.cancel'), variant: 'danger', dangerous: true, success: t('tasks.lifecycle.cancelled') },
       ];
     case 'reviewing':
       return [
         // 「继续干」用 ▶ 跟其他 continue 类动作 (▶ 启动/▶ 恢复执行/▶ 继续执行) 同款语义.
-        { key: 'refine', icon: 'play', label: '继续干', variant: 'primary', dangerous: true, success: '已继续' },
-        { key: 'approve', icon: 'check', label: '完成', variant: 'primary', dangerous: false, success: '已标记完成' },
-        { key: 'restart', icon: 'refresh', label: '清空重来', variant: 'secondary', dangerous: false, success: '已重新启动' },
+        { key: 'refine', icon: 'play', label: t('tasks.board.btnRefine'), variant: 'primary', dangerous: true, success: t('tasks.lifecycle.refined') },
+        { key: 'approve', icon: 'check', label: t('tasks.board.btnApprove'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.approved') },
+        { key: 'restart', icon: 'refresh', label: t('tasks.lifecycle.restart'), variant: 'secondary', dangerous: false, success: t('tasks.lifecycle.restarted') },
       ];
     case 'await_user':
       return [
-        { key: 'unawait', icon: 'play', label: '继续执行', variant: 'primary', dangerous: true, success: '已回到执行' },
-        { key: 'approve', icon: 'check', label: '完成', variant: 'primary', dangerous: false, success: '已标记完成' },
-        { key: 'cancel', icon: 'x', label: '取消', variant: 'danger', dangerous: true, success: '已取消' },
+        { key: 'unawait', icon: 'play', label: t('tasks.board.btnUnawait'), variant: 'primary', dangerous: true, success: t('tasks.lifecycle.backToRunning') },
+        { key: 'approve', icon: 'check', label: t('tasks.board.btnApprove'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.approved') },
+        { key: 'cancel', icon: 'x', label: t('common.cancel'), variant: 'danger', dangerous: true, success: t('tasks.lifecycle.cancelled') },
       ];
     case 'paused':
       // R52.9 (B251): 暂停态 "▶ 恢复执行" 改走 ResumeModal, 让用户在恢复前
       // 可调整 auto_approve / max_turns (master tdc.tsx:3682-3812 ResumeModal).
       // 父级 (TaskDetailView) 监听 open-resume 弹窗.
       return [
-        { key: '__resume', icon: 'play', label: '恢复执行', variant: 'primary', dangerous: false, success: '已恢复' },
-        { key: 'approve', icon: 'check', label: '已完成', variant: 'primary', dangerous: false, success: '已标记完成' },
-        { key: 'cancel', icon: 'x', label: '取消', variant: 'danger', dangerous: true, success: '已取消' },
+        { key: '__resume', icon: 'play', label: t('tasks.lifecycle.resume'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.resumed') },
+        { key: 'approve', icon: 'check', label: t('tasks.kanban.status.completed'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.approved') },
+        { key: 'cancel', icon: 'x', label: t('common.cancel'), variant: 'danger', dangerous: true, success: t('tasks.lifecycle.cancelled') },
       ];
     case 'rejected':
       // 历史兼容: R131 之前写入的 rejected task. UI 给"继续执行" (start) + "已完成" (approve).
       return [
-        { key: 'start', icon: 'play', label: '继续执行', variant: 'primary', dangerous: false, success: '已恢复' },
-        { key: 'approve', icon: 'check', label: '已完成', variant: 'primary', dangerous: false, success: '已标记完成' },
+        { key: 'start', icon: 'play', label: t('tasks.board.btnUnawait'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.resumed') },
+        { key: 'approve', icon: 'check', label: t('tasks.kanban.status.completed'), variant: 'primary', dangerous: false, success: t('tasks.lifecycle.approved') },
       ];
     case 'failed':
     case 'cancelled':
     case 'completed':
       return [
-        { key: 'restart', icon: 'refresh', label: '清空重来', variant: 'secondary', dangerous: false, success: '已重新启动' },
+        { key: 'restart', icon: 'refresh', label: t('tasks.lifecycle.restart'), variant: 'secondary', dangerous: false, success: t('tasks.lifecycle.restarted') },
       ];
     case 'verifying':
       // 后端未 expose verifying 期间的对外 action. 不渲染任何按钮.
@@ -215,7 +216,7 @@ const confirm = reactive<ConfirmState>({
   open: false,
   title: '',
   message: '',
-  confirmText: '确认',
+  confirmText: '', // 渲染时走 common.confirm (i18n)
   pending: null,
 });
 
@@ -234,6 +235,7 @@ const unawaitReason = ref<'agent_self_resolved' | 'user_timeout' | 'external_eve
 const unawaitNote = ref<string>('');
 
 const toast = useToast();
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Derived                                                            */
@@ -304,11 +306,11 @@ function dispatch(action: ActionDef): void {
     return;
   }
   if (action.dangerous) {
-    confirm.title = action.key === 'cancel' ? '取消任务' : '删除任务';
+    confirm.title = action.key === 'cancel' ? t('tasks.lifecycle.cancelTitle') : t('tasks.lifecycle.deleteTitle');
     confirm.message =
       action.key === 'cancel'
-        ? `确认取消此任务? 取消后已运行的部分不可恢复.`
-        : `确认删除此任务? 删除后可通过 "恢复" 找回, 但历史记录不再展示.`;
+        ? t('tasks.lifecycle.cancelMessage')
+        : t('tasks.lifecycle.deleteMessage');
     // 🔴 用 confirmTextFromLabel, 不要内联 /^[^\w]+/ —— \w 不含中文, 会把
     // '删除' / '取消' 整串剥空 (R213). 见 spa/src/lib/confirm-label.ts.
     confirm.confirmText = confirmTextFromLabel(action.label);
@@ -367,11 +369,11 @@ async function runAction(action: ActionDef): Promise<void> {
     if (newStatus) emit('changed', newStatus);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `操作失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('tasks.detail.errHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('tasks.detail.errNetwork', { msg: e.message }));
     } else {
-      toast.error('操作失败');
+      toast.error(t('tasks.lifecycle.actionFailed'));
     }
   } finally {
     actionLoading.value = null;
@@ -389,11 +391,11 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
     if (newStatus) emit('changed', newStatus);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `操作失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('tasks.detail.errHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('tasks.detail.errNetwork', { msg: e.message }));
     } else {
-      toast.error('操作失败');
+      toast.error(t('tasks.lifecycle.actionFailed'));
     }
   } finally {
     actionLoading.value = null;
@@ -428,10 +430,10 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
       size="mini"
       :loading="actionLoading === 'delete'"
       :disabled="actionLoading !== null && actionLoading !== 'delete'"
-      title="删除"
-      @click="dispatch({ key: 'delete', icon: 'trash', label: '删除', variant: 'danger', dangerous: true, success: '已删除' })"
+      :title="t('common.delete')"
+      @click="dispatch({ key: 'delete', icon: 'trash', label: t('common.delete'), variant: 'danger', dangerous: true, success: t('tasks.lifecycle.deleted') })"
     >
-      <span class="lca-icon"><IconSvg name="trash" /></span><span class="lca-label">删除</span>
+      <span class="lca-icon"><IconSvg name="trash" /></span><span class="lca-label">{{ t('common.delete') }}</span>
     </Button>
 
     <!-- R56-A4.8 (P1-1): 三段 ConfirmDialog — refine / await / unawait
@@ -441,10 +443,10 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
     <!-- refine 弹窗 -->
     <ConfirmDialog
       :open="refineOpen"
-      title="让 agent 接着干"
+      :title="t('tasks.board.refineTitle')"
       :message="refineMessage"
-      confirm-text="▶ 继续干"
-      cancel-text="取消"
+      :confirm-text="t('tasks.lifecycle.refineConfirm')"
+      :cancel-text="t('common.cancel')"
       type="info"
       @confirm="onConfirmRefine"
       @cancel="onCancelRefine"
@@ -452,13 +454,13 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
       <template #default>
         <div class="lca-dialog-body">
           <p class="lca-dialog-hint">
-            任务从 reviewing 切回 running, agent 会按新指示继续。消息可选。
+            {{ t('tasks.lifecycle.refineHint') }}
           </p>
           <input
             v-model="refineMessage"
             type="text"
             class="lca-dialog-input"
-            placeholder="(可选) 给 agent 的继续消息"
+            :placeholder="t('tasks.board.refinePlaceholder')"
           />
         </div>
       </template>
@@ -467,27 +469,27 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
     <!-- await 弹窗 -->
     <ConfirmDialog
       :open="awaitOpen"
-      title="等用户介入"
+      :title="t('tasks.kanban.status.await_user')"
       :message="awaitNote"
-      confirm-text="⏸ 等用户介入"
-      cancel-text="取消"
+      :confirm-text="t('tasks.lifecycle.awaitConfirm')"
+      :cancel-text="t('common.cancel')"
       type="info"
       @confirm="onConfirmAwait"
       @cancel="onCancelAwait"
     >
       <template #default>
         <div class="lca-dialog-body">
-          <p class="lca-dialog-hint">切到「等用户介入」状态，等拍板/建议。</p>
+          <p class="lca-dialog-hint">{{ t('tasks.lifecycle.awaitHint') }}</p>
           <select v-model="awaitReason" class="lca-dialog-select">
-            <option value="dispatch_needed">dispatch_needed — 等派发实现</option>
-            <option value="decision_pending">decision_pending — 等拍板</option>
-            <option value="suggestion">suggestion — 有建议给 damo</option>
+            <option value="dispatch_needed">{{ t('tasks.lifecycle.reasonDispatch') }}</option>
+            <option value="decision_pending">{{ t('tasks.lifecycle.reasonDecision') }}</option>
+            <option value="suggestion">{{ t('tasks.lifecycle.reasonSuggestion') }}</option>
           </select>
           <input
             v-model="awaitNote"
             type="text"
             class="lca-dialog-input"
-            placeholder="(可选) 备注"
+            :placeholder="t('tasks.lifecycle.notePlaceholder')"
           />
         </div>
       </template>
@@ -496,27 +498,27 @@ async function runActionByKey(key: ActionKey, body: Record<string, unknown>): Pr
     <!-- unawait 弹窗 -->
     <ConfirmDialog
       :open="unawaitOpen"
-      title="让 agent 继续执行"
+      :title="t('tasks.lifecycle.unawaitTitle')"
       :message="unawaitNote"
-      confirm-text="▶ 继续执行"
-      cancel-text="取消"
+      :confirm-text="t('tasks.lifecycle.unawaitConfirm')"
+      :cancel-text="t('common.cancel')"
       type="info"
       @confirm="onConfirmUnawait"
       @cancel="onCancelUnawait"
     >
       <template #default>
         <div class="lca-dialog-body">
-          <p class="lca-dialog-hint">任务从「等用户介入」回到 running，agent 接着干。</p>
+          <p class="lca-dialog-hint">{{ t('tasks.lifecycle.unawaitHint') }}</p>
           <select v-model="unawaitReason" class="lca-dialog-select">
-            <option value="agent_self_resolved">agent_self_resolved — agent 自决</option>
-            <option value="user_timeout">user_timeout — 用户超时</option>
-            <option value="external_event">external_event — 外部触发</option>
+            <option value="agent_self_resolved">{{ t('tasks.lifecycle.unreasonSelf') }}</option>
+            <option value="user_timeout">{{ t('tasks.lifecycle.unreasonTimeout') }}</option>
+            <option value="external_event">{{ t('tasks.lifecycle.unreasonExternal') }}</option>
           </select>
           <input
             v-model="unawaitNote"
             type="text"
             class="lca-dialog-input"
-            placeholder="(可选) 备注"
+            :placeholder="t('tasks.lifecycle.notePlaceholder')"
           />
         </div>
       </template>

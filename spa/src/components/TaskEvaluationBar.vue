@@ -12,10 +12,12 @@
    - POST /api/tasks/[id]/evaluate body {score, note}; GET /api/tasks/[id]/evals 拉历史.
    - 乐观更新评分历史, 失败回滚. */
 import { onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get, post, HttpError } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 
 const toast = useToast();
+const { t } = useI18n();
 
 interface EvalRecord {
   id: string | number;
@@ -86,8 +88,8 @@ async function submit(): Promise<void> {
     await loadHistory();
   } catch (e) {
     evals.value = evals.value.filter((x) => x.id !== temp.id);
-    if (e instanceof HttpError) toast.error(`提交评分失败: ${e.message}`);
-    else toast.error('提交评分失败');
+    if (e instanceof HttpError) toast.error(t('tasks.eval.submitFailedMsg', { msg: e.message }));
+    else toast.error(t('tasks.eval.submitFailed'));
   } finally {
     submitting.value = false;
   }
@@ -98,7 +100,7 @@ async function submit(): Promise<void> {
   <!-- R56-A4.3: amber-50 横条 (master tdc.tsx:2270-2327 1:1). flex-wrap 一行,
        评分按钮 + note input + 提交按钮 + 历史展开 (details/summary). -->
   <div class="td-eval-bar">
-    <span class="td-eval-count">评分（{{ evals.length }} 次）</span>
+    <span class="td-eval-count">{{ t('tasks.eval.count', { n: evals.length }) }}</span>
     <span v-if="evals.length > 0" class="td-eval-avg">avg {{ avg() }}</span>
     <button
       v-for="n in 5"
@@ -107,14 +109,14 @@ async function submit(): Promise<void> {
       class="td-eval-star"
       :class="{ 'td-eval-star-active': myScore === n }"
       :disabled="submitting"
-      :title="`${n} 星`"
+      :title="t('tasks.eval.starTitle', { n })"
       @click="setScore(n)"
     >{{ n }}★</button>
     <input
       v-model="myNote"
       type="text"
       class="td-eval-note"
-      placeholder="备注（可选）"
+      :placeholder="t('tasks.eval.notePlaceholder')"
       :disabled="submitting"
     />
     <button
@@ -122,9 +124,9 @@ async function submit(): Promise<void> {
       class="td-eval-submit"
       :disabled="myScore < 1 || submitting"
       @click="submit"
-    >{{ submitting ? '提交中…' : '提交评分' }}</button>
+    >{{ submitting ? t('tasks.eval.submitting') : t('tasks.eval.submit') }}</button>
     <details v-if="evals.length > 0" class="td-eval-hist-wrap">
-      <summary class="td-eval-hist-toggle">历史</summary>
+      <summary class="td-eval-hist-toggle">{{ t('tasks.eval.history') }}</summary>
       <ul class="td-eval-hist">
         <li
           v-for="e in evals"

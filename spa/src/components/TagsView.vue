@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useTagsStore } from '@/stores/tags';
 import Modal from '@/components/Modal.vue';
 import Button from '@/components/Button.vue';
@@ -8,6 +9,7 @@ import Button from '@/components/Button.vue';
 const tags = useTagsStore();
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 
 const items = computed(() => tags.visited);
 
@@ -294,25 +296,25 @@ onBeforeUnmount(() => {
   <div class="tags-view">
     <div ref="scrollerRef" class="tags-scroll">
       <div
-        v-for="t in items"
-        :key="t.name"
+        v-for="tg in items"
+        :key="tg.name"
         class="tag"
-        :class="{ active: isActive(t.path), pinned: t.closable === false }"
-        @click="onClick(t.path)"
-        @contextmenu="onContextMenu($event, t.path)"
+        :class="{ active: isActive(tg.path), pinned: tg.closable === false }"
+        @click="onClick(tg.path)"
+        @contextmenu="onContextMenu($event, tg.path)"
       >
-        <span v-if="t.closable === false" class="tag-pin" aria-label="已固定">📌</span>
-        <span class="tag-title">{{ t.title }}</span>
+        <span v-if="tg.closable === false" class="tag-pin" :aria-label="t('components.tags.pinned')">📌</span>
+        <span class="tag-title">{{ tg.title }}</span>
         <button
-          v-if="t.closable !== false"
+          v-if="tg.closable !== false"
           class="tag-close"
-          aria-label="关闭 tab"
-          @click="onClose($event, t.path)"
+          :aria-label="t('components.tags.closeTab')"
+          @click="onClose($event, tg.path)"
         >
           ×
         </button>
       </div>
-      <div v-if="!items.length" class="empty-tag">无打开的 tab</div>
+      <div v-if="!items.length" class="empty-tag">{{ t('components.tags.empty') }}</div>
     </div>
 
     <!-- ⋯ 菜单按钮 (移动端/H5 入口, 桌面右键仍可用). 放在 tags-scroll
@@ -321,8 +323,8 @@ onBeforeUnmount(() => {
     <button
       ref="overflowRef"
       class="tag-overflow"
-      title="操作菜单"
-      aria-label="操作菜单"
+      :title="t('components.tags.menuAria')"
+      :aria-label="t('components.tags.menuAria')"
       :disabled="!items.length"
       @click="openMenuFromOverflow"
     >
@@ -334,7 +336,7 @@ onBeforeUnmount(() => {
     <button
       class="persist-toggle"
       :class="{ 'persist-toggle--on': persistEnabled }"
-      :title="persistEnabled ? '关闭后刷新不再保留 tab 列表' : '开启后刷新保留 tab 列表'"
+      :title="persistEnabled ? t('components.tags.persistOffTitle') : t('components.tags.persistOnTitle')"
       :aria-pressed="persistEnabled"
       @click="togglePersist"
     >
@@ -352,23 +354,23 @@ onBeforeUnmount(() => {
       @click.stop
     >
       <button class="ctx-item" :disabled="menuCtx.isPinned" @click="menuCloseOne">
-        关闭
+        {{ t('components.tags.close') }}
       </button>
-      <button class="ctx-item" @click="menuCloseOthers">关闭其他</button>
+      <button class="ctx-item" @click="menuCloseOthers">{{ t('components.tags.closeOthers') }}</button>
       <button class="ctx-item" :disabled="!menuCtx.hasLeft" @click="menuCloseLeft">
-        关闭左侧
+        {{ t('components.tags.closeLeft') }}
       </button>
       <button class="ctx-item" :disabled="!menuCtx.hasRight" @click="menuCloseRight">
-        关闭右侧
+        {{ t('components.tags.closeRight') }}
       </button>
       <div class="ctx-sep" />
-      <button class="ctx-item" @click="menuRename">重命名…</button>
+      <button class="ctx-item" @click="menuRename">{{ t('components.tags.rename') }}</button>
       <button class="ctx-item" @click="menuTogglePin">
-        {{ menuCtx.isPinned ? '取消固定' : '固定' }}
+        {{ menuCtx.isPinned ? t('components.tags.unpin') : t('components.tags.pin') }}
       </button>
       <div class="ctx-sep" />
       <button class="ctx-item ctx-item--danger" :disabled="!menuCtx.canCloseAll" @click="menuCloseAll">
-        关闭全部
+        {{ t('components.tags.closeAll') }}
       </button>
     </div>
 
@@ -376,7 +378,7 @@ onBeforeUnmount(() => {
          handled by Modal itself. -->
     <Modal
       v-model="renameState.open"
-      title="重命名 tab"
+      :title="t('components.tags.renameTab')"
       size="sm"
       @close="cancelRename"
     >
@@ -384,15 +386,15 @@ onBeforeUnmount(() => {
         <input
           v-model="renameState.draft"
           class="rename-input"
-          placeholder="新标题"
+          :placeholder="t('components.tags.newTitlePlaceholder')"
           maxlength="60"
           autofocus
         />
       </form>
       <template #footer>
-        <Button variant="ghost" @click="cancelRename">取消</Button>
+        <Button variant="ghost" @click="cancelRename">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :disabled="!renameState.draft.trim()" @click="confirmRename">
-          确定
+          {{ t('components.tags.ok') }}
         </Button>
       </template>
     </Modal>

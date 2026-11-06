@@ -15,6 +15,7 @@
    - 列表 CRUD: 新建(内联)/改名(双击)/删除(两次点击确认, 只摘条目不动任务)。 */
 
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import {
   listPinLists,
@@ -33,6 +34,7 @@ import { get } from '@/api/http';
 const router = useRouter();
 const route = useRoute();
 const toast = useToast();
+const { t } = useI18n();
 
 /* 全局筛选接入 (damo 1013 反馈: category 视图不吃 URL 筛选标签):
    statusFilter = GlobalBoard chip 行选中集, search = q 防抖词。
@@ -251,9 +253,9 @@ async function onListDrop(targetList: PinListWithItems, e: DragEvent) {
   lists.value = rest;
   try {
     await reorderPinLists(rest.map((l, i) => ({ id: l.id, sort_key: i + 1 })));
-    toast.success('分类顺序已保存');
+    toast.success(t('tasks.category.orderSaved'));
   } catch (err: any) {
-    toast.error(err?.message ?? '保存顺序失败');
+    toast.error(err?.message ?? t('tasks.category.saveOrderFailed'));
     await refresh();
   }
 }
@@ -269,8 +271,8 @@ async function removeFromAll(taskId: string) {
       }
     }
   }
-  if (removed > 0) toast.success(`已从 ${removed} 个列表摘出`);
-  else toast.info('该任务不在任何分类里');
+  if (removed > 0) toast.success(t('tasks.category.removedFromN', { n: removed }));
+  else toast.info(t('tasks.category.notInAnyList'));
   await refresh();
 }
 
@@ -283,7 +285,7 @@ async function moveTo(list: PinListWithItems, taskId: string, insertIdx: number 
   // 同列表: 排序场景 — 摘出 → 插到新位 → 整组 reorder
   if (existing) {
     if (insertIdx == null) {
-      toast.info('已在这个分类里');
+      toast.info(t('tasks.category.alreadyInList'));
       return;
     }
     const arr = [...list.items];
@@ -296,10 +298,10 @@ async function moveTo(list: PinListWithItems, taskId: string, insertIdx: number 
     arr.splice(at, 0, existing);
     try {
       await reorderPinListItems(list.id, arr.map((i) => i.id));
-      toast.success('顺序已保存');
+      toast.success(t('tasks.category.orderSaved'));
       await refresh();
     } catch (err: any) {
-      toast.error(err?.message ?? '保存顺序失败');
+      toast.error(err?.message ?? t('tasks.category.saveOrderFailed'));
       await refresh();
     }
     return;
@@ -317,18 +319,18 @@ async function moveTo(list: PinListWithItems, taskId: string, insertIdx: number 
     }
     const addedRaw = await addPinListItem(list.id, { ref_type: 'task', ref_id: taskId, added_by: 'damo' });
     // 补齐 with-ref 展示字段 (插入排序要用完整条目对象)
-    const t = tasks.value.find((x) => x.id === taskId);
-    const added = { ...addedRaw, title: t?.title ?? '', status: t?.status ?? null, missing: false };
+    const tk = tasks.value.find((x) => x.id === taskId);
+    const added = { ...addedRaw, title: tk?.title ?? '', status: tk?.status ?? null, missing: false };
     if (insertIdx != null && insertIdx < list.items.length) {
       // 插到指定位置: 构造完整新顺序 (add 默认 append, 这里 reorder 校正)
       const arr = [...list.items];
       arr.splice(Math.max(0, insertIdx), 0, added);
       await reorderPinListItems(list.id, arr.map((i) => i.id));
     }
-    toast.success(`已放入「${list.title}」`);
+    toast.success(t('tasks.detail.putIntoList', { title: list.title }));
     await refresh();
   } catch (err: any) {
-    toast.error(err?.body?.code === 'ALREADY_IN_LIST' ? '已在这个分类里' : (err?.message ?? '放入失败'));
+    toast.error(err?.body?.code === 'ALREADY_IN_LIST' ? t('tasks.category.alreadyInList') : (err?.message ?? t('tasks.detail.putFailed')));
     await refresh();
   }
 }
@@ -339,7 +341,7 @@ async function createCategory() {
   if (!title) return;
   await createPinList(title);
   newListTitle.value = '';
-  toast.success(`分类「${title}」已建`);
+  toast.success(t('tasks.category.created', { title }));
   await refresh();
 }
 function startRename(l: PinListWithItems) {
@@ -361,7 +363,7 @@ async function removeCategory(l: PinListWithItems) {
   removingId.value = null;
   await deletePinList(l.id);
   lists.value = lists.value.filter((x) => x.id !== l.id);
-  toast.success(`分类「${l.title}」已删（任务不受影响）`);
+  toast.success(t('tasks.category.deleted', { title: l.title }));
 }
 async function cleanMissing(l: PinListWithItems, itemId: string) {
   await removePinListItem(itemId);
@@ -409,17 +411,17 @@ onMounted(refresh);
       <button
         v-if="projectId"
         class="cat-scope-chip"
-        title="只显示该项目的任务；点击查看全部项目"
+        :title="t('tasks.category.scopeChipTitle')"
         @click="clearScope"
       >
-        📁 {{ projectName(projectId) || '该项目' }} <span class="cat-scope-x">✕</span>
+        📁 {{ projectName(projectId) || t('tasks.category.thisProject') }} <span class="cat-scope-x">✕</span>
       </button>
-      <span class="cat-hint">拖任务卡片到分类里归组；拖回「未分类」摘出。分类删除不影响任务本体。</span>
+      <span class="cat-hint">{{ t('tasks.category.hint') }}</span>
       <input
-        v-model="newListTitle" class="cat-new-input" placeholder="新分类名称…"
+        v-model="newListTitle" class="cat-new-input" :placeholder="t('tasks.category.newListPlaceholder')"
         @keydown.enter="createCategory"
       />
-      <button class="cat-btn primary" :disabled="!newListTitle.trim()" @click="createCategory">＋ 新建分类</button>
+      <button class="cat-btn primary" :disabled="!newListTitle.trim()" @click="createCategory">{{ t('tasks.category.newListBtn') }}</button>
     </div>
 
     <div class="cat-board">
@@ -432,7 +434,7 @@ onMounted(refresh);
         @drop.prevent="onDropUnassigned"
       >
         <div class="cat-list-head">
-          <span>📥 未分类</span>
+          <span>📥 {{ t('tasks.category.unassigned') }}</span>
           <span class="cat-count">{{ unassignedTasks.length }}</span>
         </div>
         <div class="cat-list-body">
@@ -451,7 +453,7 @@ onMounted(refresh);
             <span class="cat-task-title">{{ t.title }}</span>
           </div>
           <div v-if="unassignedTasks.length === 0" class="cat-empty">
-            {{ unassignedPoolAll.length > 0 ? '当前筛选下无任务' : '全部任务已归组' }}
+            {{ unassignedPoolAll.length > 0 ? t('tasks.category.emptyFiltered') : t('tasks.category.allGrouped') }}
           </div>
         </div>
       </div>
@@ -471,7 +473,7 @@ onMounted(refresh);
       >
         <div class="cat-list-head">
           <span
-            class="cat-list-grip" title="拖动调整分类顺序"
+            class="cat-list-grip" :title="t('tasks.category.gripTitle')"
             draggable="true"
             @dragstart="onListDragStart($event, l.id)"
             @dragend="onListDragEnd"
@@ -485,8 +487,8 @@ onMounted(refresh);
             <span class="cat-count">{{ l.items.filter(itemVisible).length }}</span>
           </template>
           <span class="cat-ops">
-            <button title="改名" @click.stop="startRename(l)">✏</button>
-            <button :title="removingId === l.id ? '再点一次确认删除' : '删分类'" :class="{ confirm: removingId === l.id }" @click.stop="removeCategory(l)">🗑</button>
+            <button :title="t('tasks.category.rename')" @click.stop="startRename(l)">✏</button>
+            <button :title="removingId === l.id ? t('tasks.category.clickAgainToDelete') : t('tasks.category.deleteList')" :class="{ confirm: removingId === l.id }" @click.stop="removeCategory(l)">🗑</button>
           </span>
         </div>
         <div class="cat-list-body" @dragover="onBodyDragOver(l, $event)">
@@ -509,7 +511,7 @@ onMounted(refresh);
             >
               <div class="cat-task-top">
                 <span class="cat-dot" :style="{ background: STATUS_DOT[i.status ?? ''] ?? '#94a3b8' }" />
-                <button v-if="i.missing" class="cat-clean" title="清掉失效条目" @click.stop="cleanMissing(l, i.id)">✕</button>
+                <button v-if="i.missing" class="cat-clean" :title="t('tasks.category.cleanMissing')" @click.stop="cleanMissing(l, i.id)">✕</button>
               </div>
               <span class="cat-task-title">{{ i.title }}</span>
               <div v-if="dataChips(l, i).length" class="cat-task-chips">
@@ -530,11 +532,11 @@ onMounted(refresh);
               <span class="cat-task-title">{{ i.title }}</span>
             </div>
           </template>
-          <div v-if="l.items.length === 0" class="cat-empty">拖任务到这里</div>
+          <div v-if="l.items.length === 0" class="cat-empty">{{ t('tasks.category.dropHere') }}</div>
         </div>
       </div>
 
-      <div v-if="loading" class="cat-loading">加载中…</div>
+      <div v-if="loading" class="cat-loading">{{ t('common.loading') }}</div>
     </div>
   </div>
 </template>

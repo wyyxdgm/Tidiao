@@ -23,6 +23,7 @@
    - 保存成功保持面板打开 + 刷新 project 字段 (emit 'updated' 让父视图 reload
      projectsStore / loadProject). */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { isHttpError } from '@/api/http';
 import { listRunners, type Runner } from '@/api/runners';
 import { updateProject as apiUpdateProject, type Project, type RunnerEntry, type UpdateProjectBody } from '@/api/projects';
@@ -31,6 +32,8 @@ import Button from '@/components/Button.vue';
 import Input from '@/components/Input.vue';
 import Textarea from '@/components/Textarea.vue';
 import Select from '@/components/Select.vue';
+
+const { t } = useI18n();
 
 const props = defineProps<{ project: Project; open: boolean }>();
 const emit = defineEmits<{
@@ -136,14 +139,14 @@ function normalizeExtensionsInput(raw: string): { ok: true; value: string[] } | 
   for (const p of parts) {
     const ext = p.trim().replace(/^\.+/, '').toLowerCase();
     if (ext === '') continue;
-    if (ext === '*') return { ok: false, error: '不允许 `*`(放行一切) —— 必须逐个列出扩展名' };
-    if (!EXT_PATTERN.test(ext)) return { ok: false, error: `非法扩展名 ${JSON.stringify(p)}：只允许小写字母和数字，1-16 位` };
-    if (DENIED_EXTENSIONS.has(ext)) return { ok: false, error: `扩展名 ${ext} 属密钥/凭据类，禁止放行到 wiki` };
+    if (ext === '*') return { ok: false, error: t('projects.adv.errExtWildcard') };
+    if (!EXT_PATTERN.test(ext)) return { ok: false, error: t('projects.adv.errExtInvalid', { raw: JSON.stringify(p) }) };
+    if (DENIED_EXTENSIONS.has(ext)) return { ok: false, error: t('projects.adv.errExtDenied', { ext }) };
     if (ext === 'md') continue;
     if (!out.includes(ext)) out.push(ext);
   }
   if (out.length > MAX_EXTRA_EXTENSIONS) {
-    return { ok: false, error: `最多 ${MAX_EXTRA_EXTENSIONS} 个额外扩展名，当前 ${out.length} 个` };
+    return { ok: false, error: t('projects.adv.errExtTooMany', { max: MAX_EXTRA_EXTENSIONS, n: out.length }) };
   }
   return { ok: true, value: out };
 }
@@ -229,28 +232,28 @@ function toggleExt(ext: string): void {
 
 function addRunnerEntry(): void {
   if (!draftRunnerId.value.trim()) {
-    toast.error('请选择 runner');
+    toast.error(t('projects.adv.errPickRunner'));
     return;
   }
   if (!draftPurpose.value.trim()) {
-    toast.error('请填写 purpose');
+    toast.error(t('projects.adv.errPickPurpose'));
     return;
   }
   if (!draftCwdMapping.value.trim()) {
-    toast.error('请填写 cwd_mapping');
+    toast.error(t('projects.adv.errPickCwd'));
     return;
   }
   const patterns = draftPatterns.value.split('\n').map((p) => p.trim()).filter(Boolean);
   if (patterns.length === 0) {
-    toast.error('请至少填一条 command_patterns');
+    toast.error(t('projects.adv.errPickPatterns'));
     return;
   }
   if (patterns.length > 32) {
-    toast.error(`单条 entry 最多 32 条 pattern, 当前 ${patterns.length} 条`);
+    toast.error(t('projects.adv.errTooManyPatterns', { n: patterns.length }));
     return;
   }
   if (runnerEntries.value.length >= MAX_RUNNER_ENTRIES) {
-    toast.error(`runner entry 最多 ${MAX_RUNNER_ENTRIES} 条`);
+    toast.error(t('projects.adv.errTooManyEntries', { max: MAX_RUNNER_ENTRIES }));
     return;
   }
   const opt = runOptions.value.find((r) => r.id === draftRunnerId.value);
@@ -291,7 +294,7 @@ async function saveAll(): Promise<void> {
   // 2. parallel_limit
   const parallelNum = Number(parallelInput.value);
   if (!Number.isInteger(parallelNum) || parallelNum < 1 || parallelNum > MAX_PARALLEL_LIMIT) {
-    toast.error(`同目录并发上限必须是 1-${MAX_PARALLEL_LIMIT} 的整数`);
+    toast.error(t('projects.adv.errParallelRange', { max: MAX_PARALLEL_LIMIT }));
     return;
   }
 
@@ -300,7 +303,7 @@ async function saveAll(): Promise<void> {
   if (timeoutInput.value.trim() !== '') {
     const n = Number(timeoutInput.value);
     if (!Number.isInteger(n) || n < MIN_TIMEOUT_MINUTES || n > MAX_TIMEOUT_MINUTES) {
-      toast.error(`任务超时必须是 ${MIN_TIMEOUT_MINUTES}-${MAX_TIMEOUT_MINUTES} 的整数(分钟), 留空=继承全局`);
+      toast.error(t('projects.adv.errTimeoutRange', { min: MIN_TIMEOUT_MINUTES, max: MAX_TIMEOUT_MINUTES }));
       return;
     }
     timeout = n;
@@ -311,14 +314,14 @@ async function saveAll(): Promise<void> {
   if (portsInput.value.trim() !== '') {
     const parts = portsInput.value.split(',').map((p) => p.trim()).filter(Boolean);
     if (parts.length > 5) {
-      toast.error('端口最多 5 个, 逗号分隔');
+      toast.error(t('projects.adv.errPortsTooMany'));
       return;
     }
     const parsed: number[] = [];
     for (const p of parts) {
       const n = Number(p);
       if (!Number.isInteger(n) || n < 1024 || n > 65535) {
-        toast.error(`端口 "${p}" 非法: 需 1024-65535 整数`);
+        toast.error(t('projects.adv.errPortInvalid', { p }));
         return;
       }
       parsed.push(n);
@@ -341,7 +344,10 @@ async function saveAll(): Promise<void> {
   try {
     await apiUpdateProject(props.project.id, body);
     toast.success(
-      `已保存: 同目录并发 ${parallelNum}, 超时 ${timeout === null ? '跟随全局默认' : `${timeout} 分钟`}`,
+      t('projects.adv.saved', {
+        parallel: parallelNum,
+        timeout: timeout === null ? t('projects.adv.timeoutInherit') : t('projects.adv.timeoutMinutes', { n: timeout }),
+      }),
     );
     emit('updated');
     emit('close');
@@ -351,13 +357,17 @@ async function saveAll(): Promise<void> {
       const outOfPool = conflict?.outOfPool ?? [];
       const conflicting = conflict?.conflicting ?? [];
       const parts: string[] = [];
-      if (outOfPool.length) parts.push(`出池端口: ${outOfPool.slice(0, 3).join(', ')}`);
-      if (conflicting.length) parts.push(`占用端口: ${conflicting.slice(0, 3).map((c) => `${c.port} (项目 ${c.owner_project_id.slice(0, 8)})`).join(', ')}`);
-      toast.error(parts.length ? `端口冲突: ${parts.join('；')}` : (e.message || '保存失败'));
+      if (outOfPool.length) parts.push(t('projects.adv.errOutOfPool', { ports: outOfPool.slice(0, 3).join(', ') }));
+      if (conflicting.length) {
+        parts.push(t('projects.adv.errConflicting', {
+          ports: conflicting.slice(0, 3).map((c) => t('projects.adv.errConflictingItem', { port: c.port, project: c.owner_project_id.slice(0, 8) })).join(', '),
+        }));
+      }
+      toast.error(parts.length ? t('projects.adv.errPortConflict', { detail: parts.join('; ') }) : (e.message || t('projects.adv.errSave')));
     } else if (isHttpError(e)) {
-      toast.error(e.message || '保存失败');
+      toast.error(e.message || t('projects.adv.errSave'));
     } else {
-      toast.error('保存失败');
+      toast.error(t('projects.adv.errSave'));
     }
   } finally {
     saving.value = false;
@@ -369,12 +379,17 @@ async function saveAll(): Promise<void> {
   <div v-if="open" class="adv-panel">
     <!-- A. 同目录并发上限 -->
     <div class="adv-block">
-      <div class="adv-head">⚡ 高级选项 · 同目录并发上限</div>
+      <div class="adv-head">{{ t('projects.adv.advParallelHead') }}</div>
       <p class="adv-hint">
-        本项目<strong>共享同一个工作目录</strong>的任务默认只能跑一个（避免两个 agent 同时改同一棵 git 工作树）。调高后可让 N 个任务同时跑在同一目录。
+        <i18n-t keypath="projects.adv.advParallelHint" tag="span">
+          <template #0><strong>{{ t('projects.adv.advParallelHintStrong') }}</strong></template>
+        </i18n-t>
         <br />
         <span class="adv-warn">
-          🔴 只适合基本不写工作目录的项目（巡检/研究/问答）。会写文件或 <code>git commit</code> 的项目调高 = <code>index.lock</code> 冲突 + 同名文件互相覆盖。实际并行度 = min(全局并发, 本值, 账号上限)。
+          <i18n-t keypath="projects.adv.advParallelWarn" tag="span">
+            <template #0><code>git commit</code></template>
+            <template #1><code>index.lock</code></template>
+          </i18n-t>
         </span>
       </p>
       <Input
@@ -389,12 +404,16 @@ async function saveAll(): Promise<void> {
 
     <!-- B. 任务超时 -->
     <div class="adv-block">
-      <div class="adv-head">⏱ 高级选项 · 任务超时（分钟）</div>
+      <div class="adv-head">{{ t('projects.adv.advTimeoutHead') }}</div>
       <p class="adv-hint">
-        单个任务最长运行多久。<strong>留空 = 跟随全局默认</strong>（设置页「任务超时」，缺省 30 分钟）。到点后走「暂停」同一条路径：打断当前一轮但保留上下文，可恢复续跑。
+        <i18n-t keypath="projects.adv.advTimeoutHint" tag="span">
+          <template #0><strong>{{ t('projects.adv.followGlobalHint') }}</strong></template>
+        </i18n-t>
         <br />
         <span class="adv-warn">
-          🔴 调长的代价：<code>paused</code> 是非终态，定时任务防重派闸门按「非终态」算在飞 —— 超时挂着的任务会挡住后续触发更久。对已在跑的任务不生效（下一次启动/恢复才吃到新值）。
+          <i18n-t keypath="projects.adv.advTimeoutWarn" tag="span">
+            <template #0><code>paused</code></template>
+          </i18n-t>
         </span>
       </p>
       <Input
@@ -402,7 +421,7 @@ async function saveAll(): Promise<void> {
         type="number"
         :min="MIN_TIMEOUT_MINUTES"
         :max="MAX_TIMEOUT_MINUTES"
-        placeholder="跟随全局"
+        :placeholder="t('projects.adv.followGlobalPlaceholder')"
         :disabled="saving"
         class-name="adv-input-timeout"
       />
@@ -410,30 +429,38 @@ async function saveAll(): Promise<void> {
 
     <!-- C. 项目端口 -->
     <div class="adv-block">
-      <div class="adv-head">🔌 高级选项 · 项目端口</div>
+      <div class="adv-head">{{ t('projects.adv.advPortsHead') }}</div>
       <p class="adv-hint">
-        本项目占用的端口列表（逗号分隔, 最多 5 个）。必须落在 admin 配置的<strong>端口池</strong>内, 也不能与其它项目撞. 出池或撞端口时保存会回 409 + 冲突明细. <strong>留空 = 清空</strong>.
+        <i18n-t keypath="projects.adv.advPortsHint" tag="span">
+          <template #0><strong>{{ t('projects.adv.portPool') }}</strong></template>
+          <template #1><strong>{{ t('projects.adv.emptyToClear') }}</strong></template>
+        </i18n-t>
       </p>
       <Input
         v-model="portsInput"
         type="text"
-        placeholder="13001, 13002（留空 = 清空）"
+        :placeholder="t('projects.adv.portsPlaceholder')"
         :disabled="saving"
         class-name="adv-input-ports"
       />
       <div class="adv-preview muted">
-        当前: {{ parseStoredPorts(project.ports).join(', ') || '（未分配）' }}
+        {{ t('projects.adv.portsCurrent', { ports: parseStoredPorts(project.ports).join(', ') || t('projects.adv.portsUnassigned') }) }}
       </div>
     </div>
 
     <!-- D. Wiki 可读取的文件类型 -->
     <div class="adv-block">
-      <div class="adv-head">🔧 高级选项 · Wiki 可读取的文件类型</div>
+      <div class="adv-head">{{ t('projects.adv.advWikiExtHead') }}</div>
       <p class="adv-hint">
-        Wiki 默认只读取 <code>.md</code>。在此追加扩展名(空格或逗号分隔),即可在 Wiki 里浏览 agent 产出的 json / csv 等文件。留空保存 = 恢复默认(只读 .md)。
+        <i18n-t keypath="projects.adv.advWikiExtHint" tag="span">
+          <template #0><code>.md</code></template>
+        </i18n-t>
         <br />
         <span class="adv-warn">
-          仅小写字母数字,最多 {{ MAX_EXTRA_EXTENSIONS }} 个;隐藏文件(<code>.env</code> 等以 . 开头的)和密钥类扩展名始终不可读取。非 .md 文件有 1 MiB 大小上限。
+          <i18n-t keypath="projects.adv.advWikiExtWarn" tag="span">
+            <template #0><code>.env</code></template>
+            <template #max>{{ MAX_EXTRA_EXTENSIONS }}</template>
+          </i18n-t>
         </span>
       </p>
       <Input
@@ -457,12 +484,17 @@ async function saveAll(): Promise<void> {
 
     <!-- E. Runners 子块 -->
     <div class="adv-runners">
-      <div class="adv-head">🛰️ 高级选项 · Runners（远程执行白名单）</div>
+      <div class="adv-head">{{ t('projects.adv.advRunnersHead') }}</div>
       <p class="adv-hint">
-        把本项目命中命令白名单的 Bash 调到目标机的 runner daemon 执行 (例：<code>cargo tauri build</code> 必须在 mac 上跑)。每条 entry = 一个 runner + 一个目的 (purpose) + 路径映射 (runner 物理路径, 与平台 WSL 的 /home/user/... 不同) + 命令白名单 (每行一条, R3 escape 后 .* 匹配).
+        <i18n-t keypath="projects.adv.advRunnersHint" tag="span">
+          <template #0><code>cargo tauri build</code></template>
+        </i18n-t>
         <br />
         <span class="adv-warn">
-          🔴 runner_id 必须真在 /runners 里注册过; <code>cwd_mapping</code> 错了 exec 必失败; <code>.*</code> 等过宽正则 = 把 Bash 几乎全打到 runner 上, 慎填. 留空 = 清空 (回 NULL, 全部走本地 SDK bash, 不走远程).
+          <i18n-t keypath="projects.adv.advRunnersWarn" tag="span">
+            <template #0><code>cwd_mapping</code></template>
+            <template #1><code>.*</code></template>
+          </i18n-t>
         </span>
       </p>
 
@@ -477,7 +509,7 @@ async function saveAll(): Promise<void> {
             <div class="muted small">purpose: {{ e.purpose }}</div>
             <div class="muted small mono" :title="e.cwd_mapping">cwd_mapping: {{ e.cwd_mapping }}</div>
             <div class="muted small">
-              patterns ({{ e.command_patterns.length }}):
+              {{ t('projects.adv.patternsN', { n: e.command_patterns.length }) }}
               {{ e.command_patterns.slice(0, 3).join(', ') }}{{ e.command_patterns.length > 3 ? ` … (+${e.command_patterns.length - 3})` : '' }}
             </div>
           </div>
@@ -486,7 +518,7 @@ async function saveAll(): Promise<void> {
             class="adv-runner-del"
             :disabled="saving"
             @click="removeRunnerEntry(idx)"
-          >删除</button>
+          >{{ t('common.delete') }}</button>
         </div>
       </div>
 
@@ -498,7 +530,7 @@ async function saveAll(): Promise<void> {
             <Select
               v-model="draftRunnerId"
               :options="runOptions.map((r) => ({ value: r.id, label: runnerLabel(r) }))"
-              :placeholder="runOptions.length === 0 ? '无可用 runner, 去 /runners 注册' : '选择 runner'"
+              :placeholder="runOptions.length === 0 ? t('projects.adv.noRunnerPlaceholder') : t('projects.adv.pickRunnerPlaceholder')"
               :disabled="saving || runOptions.length === 0"
             />
           </label>
@@ -536,17 +568,17 @@ async function saveAll(): Promise<void> {
             variant="primary"
             :disabled="saving || runnerEntries.length >= MAX_RUNNER_ENTRIES"
             @click="addRunnerEntry"
-          >+ 加入列表</Button>
+          >{{ t('projects.adv.addToList') }}</Button>
         </div>
       </div>
     </div>
 
     <!-- F. Footer -->
     <div class="adv-footer">
-      <Button variant="primary" size="sm" :loading="saving" :disabled="saving" @click="saveAll">保存</Button>
-      <Button variant="ghost" size="sm" :disabled="saving" @click="emit('close')">取消</Button>
+      <Button variant="primary" size="sm" :loading="saving" :disabled="saving" @click="saveAll">{{ t('common.save') }}</Button>
+      <Button variant="ghost" size="sm" :disabled="saving" @click="emit('close')">{{ t('common.cancel') }}</Button>
       <router-link :to="`/${project.id}/wiki`" class="adv-wiki-link" target="_blank">
-        打开 Wiki →
+        {{ t('projects.adv.openWiki') }}
       </router-link>
     </div>
   </div>

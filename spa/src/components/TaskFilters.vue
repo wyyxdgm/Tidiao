@@ -22,6 +22,7 @@
      有的 watch [statusGroup, debouncedSearch, modelFilter, tagFilter, showDeleted, pageSize]
      只需扩到包含 selectedProjects 即可 (后续 task, 不在 R16 范围内). */
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Checkbox from '@/components/Checkbox.vue';
 import CheckboxGroup from '@/components/CheckboxGroup.vue';
 import Input from '@/components/Input.vue';
@@ -87,11 +88,17 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   statusLabels: () => ({}),
   statusColors: () => ({}),
-  searchPlaceholder: '搜索...',
+  searchPlaceholder: undefined,
   showProject: true,
   showStatus: true,
   disabled: false,
 });
+
+// i18n: searchPlaceholder 未传时兜底走当前语言 (调用方传入值优先).
+const { t } = useI18n();
+const searchPlaceholderText = computed(
+  () => props.searchPlaceholder ?? t('tasks.filters.searchPlaceholder'),
+);
 
 const emit = defineEmits<{
   /** v-model 更新 (整个 FilterState 替换). */
@@ -218,7 +225,7 @@ const hasAnyFilter = computed<boolean>(() =>
   <div :class="['tf-root', { 'tf-disabled': disabled }]">
     <!-- Row 1: 项目多选 (CheckboxGroup) -->
     <div v-if="renderProject" class="tf-row">
-      <span class="tf-label">项目</span>
+      <span class="tf-label">{{ t('tasks.filters.projectLabel') }}</span>
       <CheckboxGroup
         v-model="projectsModel"
         :disabled="disabled"
@@ -236,7 +243,7 @@ const hasAnyFilter = computed<boolean>(() =>
 
     <!-- Row 2: 状态多选 (chip) -->
     <div v-if="renderStatus" class="tf-row">
-      <span class="tf-label">状态</span>
+      <span class="tf-label">{{ t('tasks.filters.statusLabel') }}</span>
       <button
         type="button"
         :class="[
@@ -247,7 +254,7 @@ const hasAnyFilter = computed<boolean>(() =>
         :disabled="disabled"
         @click="toggleAllStatuses"
       >
-        {{ allStatusesSelected ? '全选' : '全不选' }}
+        {{ allStatusesSelected ? t('tasks.filters.selectAll') : t('tasks.filters.selectNone') }}
       </button>
       <button
         v-for="chip in statusChips"
@@ -274,7 +281,7 @@ const hasAnyFilter = computed<boolean>(() =>
       <div class="tf-search">
         <Input
           :model-value="localSearch"
-          :placeholder="searchPlaceholder"
+          :placeholder="searchPlaceholderText"
           clearable
           :disabled="disabled"
           @update:model-value="onSearchInput"
@@ -284,10 +291,10 @@ const hasAnyFilter = computed<boolean>(() =>
         v-if="hasAnyFilter && !disabled"
         type="button"
         class="tf-clear-all"
-        aria-label="清除全部筛选"
+        :aria-label="t('tasks.filters.clearAllAria')"
         @click="clearAll"
       >
-        清除筛选
+        {{ t('tasks.filters.clearAll') }}
       </button>
     </div>
   </div>

@@ -10,6 +10,7 @@
      projects-client.tsx:426-436 同口径), 再 emit created.
    - 失败: HTTP 非 2xx toast 报错 (name 重复 / 数据校验等), 表单不关可改完重试. */
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   aiParseVersion,
   createVersion,
@@ -32,6 +33,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 const projectsStore = useProjectsStore();
 
 const newName = ref('');
@@ -47,18 +49,18 @@ const sources = ref<VersionSuggestion['sources'] | null>(null);
 /** 来源徽标文案 —— 让用户一眼看出哪些字段是 AI/确定性解析填的. */
 function aiSourceHint(s: NonNullable<typeof sources.value>): string {
   const parts: string[] = [];
-  if (s.name === 'ai') parts.push('版本名 AI 生成');
-  if (s.description === 'ai') parts.push('描述 AI 生成');
-  if (s.feishu_url === 'text') parts.push('URL 来自文本');
-  if (s.feishu_sheet === 'id-mapped') parts.push('sheet id 已转 name');
-  if (s.feishu_sheet === 'ai') parts.push('sheet AI 选取');
-  return parts.length ? `已填入: ${parts.join('、')}` : '未识别出可用信息';
+  if (s.name === 'ai') parts.push(t('projects.newVersion.srcNameAi'));
+  if (s.description === 'ai') parts.push(t('projects.newVersion.srcDescAi'));
+  if (s.feishu_url === 'text') parts.push(t('projects.newVersion.srcUrlText'));
+  if (s.feishu_sheet === 'id-mapped') parts.push(t('projects.newVersion.srcSheetMapped'));
+  if (s.feishu_sheet === 'ai') parts.push(t('projects.newVersion.srcSheetAi'));
+  return parts.length ? t('projects.newVersion.filledPrefix') + parts.join(t('projects.newVersion.filledJoin')) : t('projects.newVersion.nothingParsed');
 }
 
 /** AI 解析输入 → 后端解析 → 建议值填表单. 只填后端返回了建议的字段. */
 async function aiFill(): Promise<void> {
   if (!aiText.value.trim()) {
-    toast.error('请先粘贴要解析的文本');
+    toast.error(t('projects.newVersion.errPasteFirst'));
     return;
   }
   aiLoading.value = true;
@@ -70,15 +72,15 @@ async function aiFill(): Promise<void> {
     if (suggestion.feishu_sheet) newSheet.value = suggestion.feishu_sheet;
     sources.value = suggestion.sources;
     if (llmFailed) {
-      toast.info('AI 暂不可用，已填入可直接解析的部分（URL / sheet）');
+      toast.info(t('projects.newVersion.llmFailedPartial'));
     } else {
-      toast.success('已按解析结果填入表单，可手动调整后保存');
+      toast.success(t('projects.newVersion.aiFilled'));
     }
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`AI 解析失败: ${e.message}`);
+      toast.error(t('projects.newVersion.aiParseFailedMsg', { msg: e.message }));
     } else {
-      toast.error('AI 解析失败');
+      toast.error(t('projects.newVersion.aiParseFailed'));
     }
   } finally {
     aiLoading.value = false;
@@ -88,7 +90,7 @@ async function aiFill(): Promise<void> {
 /** POST /api/versions 提交. 首个版本自动设当前版本. */
 async function submit(): Promise<void> {
   if (!newName.value.trim()) {
-    toast.error('请填写版本名');
+    toast.error(t('projects.newVersion.errNameRequired'));
     return;
   }
   try {
@@ -105,13 +107,13 @@ async function submit(): Promise<void> {
     if (proj && !proj.current_version_id) {
       await apiUpdateProject(props.projectId, { current_version_id: v.id });
     }
-    toast.success(`版本「${v.name}」已创建`);
+    toast.success(t('projects.newVersion.created', { name: v.name }));
     emit('created', v);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`创建版本失败: ${e.message}`);
+      toast.error(t('projects.newVersion.createFailedMsg', { msg: e.message }));
     } else {
-      toast.error('创建版本失败');
+      toast.error(t('projects.newVersion.createFailed'));
     }
   }
 }
@@ -124,43 +126,43 @@ async function submit(): Promise<void> {
       <Textarea
         v-model="aiText"
         :rows="2"
-        placeholder="AI 解析：粘贴飞书 sheet URL / sheet 名或 id / 版本用途描述…（可留空手动填）"
+        :placeholder="t('projects.newVersion.aiPlaceholder')"
         class-name="version-new-ai-text"
       />
       <Button size="sm" variant="secondary" :disabled="aiLoading" @click="aiFill">
-        {{ aiLoading ? '解析中…' : 'AI 解析填表' }}
+        {{ aiLoading ? t('projects.newVersion.parsing') : t('projects.newVersion.aiFillBtn') }}
       </Button>
     </div>
     <div class="version-new-row">
       <Input
         v-model="newName"
-        placeholder="版本名（如 v1.7）"
+        :placeholder="t('projects.newVersion.namePlaceholder')"
         class-name="version-new-name"
       />
-      <Button size="sm" @click="submit">创建</Button>
-      <Button size="sm" variant="secondary" @click="emit('cancel')">取消</Button>
+      <Button size="sm" @click="submit">{{ t('common.create') }}</Button>
+      <Button size="sm" variant="secondary" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
     </div>
     <div class="version-new-row">
       <Input
         v-model="newDescription"
-        placeholder="版本干啥的（可选，AI 可自动生成）"
+        :placeholder="t('projects.newVersion.descPlaceholder')"
         class-name="version-new-desc"
       />
     </div>
     <div class="version-new-row">
       <Input
         v-model="newUrl"
-        placeholder="飞书 sheet URL（可选）"
+        :placeholder="t('projects.newVersion.urlPlaceholder')"
         class-name="version-new-url"
       />
       <Input
         v-model="newSheet"
-        placeholder="Sheet 名或 id（可选）"
+        :placeholder="t('projects.newVersion.sheetPlaceholder')"
         class-name="version-new-sheet"
       />
     </div>
     <div class="version-new-row">
-      <Checkbox v-model="newEnable" label="开启自动派发" />
+      <Checkbox v-model="newEnable" :label="t('projects.newVersion.enableDispatch')" />
       <span v-if="sources" class="muted version-edit-hint">
         {{ aiSourceHint(sources) }}
       </span>

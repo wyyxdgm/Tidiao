@@ -13,6 +13,7 @@
    - Model `<datalist>` 喂建议 (composable useAvailableModels), 用户仍可输自定义.
    - ConfirmDialog (imperative useConfirm) 用于删除二次确认. */
 import { computed, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   createProjectLlmConfig,
   deleteProjectLlmConfig,
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 const { confirm: confirmDialog } = useConfirm();
 const { options: modelOptions } = useAvailableModels();
 
@@ -82,8 +84,8 @@ async function loadConfigs(): Promise<void> {
     llmConfigs.value = await listProjectLlmConfigs(props.projectId);
   } catch (e: unknown) {
     llmConfigs.value = [];
-    if (isHttpError(e)) toast.error(`加载 LLM 配置失败: ${e.message}`);
-    else toast.error('加载 LLM 配置失败');
+    if (isHttpError(e)) toast.error(t('projects.llm.loadFailedMsg', { msg: e.message }));
+    else toast.error(t('projects.llm.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -133,7 +135,7 @@ function cancelEdit(): void {
 
 async function save(): Promise<void> {
   if (!llmDraft.name.trim()) {
-    llmMessage.value = '名称必填';
+    llmMessage.value = t('projects.llm.errNameRequired');
     return;
   }
   llmSaving.value = true;
@@ -158,16 +160,16 @@ async function save(): Promise<void> {
         body,
       );
     } else {
-      llmMessage.value = '无正在编辑的配置';
+      llmMessage.value = t('projects.llm.errNothingEditing');
       return;
     }
-    llmMessage.value = '✅ 已保存';
+    llmMessage.value = t('projects.llm.saved');
     cancelEdit();
     await loadConfigs();
     emit('updated');
   } catch (e: unknown) {
     if (isHttpError(e)) llmMessage.value = e.message;
-    else llmMessage.value = '保存失败';
+    else llmMessage.value = t('projects.llm.saveFailed');
   } finally {
     llmSaving.value = false;
   }
@@ -178,12 +180,12 @@ async function setDefault(configId: string): Promise<void> {
   llmMessage.value = null;
   try {
     await setProjectLlmConfigDefault(props.projectId, configId);
-    llmMessage.value = '✅ 已设为默认';
+    llmMessage.value = t('projects.llm.defaultSet');
     await loadConfigs();
     emit('updated');
   } catch (e: unknown) {
     if (isHttpError(e)) llmMessage.value = e.message;
-    else llmMessage.value = '设置失败';
+    else llmMessage.value = t('projects.llm.setFailed');
   } finally {
     llmSaving.value = false;
   }
@@ -191,11 +193,11 @@ async function setDefault(configId: string): Promise<void> {
 
 async function handleDelete(c: ProjectLlmConfig): Promise<void> {
   const ok = await confirmDialog(
-    '确定要删除这份配置？删除后该项目回落到平台默认 LLM 配置。',
+    t('projects.llm.deleteConfirmMsg'),
     {
-      title: `删除项目 LLM 配置「${c.name}」`,
+      title: t('projects.llm.deleteConfirmTitle', { name: c.name }),
       type: 'danger',
-      confirmText: '删除',
+      confirmText: t('common.delete'),
     },
   );
   if (!ok) return;
@@ -203,12 +205,12 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
   llmMessage.value = null;
   try {
     await deleteProjectLlmConfig(props.projectId, c.id);
-    llmMessage.value = '✅ 已删除';
+    llmMessage.value = t('projects.llm.deleted');
     await loadConfigs();
     emit('updated');
   } catch (e: unknown) {
     if (isHttpError(e)) llmMessage.value = e.message;
-    else llmMessage.value = '删除失败';
+    else llmMessage.value = t('projects.llm.deleteFailed');
   } finally {
     llmSaving.value = false;
   }
@@ -218,11 +220,11 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
 <template>
   <div v-if="open" class="llm-panel">
     <div class="llm-desc">
-      项目级 LLM 配置（可多份，命名区分）。该项目下的任务优先用此处的默认配置；不配则按 admin → user → env 链路解析。
+      {{ t('projects.llm.desc') }}
     </div>
 
     <div v-if="loading && llmConfigs.length === 0" class="llm-loading muted">
-      加载中…
+      {{ t('common.loading') }}
     </div>
 
     <!-- 列表 -->
@@ -230,12 +232,12 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
       <table class="llm-table">
         <thead>
           <tr>
-            <th>名称</th>
+            <th>{{ t('projects.llm.thName') }}</th>
             <th>Base URL</th>
             <th>Model</th>
             <th>Key</th>
-            <th>默认</th>
-            <th class="text-right">操作</th>
+            <th>{{ t('projects.llm.thDefault') }}</th>
+            <th class="text-right">{{ t('projects.llm.thActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -249,17 +251,17 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
             </td>
             <td>
               <code v-if="cfg.has_api_key" class="llm-key-chip">{{ cfg.api_key_masked }}</code>
-              <span v-else class="llm-key-warn">未配</span>
+              <span v-else class="llm-key-warn">{{ t('projects.llm.noKey') }}</span>
             </td>
             <td>
-              <span v-if="cfg.is_default" class="llm-badge-default">默认</span>
+              <span v-if="cfg.is_default" class="llm-badge-default">{{ t('projects.llm.default') }}</span>
               <button
                 v-else
                 type="button"
                 class="llm-link"
                 :disabled="llmSaving"
                 @click="setDefault(cfg.id)"
-              >设为默认</button>
+              >{{ t('projects.llm.setDefault') }}</button>
             </td>
             <td class="llm-actions">
               <button
@@ -267,13 +269,13 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
                 class="llm-link"
                 :disabled="llmSaving"
                 @click="startEdit(cfg)"
-              >编辑</button>
+              >{{ t('common.edit') }}</button>
               <button
                 type="button"
                 class="llm-link llm-link-danger"
                 :disabled="llmSaving"
                 @click="handleDelete(cfg)"
-              >删除</button>
+              >{{ t('common.delete') }}</button>
             </td>
           </tr>
         </tbody>
@@ -284,7 +286,7 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
     <div class="llm-form-section">
       <div class="llm-form-head">
         <h4 v-if="editingLlmConfigId !== null" class="llm-form-title">
-          {{ editingLlmConfigId === 'new' ? '新增项目 LLM 配置' : '编辑项目 LLM 配置' }}
+          {{ editingLlmConfigId === 'new' ? t('projects.llm.formNewTitle') : t('projects.llm.formEditTitle') }}
         </h4>
         <Button
           v-else
@@ -292,15 +294,15 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
           size="sm"
           :disabled="llmSaving"
           @click="startEdit('new')"
-        >+ 新增配置</Button>
+        >+ {{ t('projects.llm.addBtn') }}</Button>
       </div>
 
       <div v-if="editingLlmConfigId !== null" class="llm-form">
         <label class="llm-form-label">
-          名称 *
+          {{ t('projects.llm.labelName') }}
           <Input
             v-model="llmDraft.name"
-            placeholder="如：Claude 生产 / 火山方舟测试"
+            :placeholder="t('projects.llm.namePlaceholder')"
             :disabled="llmSaving"
           />
         </label>
@@ -308,7 +310,7 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
           Base URL
           <Input
             v-model="llmDraft.base_url"
-            placeholder="留空继承上级"
+            :placeholder="t('projects.llm.baseUrlPlaceholder')"
             :disabled="llmSaving"
           />
         </label>
@@ -316,7 +318,7 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
           Model
           <Input
             v-model="llmDraft.model"
-            placeholder="选择或输入自定义模型名"
+            :placeholder="t('projects.llm.modelPlaceholder')"
             list="project-llm-model-options"
             :disabled="llmSaving"
           />
@@ -329,7 +331,7 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
           <Input
             v-model="llmDraft.api_key"
             type="password"
-            :placeholder="editingLlmConfigId !== 'new' ? '留空保留现有 key' : '输入 API Key'"
+            :placeholder="editingLlmConfigId !== 'new' ? t('projects.llm.keyKeepPlaceholder') : t('projects.llm.keyPlaceholder')"
             :disabled="llmSaving"
             @update:model-value="(v: string) => { if (v) llmDraft.clear_api_key = false; }"
           />
@@ -340,7 +342,7 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
               :disabled="llmSaving"
               @update:model-value="(v: boolean) => llmDraft.clear_api_key = v"
             />
-            <label for="clear-project-api-key" class="llm-clear-label">清除现有 key</label>
+            <label for="clear-project-api-key" class="llm-clear-label">{{ t('projects.llm.clearKey') }}</label>
           </span>
         </label>
 
@@ -351,8 +353,8 @@ async function handleDelete(c: ProjectLlmConfig): Promise<void> {
             :loading="llmSaving"
             :disabled="!llmDraft.name.trim()"
             @click="save"
-          >保存</Button>
-          <Button variant="ghost" size="sm" :disabled="llmSaving" @click="cancelEdit">取消</Button>
+          >{{ t('common.save') }}</Button>
+          <Button variant="ghost" size="sm" :disabled="llmSaving" @click="cancelEdit">{{ t('common.cancel') }}</Button>
           <span v-if="llmMessage" class="llm-msg">{{ llmMessage }}</span>
         </div>
       </div>

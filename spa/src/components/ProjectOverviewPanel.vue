@@ -17,6 +17,7 @@
      不用手写, 自动给可点的项目内入口. */
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import {
   getProjectOverview,
@@ -50,6 +51,7 @@ interface ProjectListItem {
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const { t } = useI18n();
 
 const projectId = computed(() => String(route.params.projectId));
 
@@ -108,7 +110,7 @@ async function loadOverview(): Promise<void> {
   try {
     overview.value = await getProjectOverview(projectId.value);
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '加载失败';
+    error.value = e instanceof Error ? e.message : t('projects.overview.loadFailed');
   } finally {
     loading.value = false;
     retrying.value = false;
@@ -160,9 +162,9 @@ async function save(): Promise<void> {
     const saved = await saveProjectOverview(projectId.value, draft.value);
     overview.value = saved;
     editing.value = false;
-    toast.success('概览已保存');
+    toast.success(t('projects.overview.saved'));
   } catch (e: unknown) {
-    toast.error(`保存失败: ${e instanceof Error ? e.message : String(e)}`);
+    toast.error(t('projects.overview.saveFailedMsg', { msg: e instanceof Error ? e.message : String(e) }));
   } finally {
     saving.value = false;
   }
@@ -230,14 +232,14 @@ watch(
   <section class="overview-panel">
     <!-- 加载中 -->
     <div v-if="loading && !overview" class="state-block">
-      <Loading size="lg" label="加载概览" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('projects.overview.loading')" />
+      <p class="state-text muted">{{ t('common.loading') }}</p>
     </div>
 
     <!-- 错误 -->
     <ErrorView
       v-else-if="error"
-      title="加载概览失败"
+      :title="t('projects.overview.loadFailedTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -249,31 +251,31 @@ watch(
       <!-- 顶部: 标题 + 快捷链接 + 操作 -->
       <header class="ov-header">
         <div class="ov-header-left">
-          <h3 class="ov-title">项目概览</h3>
+          <h3 class="ov-title">{{ t('projects.overview.title') }}</h3>
           <span v-if="overview?.updated_at" class="ov-updated muted">
-            最后更新 {{ formatDate(overview.updated_at) }}
+            {{ t('projects.overview.updatedAt') }} {{ formatDate(overview.updated_at) }}
           </span>
         </div>
         <div class="ov-actions">
           <Button v-if="!editing" variant="secondary" size="sm" @click="startEdit">
-            ✏️ 编辑
+            ✏️ {{ t('common.edit') }}
           </Button>
         </div>
       </header>
 
       <!-- 常用链接: 项目内各视图入口 (不用手写, 自动可点) -->
-      <nav class="ov-links" aria-label="项目内快捷入口">
+      <nav class="ov-links" :aria-label="t('projects.overview.linksAria')">
         <button type="button" class="ov-link" @click="goto(`/${projectId}/console`)">
-          🎬 控制台
+          🎬 {{ t('projects.overview.linkConsole') }}
         </button>
         <button type="button" class="ov-link" @click="goto(`/${projectId}/wiki`)">
           📚 Wiki
         </button>
         <button type="button" class="ov-link" @click="gotoRequirements">
-          📋 需求点
+          📋 {{ t('projects.overview.linkReqs') }}
         </button>
         <button type="button" class="ov-link" @click="gotoNewTask">
-          ➕ 新建任务
+          ➕ {{ t('projects.overview.linkNewTask') }}
         </button>
       </nav>
 
@@ -283,19 +285,19 @@ watch(
           v-model="draft"
           :rows="18"
           autosize
-          placeholder="# 项目状态&#10;&#10;## 常用链接&#10;- [飞书表](https://...)&#10;- [任务](task:xxxxxxxx)&#10;&#10;## 凭据&#10;- 某某 key: ****"
+          :placeholder="t('projects.overview.editorPlaceholder')"
         />
         <div class="ov-editor-actions">
           <Button variant="primary" :loading="saving" @click="save">
-            {{ saving ? '保存中…' : '保存' }}
+            {{ saving ? t('common.saving') : t('common.save') }}
           </Button>
           <Button variant="secondary" :disabled="saving" @click="cancelEdit">
-            取消
+            {{ t('common.cancel') }}
           </Button>
         </div>
         <p class="ov-hint muted">
-          支持 markdown: 链接 / 表格 / 代码块. 平台内跳转用
-          <code>task:任务ID</code> 或相对 <code>.md</code> 路径, 外部链接贴 URL 即可.
+          {{ t('projects.overview.markdownHintPrefix') }}
+          <code>{{ t('projects.overview.taskRef') }}</code> {{ t('projects.overview.markdownHintMid') }} <code>.md</code> {{ t('projects.overview.markdownHintSuffix') }}
         </p>
       </div>
 
@@ -304,8 +306,8 @@ watch(
         <Empty
           v-if="!hasContent"
           illustration="folder"
-          title="还没写概览"
-          description="点右上「编辑」写一份 —— 项目状态、常用链接、凭据备注放这一个文件里"
+          :title="t('projects.overview.emptyTitle')"
+          :description="t('projects.overview.emptyDesc')"
           size="md"
         />
         <div v-else class="ov-markdown" v-html="bodyHtml"></div>

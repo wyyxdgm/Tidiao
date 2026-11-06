@@ -15,6 +15,7 @@
      挂载后零改动; 路由未注册时 router.push 静默失败, 不阻塞.
    - 不引入新依赖. */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { parseDbTime } from '@/lib/datetime';
 import TaskResourceBadge from '@/components/TaskResourceBadge.vue';
@@ -71,24 +72,25 @@ interface TaskCardProps {
 
 const props = defineProps<TaskCardProps>();
 const router = useRouter();
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Status chip — 11 状态色 (与 BoardPage R14 scoped class 同源)       */
 /* ------------------------------------------------------------------ */
 
-/** 状态中文标签 — 与 master STATUS_LABELS 对齐. */
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
+/** 状态 locale key — 复用 tasks.kanban.status.* 十一键. */
+const STATUS_LABEL_KEYS: Record<TaskStatus, string> = {
+  pending: 'tasks.kanban.status.pending',
+  queued: 'tasks.kanban.status.queued',
+  running: 'tasks.kanban.status.running',
+  paused: 'tasks.kanban.status.paused',
+  reviewing: 'tasks.kanban.status.reviewing',
+  verifying: 'tasks.kanban.status.verifying',
+  await_user: 'tasks.kanban.status.await_user',
+  completed: 'tasks.kanban.status.completed',
+  failed: 'tasks.kanban.status.failed',
+  rejected: 'tasks.kanban.status.rejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'tasks.kanban.status.cancelled',
 };
 
 /** 状态 → chip class. 用本组件 scoped class, 不引 Tailwind palette
@@ -116,9 +118,9 @@ const statusClass = computed<string>(() =>
   STATUS_CHIP_CLASS[props.task.status] || 'tc-status-default',
 );
 
-/** status 中文标签 (含 unknown 兜底). */
+/** status 标签 (含 unknown 兜底). */
 const statusLabel = computed<string>(() =>
-  STATUS_LABELS[props.task.status] || props.task.status,
+  STATUS_LABEL_KEYS[props.task.status] ? t(STATUS_LABEL_KEYS[props.task.status]) : props.task.status,
 );
 
 /** 优先级文本. priority>0 才显示. */
@@ -133,7 +135,7 @@ const ownerText = computed<string>(() => {
   if (o && o.trim().length > 0) return o;
   const id = props.task.owner_id;
   if (id && id.length > 0) return id.slice(0, 8);
-  return '未分配';
+  return t('tasks.card.unassigned');
 });
 
 /** 显示用时间. 优先 created_at; 缺则回落 updated_at. */
@@ -172,7 +174,7 @@ function onCardClick(): void {
     :class="['tc-root', { 'tc-deleted': isDeleted }]"
     role="button"
     tabindex="0"
-    :aria-label="`任务: ${task.title}`"
+    :aria-label="t('tasks.card.taskAria', { title: task.title })"
     :title="task.title"
     @click="onCardClick"
     @keydown.enter.prevent="onCardClick"
@@ -182,7 +184,7 @@ function onCardClick(): void {
       <span :class="['tc-status', statusClass]">{{ statusLabel }}</span>
       <QueuedReasonHint :status="task.status" :reason="task.queued_reason" />
       <span v-if="priorityText" class="tc-priority">{{ priorityText }}</span>
-      <span v-if="isDeleted" class="tc-deleted-badge">已删除</span>
+      <span v-if="isDeleted" class="tc-deleted-badge">{{ t('common.deleted') }}</span>
     </div>
 
     <h3 :class="['tc-title', { 'tc-title-strike': isDeleted }]">
@@ -190,7 +192,7 @@ function onCardClick(): void {
     </h3>
 
     <div class="tc-meta">
-      <span class="tc-owner" :title="`归属：${ownerText}`">@{{ ownerText }}</span>
+      <span class="tc-owner" :title="t('tasks.card.ownerTitle', { owner: ownerText })">@{{ ownerText }}</span>
       <span v-if="createdAtText" class="tc-time">{{ createdAtText }}</span>
       <!-- R232: 运行中任务资源徽章 — 父组件传 resource (useTaskResources 采样) 才渲染. -->
       <TaskResourceBadge

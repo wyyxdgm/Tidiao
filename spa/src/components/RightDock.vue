@@ -14,6 +14,7 @@
    - timeline / checkpoints / commits 三面板各自 fetch + 单次刷新键.
    - 关系图 (R62: 派发 / 继承 / 依赖 全在一张图) + 需求点关联走 SubSection. */
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get, post, HttpError } from '@/api/http';
 import { parseDbTime } from '@/lib/datetime';
 import TaskStatusChip from './TaskStatusChip.vue';
@@ -102,6 +103,8 @@ const emit = defineEmits<{
   (e: 'toggle', panel: 'details' | 'timeline' | 'checkpoints' | 'commits'): void;
 }>();
 
+const { t } = useI18n();
+
 /* R242: 开始/结束时间展示 (与 TaskMetaRow 创建时间同一 parseDbTime 口径, R205
    当 UTC 处理避免 CST 偏早 8h). 精确到秒 — 排查派发链路耗时要看秒位.
    命名 formatDbTime: 区别于上方 formatTime(ms: number) 时长格式化. */
@@ -136,25 +139,33 @@ const STATUS_DOT: Record<string, string> = {
   await_user: 'bg-indigo-400',
 };
 
+// i18n: 复用 tasks.kanban.status.* 键, 存 key 渲染时 t().
 const STATUS_LABELS: Record<string, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  verifying: '验收中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
-  await_user: '等用户介入',
+  pending: 'tasks.kanban.status.pending',
+  queued: 'tasks.kanban.status.queued',
+  running: 'tasks.kanban.status.running',
+  verifying: 'tasks.kanban.status.verifying',
+  paused: 'tasks.kanban.status.paused',
+  reviewing: 'tasks.kanban.status.reviewing',
+  completed: 'tasks.kanban.status.completed',
+  failed: 'tasks.kanban.status.failed',
+  rejected: 'tasks.kanban.status.rejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'tasks.kanban.status.cancelled',
+  await_user: 'tasks.kanban.status.await_user',
 };
 
-const PANEL_META: Record<'details' | 'timeline' | 'checkpoints' | 'commits', { icon: string; label: string }> = {
-  details: { icon: '🗂', label: '详情' },
-  timeline: { icon: '🕒', label: '时间线' },
-  checkpoints: { icon: '🧷', label: 'Checkpoints' },
-  commits: { icon: '🔗', label: 'Commits' },
+function statusLabel(s: string | null | undefined): string {
+  if (!s) return '';
+  const key = STATUS_LABELS[s];
+  return key ? t(key) : s;
+}
+
+// i18n: label 存 locale key (checkpoints / commits 英文术语不翻).
+const PANEL_META: Record<'details' | 'timeline' | 'checkpoints' | 'commits', { icon: string; labelKey: string }> = {
+  details: { icon: '🗂', labelKey: 'tasks.dock.panelDetails' },
+  timeline: { icon: '🕒', labelKey: 'tasks.dock.panelTimeline' },
+  checkpoints: { icon: '🧷', labelKey: 'tasks.dock.panelCheckpoints' },
+  commits: { icon: '🔗', labelKey: 'tasks.dock.panelCommits' },
 };
 
 const REQ_STATUS_COLOR: Record<string, string> = {
@@ -166,14 +177,21 @@ const REQ_STATUS_COLOR: Record<string, string> = {
   closed: 'bg-gray-200 text-gray-500',
 };
 
+// i18n: 复用 requirements.status.* 键.
 const REQ_STATUS_LABEL: Record<string, string> = {
-  pending: '未开始',
-  done: '已完成',
-  awaiting_reply: '等回复',
-  has_suggestion: '有建议',
-  blocked: '需拍板',
-  closed: '已关闭',
+  pending: 'requirements.status.pending',
+  done: 'requirements.status.done',
+  awaiting_reply: 'requirements.status.awaiting_reply',
+  has_suggestion: 'requirements.status.has_suggestion',
+  blocked: 'requirements.status.blocked',
+  closed: 'requirements.status.closed',
 };
+
+function reqStatusLabel(s: string | null | undefined): string {
+  if (!s) return '';
+  const key = REQ_STATUS_LABEL[s];
+  return key ? t(key) : s;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -210,15 +228,16 @@ function formatTime(ms: number): string {
 }
 
 function formatDuration(ms: number): string {
+  // 复用 tasks.transcript.duration* 键 (与转录页同口径).
   const totalSec = Math.floor(ms / 1000);
-  if (totalSec < 1) return '<1秒';
-  if (totalSec < 60) return `${totalSec}秒`;
+  if (totalSec < 1) return t('tasks.transcript.durUnder1s');
+  if (totalSec < 60) return t('tasks.transcript.durSeconds', { n: totalSec });
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
-  if (minutes < 60) return `${minutes}分${seconds}秒`;
+  if (minutes < 60) return t('tasks.transcript.durMinSec', { m: minutes, s: seconds });
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}时${mins}分`;
+  return t('tasks.transcript.durHourMin', { h: hours, m: mins });
 }
 
 // R56-B18: 改用 lib/datetime parseDbTime 当 UTC 处理, 不再用本地 new Date(s) —
@@ -268,7 +287,7 @@ async function regenerateSummary(): Promise<void> {
     ok = true;
   }
   if (!ok) {
-    regenError.value = '生成失败 (总结链路不可用或超时), 稍后再试';
+    regenError.value = t('tasks.dock.regenFailed');
   }
   regenerating.value = false;
 }
@@ -312,16 +331,16 @@ function relGroup(
 
 const upstreamGroups = computed<RelGroup[]>(() =>
   [
-    relGroup('派发自（上游任务）', '派发', 'rd-tag-dispatch', props.dispatcherTask ? [props.dispatcherTask] : []),
-    relGroup('继承自（Fork 父任务）', '继承', 'rd-tag-fork', props.parentTask ? [props.parentTask] : []),
-    relGroup('上游（依赖）', '依赖', 'rd-tag-depends', props.dependsOnTasks),
+    relGroup(t('tasks.dock.relDispatchFrom'), t('tasks.dock.tagDispatch'), 'rd-tag-dispatch', props.dispatcherTask ? [props.dispatcherTask] : []),
+    relGroup(t('tasks.dock.relForkFrom'), t('tasks.dock.tagFork'), 'rd-tag-fork', props.parentTask ? [props.parentTask] : []),
+    relGroup(t('tasks.dock.relDependsUp'), t('tasks.dock.tagDepends'), 'rd-tag-depends', props.dependsOnTasks),
   ].filter((g): g is RelGroup => g !== null)
 );
 
 const downstreamGroups = computed<RelGroup[]>(() =>
   [
-    relGroup('本任务派发（下游任务）', '派发', 'rd-tag-dispatch', props.dispatchedTasks),
-    relGroup('下游（被依赖）', '依赖', 'rd-tag-depends', props.dependentTasks),
+    relGroup(t('tasks.dock.relDispatchedDown'), t('tasks.dock.tagDispatch'), 'rd-tag-dispatch', props.dispatchedTasks),
+    relGroup(t('tasks.dock.relDependsDown'), t('tasks.dock.tagDepends'), 'rd-tag-depends', props.dependentTasks),
   ].filter((g): g is RelGroup => g !== null)
 );
 
@@ -375,7 +394,7 @@ async function loadTimeline(): Promise<void> {
     const data = await get<{ events: TimelineEvent[] }>(`/api/tasks/${props.taskId}/timeline`);
     timelineEvents.value = Array.isArray(data.events) ? data.events : [];
   } catch (e: unknown) {
-    timelineError.value = e instanceof Error ? e.message : '加载失败';
+    timelineError.value = e instanceof Error ? e.message : t('tasks.detail.errGeneric');
   } finally {
     timelineLoading.value = false;
   }
@@ -417,7 +436,7 @@ async function loadCheckpoints(): Promise<void> {
     if (Array.isArray(data)) checkpoints.value = data;
     else checkpoints.value = [];
   } catch (e: unknown) {
-    checkpointsError.value = e instanceof Error ? e.message : '加载失败';
+    checkpointsError.value = e instanceof Error ? e.message : t('tasks.detail.errGeneric');
     checkpoints.value = [];
   } finally {
     checkpointsLoading.value = false;
@@ -466,7 +485,7 @@ async function loadCommits(): Promise<void> {
       expandedCommitId.value = null;
     }
   } catch (e: unknown) {
-    commitsError.value = e instanceof Error ? e.message : '加载失败';
+    commitsError.value = e instanceof Error ? e.message : t('tasks.detail.errGeneric');
     commitEntries.value = [];
   } finally {
     commitsLoading.value = false;
@@ -508,21 +527,21 @@ function onCheckpointCreated(): void {
         type="button"
         class="rd-panel-header"
         :aria-expanded="!props.collapsed[panel]"
-        :title="`${props.collapsed[panel] ? '展开' : '折叠'}「${PANEL_META[panel].label}」面板`"
+        :title="`${props.collapsed[panel] ? t('tasks.dock.expand') : t('tasks.dock.collapse')}${t('tasks.dock.panelTitleSuffix', { panel: t(PANEL_META[panel].labelKey) })}`"
         @click="onPanelToggle(panel)"
       >
         <span class="rd-caret">{{ props.collapsed[panel] ? '▶' : '▼' }}</span>
         <span class="rd-panel-title">
-          {{ PANEL_META[panel].icon }} {{ PANEL_META[panel].label }}
+          {{ PANEL_META[panel].icon }} {{ t(PANEL_META[panel].labelKey) }}
         </span>
         <span v-if="panel === 'timeline' && timelineEvents.length > 0" class="rd-panel-count">
-          {{ timelineEvents.length }} 个节点
+          {{ t('tasks.dock.nodesN', { n: timelineEvents.length }) }}
         </span>
         <span v-else-if="panel === 'checkpoints' && checkpoints.length > 0" class="rd-panel-count">
-          {{ checkpoints.length }} 个
+          {{ t('tasks.dock.itemsN', { n: checkpoints.length }) }}
         </span>
         <span v-else-if="panel === 'commits' && commitEntries.length > 0" class="rd-panel-count">
-          {{ commitEntries.length }} 条 commit
+          {{ t('tasks.dock.commitsN', { n: commitEntries.length }) }}
         </span>
       </button>
 
@@ -543,15 +562,15 @@ function onCheckpointCreated(): void {
             @click="toggleSub('summary')"
           >
             <span class="rd-caret">{{ subOpen['summary'] ? '▼' : '▶' }}</span>
-            <span class="rd-sub-title">总结</span>
-            <span class="rd-sub-hint">{{ hasSummary ? '收尾自动生成' : '未生成' }}</span>
+            <span class="rd-sub-title">{{ t('tasks.dock.summary') }}</span>
+            <span class="rd-sub-hint">{{ hasSummary ? t('tasks.dock.summaryAuto') : t('tasks.dock.summaryNone') }}</span>
           </button>
           <div v-if="subOpen['summary']" class="rd-sub-body">
             <p v-if="viewCard?.what" class="rd-sum-line">
-              <span class="rd-sum-tag">干啥</span>{{ viewCard.what }}
+              <span class="rd-sum-tag">{{ t('tasks.dock.tagWhat') }}</span>{{ viewCard.what }}
             </p>
             <p v-if="viewCard?.why" class="rd-sum-line">
-              <span class="rd-sum-tag rd-sum-tag-gain">有啥用</span>{{ viewCard.why }}
+              <span class="rd-sum-tag rd-sum-tag-gain">{{ t('tasks.dock.tagWhy') }}</span>{{ viewCard.why }}
             </p>
             <template v-if="viewLayers">
               <p v-if="viewLayers.brief" class="rd-sum-brief">{{ viewLayers.brief }}</p>
@@ -562,7 +581,7 @@ function onCheckpointCreated(): void {
                 </li>
               </ol>
               <p v-if="viewLayers.next" class="rd-sum-line">
-                <span class="rd-sum-tag">下一步</span>{{ viewLayers.next }}
+                <span class="rd-sum-tag">{{ t('tasks.dock.tagNext') }}</span>{{ viewLayers.next }}
               </p>
             </template>
           </div>
@@ -571,10 +590,10 @@ function onCheckpointCreated(): void {
               type="button"
               class="rd-regen-btn"
               :disabled="regenerating"
-              :title="regenerating ? '正在调用总结链路 (最长约 1 分钟)' : '强制重算干啥/有啥用 + 概览/细节流程'"
+              :title="regenerating ? t('tasks.dock.regenRunningTitle') : t('tasks.dock.regenTitle')"
               @click="regenerateSummary"
             >
-              {{ regenerating ? '生成中…' : '↻ 重新生成' }}
+              {{ regenerating ? t('tasks.dock.regenRunning') : t('tasks.dock.regen') }}
             </button>
             <span v-if="regenError" class="rd-regen-err">{{ regenError }}</span>
           </div>
@@ -605,9 +624,9 @@ function onCheckpointCreated(): void {
             @click="toggleSub('requirement')"
           >
             <span class="rd-caret">{{ subOpen['requirement'] ? '▼' : '▶' }}</span>
-            <span class="rd-sub-title">需求点关联</span>
+            <span class="rd-sub-title">{{ t('tasks.dock.reqSection') }}</span>
             <span v-if="requirementSiblings.length > 0" class="rd-sub-hint">
-              森林 {{ requirementSiblings.length + 1 }} 个
+              {{ t('tasks.dock.forestN', { n: requirementSiblings.length + 1 }) }}
             </span>
           </button>
           <div v-if="subOpen['requirement']" class="rd-sub-body">
@@ -615,11 +634,11 @@ function onCheckpointCreated(): void {
               <span class="rd-icon">📋</span>
               <span class="rd-link-title" :title="requirementLink.title">{{ requirementLink.title }}</span>
               <span :class="['rd-req-chip', REQ_STATUS_COLOR[requirementLink.status] || 'bg-gray-100 text-gray-700']">
-                {{ REQ_STATUS_LABEL[requirementLink.status] || requirementLink.status }}
+                {{ reqStatusLabel(requirementLink.status) }}
               </span>
             </a>
             <div v-if="requirementSiblings.length > 0" class="rd-siblings-block">
-              <div class="rd-sub-label">同需求点下的其他 task (森林)</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.forestLabel') }}</div>
               <a
                 v-for="sib in requirementSiblings"
                 :key="sib.id"
@@ -628,9 +647,9 @@ function onCheckpointCreated(): void {
               >
                 <span class="rd-status-dot" :class="STATUS_DOT[sib.status] || 'bg-gray-400'" />
                 <span class="rd-link-title" :title="sib.title">{{ sib.title }}</span>
-                <span class="rd-link-status">{{ STATUS_LABELS[sib.status] || sib.status }}</span>
+                <span class="rd-link-status">{{ statusLabel(sib.status) }}</span>
               </a>
-              <a :href="reqLink(requirementLink.id)" class="rd-view-forest">查看森林 →</a>
+              <a :href="reqLink(requirementLink.id)" class="rd-view-forest">{{ t('tasks.dock.viewForest') }}</a>
             </div>
           </div>
         </div>
@@ -645,13 +664,13 @@ function onCheckpointCreated(): void {
             @click="toggleSub('dependency')"
           >
             <span class="rd-caret">{{ subOpen['dependency'] ? '▼' : '▶' }}</span>
-            <span class="rd-sub-title">关系图</span>
+            <span class="rd-sub-title">{{ t('tasks.dock.graphSection') }}</span>
             <span v-if="hasAnyRelation" class="rd-sub-hint">
-              {{ relUpCount }} 上游 · {{ relDownCount }} 下游
+              {{ t('tasks.dock.upDownCount', { up: relUpCount, down: relDownCount }) }}
             </span>
           </button>
           <div v-if="subOpen['dependency']" class="rd-sub-body">
-            <div v-if="!hasAnyRelation" class="rd-empty">此任务无关联关系</div>
+            <div v-if="!hasAnyRelation" class="rd-empty">{{ t('tasks.dock.noRelations') }}</div>
             <div v-if="upstreamGroups.length > 0" class="rd-upstream">
               <div
                 v-for="g in upstreamGroups"
@@ -673,22 +692,22 @@ function onCheckpointCreated(): void {
                   <span
                     v-if="dep.project_id && dep.project_id !== task.project_id"
                     class="rd-cross-project"
-                    :title="`跨项目: ${dep.project_id}`"
-                  >跨项目</span>
-                  <span class="rd-link-status">{{ STATUS_LABELS[dep.status] || dep.status }}</span>
+                    :title="t('tasks.dock.crossProjectTitle', { id: dep.project_id })"
+                  >{{ t('tasks.dock.crossProject') }}</span>
+                  <span class="rd-link-status">{{ statusLabel(dep.status) }}</span>
                   <span class="rd-link-id">#{{ shortId(dep.id) }}</span>
                 </a>
                 <div v-if="g.hidden > 0" class="rd-hidden-count">
-                  还有 {{ g.hidden }} 个未展示…
+                  {{ t('tasks.dock.hiddenMore', { n: g.hidden }) }}
                 </div>
               </div>
             </div>
             <div v-if="hasAnyRelation" class="rd-current">
-              <div class="rd-current-label">当前任务</div>
+              <div class="rd-current-label">{{ t('tasks.dock.currentTask') }}</div>
               <div class="rd-current-title" :title="task.title">{{ task.title }}</div>
               <div class="rd-current-meta">
                 <span class="rd-status-dot" :class="STATUS_DOT[task.status] || 'bg-gray-400'" />
-                <span>{{ STATUS_LABELS[task.status] || task.status }}</span>
+                <span>{{ statusLabel(task.status) }}</span>
                 <span class="rd-link-id">#{{ shortId(task.id) }}</span>
               </div>
             </div>
@@ -713,13 +732,13 @@ function onCheckpointCreated(): void {
                   <span
                     v-if="dep.project_id && dep.project_id !== task.project_id"
                     class="rd-cross-project"
-                    :title="`跨项目: ${dep.project_id}`"
-                  >跨项目</span>
-                  <span class="rd-link-status">{{ STATUS_LABELS[dep.status] || dep.status }}</span>
+                    :title="t('tasks.dock.crossProjectTitle', { id: dep.project_id })"
+                  >{{ t('tasks.dock.crossProject') }}</span>
+                  <span class="rd-link-status">{{ statusLabel(dep.status) }}</span>
                   <span class="rd-link-id">#{{ shortId(dep.id) }}</span>
                 </a>
                 <div v-if="g.hidden > 0" class="rd-hidden-count">
-                  还有 {{ g.hidden }} 个未展示…
+                  {{ t('tasks.dock.hiddenMore', { n: g.hidden }) }}
                 </div>
               </div>
             </div>
@@ -735,7 +754,7 @@ function onCheckpointCreated(): void {
             @click="toggleSub('outcome')"
           >
             <span class="rd-caret">{{ subOpen['outcome'] ? '▼' : '▶' }}</span>
-            <span class="rd-sub-title">结果</span>
+            <span class="rd-sub-title">{{ t('tasks.dock.outcomeSection') }}</span>
             <span class="rd-sub-hint">
               {{ [task.result ? 'result' : null, task.error ? 'error' : null].filter(Boolean).join(' + ') }}
             </span>
@@ -761,7 +780,7 @@ function onCheckpointCreated(): void {
             @click="toggleSub('meta')"
           >
             <span class="rd-caret">{{ subOpen['meta'] ? '▼' : '▶' }}</span>
-            <span class="rd-sub-title">元信息</span>
+            <span class="rd-sub-title">{{ t('tasks.dock.metaSection') }}</span>
           </button>
           <div v-if="subOpen['meta']" class="rd-sub-body rd-meta-body">
             <!-- R242: 任务基本信息块 — 复用 TaskMetaRow (模型/强度/最大轮次/创建时间/
@@ -781,37 +800,37 @@ function onCheckpointCreated(): void {
                 :timeout-total-ms="timeoutTotalMs ?? null"
               />
               <div v-if="task.started_at || task.completed_at" class="rd-meta-times">
-                <span v-if="task.started_at" class="rd-meta-time-item">开始: <strong>{{ formatDbTime(task.started_at) }}</strong></span>
-                <span v-if="task.completed_at" class="rd-meta-time-item">结束: <strong>{{ formatDbTime(task.completed_at) }}</strong></span>
+                <span v-if="task.started_at" class="rd-meta-time-item">{{ t('tasks.dock.startedAt') }}<strong>{{ formatDbTime(task.started_at) }}</strong></span>
+                <span v-if="task.completed_at" class="rd-meta-time-item">{{ t('tasks.dock.completedAt') }}<strong>{{ formatDbTime(task.completed_at) }}</strong></span>
               </div>
             </div>
             <div v-if="task.cwd">
-              <div class="rd-sub-label">工作目录</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.cwdLabel') }}</div>
               <p class="rd-mono">{{ task.cwd }}</p>
             </div>
             <div v-if="task.preflight_result">
-              <div class="rd-sub-label">Preflight 自检（系统执行）</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.preflightLabel') }}</div>
               <pre class="rd-preflight">{{ task.preflight_result }}</pre>
             </div>
             <div v-if="allowedTools.length > 0">
-              <div class="rd-sub-label">工具</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.toolsLabel') }}</div>
               <div class="rd-chips">
                 <span v-for="t in allowedTools" :key="t" class="rd-chip">{{ t }}</span>
               </div>
             </div>
             <div v-if="tags.length > 0">
-              <div class="rd-sub-label">标签</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.tagsLabel') }}</div>
               <div class="rd-chips">
                 <span v-for="t in tags" :key="t" class="rd-chip rd-chip-blue">{{ t }}</span>
               </div>
             </div>
             <div v-if="task.project_id || task.version_id">
-              <div class="rd-sub-label">归属</div>
-              <span v-if="task.project_id" class="rd-chip rd-chip-purple">项目: {{ shortId(task.project_id) }}…</span>
-              <span v-if="task.version_id" class="rd-chip rd-chip-orange">版本: {{ shortId(task.version_id) }}…</span>
+              <div class="rd-sub-label">{{ t('tasks.dock.ownerLabel') }}</div>
+              <span v-if="task.project_id" class="rd-chip rd-chip-purple">{{ t('tasks.dock.projectChip') }}{{ shortId(task.project_id) }}…</span>
+              <span v-if="task.version_id" class="rd-chip rd-chip-orange">{{ t('tasks.dock.versionChip') }}{{ shortId(task.version_id) }}…</span>
             </div>
             <div v-if="parentTask">
-              <div class="rd-sub-label">父任务</div>
+              <div class="rd-sub-label">{{ t('tasks.dock.parentLabel') }}</div>
               <a class="rd-link-row" :href="taskLink(parentTask.id)">
                 <span class="rd-status-dot" :class="STATUS_DOT[parentTask.status] || 'bg-gray-400'" />
                 <span class="rd-link-title rd-link-up" :title="parentTask.title">{{ parentTask.title }}</span>
@@ -832,9 +851,9 @@ function onCheckpointCreated(): void {
         v-show="!props.collapsed.timeline"
         class="rd-panel-body"
       >
-        <div v-if="timelineLoading" class="rd-state">加载中...</div>
+        <div v-if="timelineLoading" class="rd-state">{{ t('common.loading') }}</div>
         <div v-else-if="timelineError" class="rd-state rd-state-error">⚠ {{ timelineError }}</div>
-        <div v-else-if="timelineEvents.length === 0" class="rd-state">暂无事件</div>
+        <div v-else-if="timelineEvents.length === 0" class="rd-state">{{ t('tasks.dock.noEvents') }}</div>
         <ol v-else class="rd-timeline">
           <span class="rd-timeline-rail" aria-hidden="true" />
           <li
@@ -859,14 +878,14 @@ function onCheckpointCreated(): void {
                 </span>
                 <span class="rd-timeline-label">
                   {{ ev.from
-                    ? `${STATUS_LABELS[ev.from] || ev.from} → ${STATUS_LABELS[ev.to] || ev.to}`
-                    : STATUS_LABELS[ev.to] || ev.to }}
+                    ? `${statusLabel(ev.from)} → ${statusLabel(ev.to)}`
+                    : statusLabel(ev.to) }}
                 </span>
-                <span v-if="ev.from === 'running' && ev.to === 'reviewing'" class="rd-tag rd-tag-purple">完成</span>
-                <span v-if="ev.is_initial" class="rd-tag rd-tag-gray">起始</span>
+                <span v-if="ev.from === 'running' && ev.to === 'reviewing'" class="rd-tag rd-tag-purple">{{ t('tasks.dock.evCompleted') }}</span>
+                <span v-if="ev.is_initial" class="rd-tag rd-tag-gray">{{ t('tasks.dock.evInitial') }}</span>
               </div>
               <div v-if="ev.duration_ms != null" class="rd-timeline-duration">
-                ⏱ 持续 {{ formatDuration(ev.duration_ms) }}
+                ⏱ {{ t('tasks.dock.duration') }}{{ formatDuration(ev.duration_ms) }}
               </div>
             </div>
           </li>
@@ -879,7 +898,7 @@ function onCheckpointCreated(): void {
         v-show="!props.collapsed.checkpoints"
         class="rd-panel-body"
       >
-        <div v-if="checkpointsLoading" class="rd-state">加载中...</div>
+        <div v-if="checkpointsLoading" class="rd-state">{{ t('common.loading') }}</div>
         <div v-else-if="checkpointsError" class="rd-state rd-state-error">⚠ {{ checkpointsError }}</div>
         <ol v-else-if="checkpoints.length > 0" class="rd-checkpoints">
           <li
@@ -897,7 +916,7 @@ function onCheckpointCreated(): void {
                   {{ cp.commit_id.slice(0, 7) }}
                 </code>
               </template>
-              <span v-if="cp.by" class="rd-tag rd-tag-slate" :title="`写这个 checkpoint 的 agent: ${cp.by}`">
+              <span v-if="cp.by" class="rd-tag rd-tag-slate" :title="t('tasks.dock.cpByTitle', { by: cp.by })">
                 [by]{{ cp.by }}
               </span>
             </div>
@@ -918,11 +937,10 @@ function onCheckpointCreated(): void {
           </li>
         </ol>
         <div v-else class="rd-state rd-state-multi-line">
-          <div>暂无 checkpoint。</div>
+          <div>{{ t('tasks.dock.noCheckpoints') }}</div>
           <div class="rd-state-hint">
-            让 agent 在输出里写
-            <code>&lt;checkpoint step=N summary="..."&gt;</code>，
-            或手动添加一个 fork 点。
+            {{ t('tasks.dock.cpHintPrefix') }}
+            <code>&lt;checkpoint step=N summary="..."&gt;</code>{{ t('tasks.dock.cpHintSuffix') }}
           </div>
         </div>
         <!-- R56-A4.2: 手动添加 checkpoint 表单 (master right-dock.tsx:1228-1324
@@ -942,19 +960,16 @@ function onCheckpointCreated(): void {
         v-show="!props.collapsed.commits"
         class="rd-panel-body"
       >
-        <div v-if="commitsLoading" class="rd-state">加载中...</div>
+        <div v-if="commitsLoading" class="rd-state">{{ t('common.loading') }}</div>
         <div v-else-if="commitsError" class="rd-state rd-state-error">⚠ {{ commitsError }}</div>
         <div v-else-if="commitEntries.length === 0" class="rd-state rd-state-multi-line">
-          <div class="rd-state-line">agent 未声明 git 提交</div>
+          <div class="rd-state-line">{{ t('tasks.dock.noCommits') }}</div>
           <div class="rd-state-hint">
-            让 agent 在输出里写
-            <code>&lt;git commit-id="abc" desc="..." files="a.ts,b.ts"/&gt;</code>，
-            或手动 git commit 后重启任务。
+            {{ t('tasks.dock.commitsHintPrefix') }}
+            <code>&lt;git commit-id="abc" desc="..." files="a.ts,b.ts"/&gt;</code>{{ t('tasks.dock.commitsHintSuffix') }}
           </div>
           <div v-if="task.base_commit || task.head_commit" class="rd-state-hint rd-mono">
-            区间 base {{ task.base_commit?.slice(0, 7) ?? '—' }}
-            →
-            head {{ task.head_commit?.slice(0, 7) ?? '—' }}
+            {{ t('tasks.dock.baseRange', { base: task.base_commit?.slice(0, 7) ?? '—', head: task.head_commit?.slice(0, 7) ?? '—' }) }}
           </div>
         </div>
         <ol v-else class="rd-commits">
@@ -985,7 +1000,7 @@ function onCheckpointCreated(): void {
               >{{ f }}</div>
             </div>
             <div v-else-if="expandedCommitId === e.commit_id && e.files.length === 0" class="rd-commit-files-empty">
-              (无文件清单 — agent marker 没写 files 属性)
+              {{ t('tasks.dock.noFilesList') }}
             </div>
           </li>
         </ol>
