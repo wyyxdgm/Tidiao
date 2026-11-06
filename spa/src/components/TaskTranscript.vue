@@ -29,6 +29,7 @@
      实际 = TaskDetailView.vue (现有文件) + 新建本组件 TaskTranscript.vue
      (sheet 红线允许的"如 transcript 视图组件化可接受"分支, 单一新文件). */
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get, getIfChanged } from '@/api/http';
 import Loading from '@/components/Loading.vue';
 import ForkModal from '@/components/ForkModal.vue';
@@ -96,6 +97,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'update:searchQuery', q: string): void;
 }>();
+
+const { t } = useI18n();
 
 /** ts ms → "HH:mm:ss". 缺省 → "—". 与 master task-detail-client.tsx
     formatTime 同款. */
@@ -222,9 +225,9 @@ function formatSize(bytes: number): string {
 /** R56-B1.5: user 消息发送方标签 — master tdc.tsx:3279-3285 同款三态. */
 function senderBadge(senderType: string | undefined): { icon: string; label: string; cls: string } {
   switch (senderType) {
-    case 'script': return { icon: '🤖', label: '脚本', cls: 'sender-script' };
-    case 'system': return { icon: '⚙️', label: '系统', cls: 'sender-system' };
-    default:       return { icon: '👤', label: '你',   cls: 'sender-user' };
+    case 'script': return { icon: '🤖', label: t('tasks.transcript.senderScript'), cls: 'sender-script' };
+    case 'system': return { icon: '⚙️', label: t('tasks.transcript.senderSystem'), cls: 'sender-system' };
+    default:       return { icon: '👤', label: t('tasks.transcript.senderYou'),   cls: 'sender-user' };
   }
 }
 
@@ -371,7 +374,7 @@ function normalizeHistoryItem(m: HistoryMessage): TranscriptItem | null {
     return {
       id: m.uuid ?? `history-${Math.random().toString(36).slice(2, 10)}`,
       role: 'attachment_group',
-      content: `${m.attachments.length} 个附件`,
+      content: t('tasks.transcript.attachmentsN', { n: m.attachments.length }),
       attachments: m.attachments,
       ts: Number.isNaN(ts ?? NaN) ? undefined : ts,
     };
@@ -578,9 +581,9 @@ const showSpinner = computed<boolean>(() => connState.value === 'connecting');
 const connLabel = computed<string>(() => {
   switch (connState.value) {
     case 'idle': return '';
-    case 'connecting': return retryCount.value > 0 ? `重连中 (${retryCount.value}/${MAX_RETRY_COUNT})…` : '连接中…';
-    case 'connected': return '实时';
-    case 'closed': return '已断开';
+    case 'connecting': return retryCount.value > 0 ? t('tasks.transcript.reconnecting', { n: retryCount.value, max: MAX_RETRY_COUNT }) : t('tasks.transcript.connecting');
+    case 'connected': return t('tasks.transcript.live');
+    case 'closed': return t('tasks.transcript.disconnected');
   }
 });
 
@@ -904,7 +907,7 @@ async function loadHistory(): Promise<void> {
     // forked_at 时间戳插到继承历史中间.
     injectPromptIfMissing();
   } catch (e: unknown) {
-    historyError.value = e instanceof Error ? e.message : '加载消息历史失败';
+    historyError.value = e instanceof Error ? e.message : t('tasks.transcript.errLoadHistory');
   } finally {
     loadingHistory.value = false;
     void scrollToBottom();
@@ -1185,10 +1188,10 @@ onActivated(() => {
          页面照常渲染」看起来像任务卡住. 重连中显示退避次数 (与 retryCount
          联动), 已断开 (401 关停) 常驻提示. connected 不渲染 (不打扰). -->
     <div v-if="connState === 'connecting' && retryCount > 0" class="conn-banner conn-connecting">
-      ⚡ 实时流重连中 ({{ retryCount }})… 消息可能有延迟
+      ⚡ {{ t('tasks.transcript.reconnectBanner', { n: retryCount }) }}
     </div>
     <div v-else-if="connState === 'closed'" class="conn-banner conn-closed">
-      ✕ 实时流已断开 — 显示的可能不是最新状态, 刷新页面重连
+      ✕ {{ t('tasks.transcript.closedBanner') }}
     </div>
 
     <!-- R56-A3.4 (C4): 搜索条由父级 TaskStatusBar 🔍 控制显示; searchOpen=true
@@ -1199,23 +1202,23 @@ onActivated(() => {
         :value="searchQuery"
         type="text"
         class="search-input"
-        placeholder="搜索消息..."
+        :placeholder="t('tasks.transcript.searchPlaceholder')"
         @input="(e: Event) => (searchQuery = (e.target as HTMLInputElement).value)"
         @keydown="onSearchKeyDown"
       />
-      <span v-if="isFiltering" class="search-count">{{ matchCount }} 个匹配</span>
+      <span v-if="isFiltering" class="search-count">{{ t('tasks.transcript.matchCount', { n: matchCount }) }}</span>
       <button
         v-if="searchQuery"
         type="button"
         class="search-clear"
-        title="清空搜索"
+        :title="t('common.clearSearch')"
         @click="clearSearch"
       >×</button>
     </div>
 
     <div v-if="loadingHistory && items.length === 0" class="state-block">
-      <Loading size="md" label="加载消息历史" />
-      <p class="state-text muted">加载历史消息…</p>
+      <Loading size="md" :label="t('tasks.transcript.loadingHistory')" />
+      <p class="state-text muted">{{ t('tasks.transcript.loading') }}</p>
     </div>
 
     <p v-else-if="historyError" class="error-text">{{ historyError }}</p>
@@ -1236,7 +1239,7 @@ onActivated(() => {
         <div v-if="taskResult" class="result-preview-result">
           <div class="result-preview-header">
             <span class="result-preview-icon" aria-hidden="true">🤖</span>
-            <span class="result-preview-label">Agent 输出</span>
+            <span class="result-preview-label">{{ t('tasks.transcript.agentOutput') }}</span>
           </div>
           <div
             class="result-preview-body markdown-body"
@@ -1246,14 +1249,14 @@ onActivated(() => {
       </div>
 
       <div v-else-if="items.length === 0 && !streamingText" class="empty-block">
-        <p class="empty-text muted">暂无消息</p>
+        <p class="empty-text muted">{{ t('tasks.transcript.empty') }}</p>
       </div>
 
       <div
         v-else-if="isFiltering && filteredItems.length === 0"
         class="empty-block"
       >
-        <p class="empty-text muted">没有匹配的消息</p>
+        <p class="empty-text muted">{{ t('tasks.transcript.noMatch') }}</p>
       </div>
 
       <ol v-else class="message-list">
@@ -1334,7 +1337,7 @@ onActivated(() => {
             <div class="msg-attachment-group">
               <div class="msg-attachment-group-title">
                 <span>📎</span>
-                <span>{{ item.attachments.length }} 个附件</span>
+                <span>{{ t('tasks.transcript.attachmentsN', { n: item.attachments.length }) }}</span>
               </div>
               <div class="msg-attachment-grid">
                 <a
@@ -1377,7 +1380,7 @@ onActivated(() => {
                     {{ senderBadge(item.senderType).icon }} <span class="msg-sender-label">{{ senderBadge(item.senderType).label }}</span>
                   </template>
                   <template v-else>
-                    🤖 <span class="msg-sender-label">助手</span>
+                    🤖 <span class="msg-sender-label">{{ t('tasks.transcript.assistant') }}</span>
                   </template>
                 </span>
                 <span class="message-time mono">{{ formatTimestampLabel(item.ts, filteredItems[i - 1]?.ts) }}</span>
@@ -1387,7 +1390,7 @@ onActivated(() => {
                   v-if="item.role === 'assistant' && item.id && !item.id.startsWith('sse-')"
                   type="button"
                   class="msg-fork-btn"
-                  title="从这条消息 fork：新任务继承到此为止的历史"
+                  :title="t('tasks.transcript.forkFromHere')"
                   @click="onForkFromMessage(item.id)"
                 >⑂ fork</button>
               </div>
@@ -1432,7 +1435,7 @@ onActivated(() => {
                 <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(item.toolName) }}</span>
                 <span class="tool-card-name">{{ item.toolName || 'tool' }}</span>
                 <span v-if="effectiveCollapsed(item) && toolCollapsedSummary(item.toolName, item.toolInputRaw)" class="tool-card-summary">{{ toolCollapsedSummary(item.toolName, item.toolInputRaw) }}</span>
-                <span v-if="!effectiveCollapsed(item)" class="tool-card-hint">点击折叠</span>
+                <span v-if="!effectiveCollapsed(item)" class="tool-card-hint">{{ t('tasks.transcript.clickToCollapse') }}</span>
                 <span class="tool-card-time mono">{{ formatTimestampLabel(item.ts, filteredItems[i - 1]?.ts) }}</span>
               </button>
               <pre
@@ -1447,7 +1450,7 @@ onActivated(() => {
         <!-- 流式暂存 (SSE stream_delta 累积) — master tdc.tsx:2633-2639 同款蓝底 + 闪烁. -->
         <li v-if="streamingText" class="message-item role-assistant streaming">
           <div class="message-meta">
-            <span class="message-role role-tag-assistant">🤖 <span class="msg-sender-label">助手</span></span>
+            <span class="message-role role-tag-assistant">🤖 <span class="msg-sender-label">{{ t('tasks.transcript.assistant') }}</span></span>
             <span class="message-time mono">{{ formatTimestamp(Date.now()) }}</span>
             <span class="streaming-dot">●</span>
           </div>
@@ -1461,7 +1464,7 @@ onActivated(() => {
             type="button"
             class="unread-badge"
             @click="scrollToBottomAndClear"
-          >↓ {{ unreadCount }} 条新消息</button>
+          >↓ {{ t('tasks.transcript.unreadCount', { n: unreadCount }) }}</button>
         </li>
       </ol>
     </div>

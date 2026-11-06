@@ -6,10 +6,12 @@
    - 拒绝时支持 feedback (可选), 输入框与按钮同行.
    - 列表为空时不渲染容器 (避免空块占空间). */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { post, HttpError } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 
 const toast = useToast();
+const { t } = useI18n();
 
 interface PendingApproval {
   requestId: string;
@@ -54,8 +56,8 @@ async function approve(requestId: string): Promise<void> {
     });
     emit('resolved', requestId);
   } catch (e) {
-    if (e instanceof HttpError) toast.error(`允许失败: ${e.message}`);
-    else toast.error('允许失败');
+    if (e instanceof HttpError) toast.error(t('tasks.approvals.allowFailedMsg', { msg: e.message }));
+    else toast.error(t('tasks.approvals.allowFailed'));
   } finally {
     busyIds.value.delete(requestId);
   }
@@ -73,8 +75,8 @@ async function reject(requestId: string): Promise<void> {
     });
     emit('resolved', requestId);
   } catch (e) {
-    if (e instanceof HttpError) toast.error(`拒绝失败: ${e.message}`);
-    else toast.error('拒绝失败');
+    if (e instanceof HttpError) toast.error(t('tasks.approvals.rejectFailedMsg', { msg: e.message }));
+    else toast.error(t('tasks.approvals.rejectFailed'));
   } finally {
     busyIds.value.delete(requestId);
   }
@@ -83,7 +85,7 @@ async function reject(requestId: string): Promise<void> {
 
 <template>
   <div v-if="hasApprovals" class="pending-approvals">
-    <div class="approvals-header">⚠️ 等待审批 ({{ approvals.length }})</div>
+    <div class="approvals-header">⚠️ {{ t('tasks.approvals.header', { n: approvals.length }) }}</div>
     <div v-for="a in approvals" :key="a.requestId" class="approval-card">
       <div class="approval-body">
         <div class="approval-left">
@@ -97,13 +99,13 @@ async function reject(requestId: string): Promise<void> {
             :disabled="busyIds.has(a.requestId)"
             @click="approve(a.requestId)"
           >
-            ✅ 允许
+            ✅ {{ t('tasks.approvals.allow') }}
           </button>
           <div class="reject-row">
             <input
               :value="feedbackMap[a.requestId] ?? ''"
               type="text"
-              placeholder="拒绝原因..."
+              :placeholder="t('tasks.approvals.rejectPlaceholder')"
               class="reject-input"
               @input="(e) => setFeedback(a.requestId, (e.target as HTMLInputElement).value)"
             />
@@ -113,7 +115,7 @@ async function reject(requestId: string): Promise<void> {
               :disabled="busyIds.has(a.requestId)"
               @click="reject(a.requestId)"
             >
-              ❌ 拒绝
+              ❌ {{ t('tasks.approvals.reject') }}
             </button>
           </div>
         </div>

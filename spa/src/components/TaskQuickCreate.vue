@@ -21,6 +21,7 @@
      不记历史不清草稿).
    - 打开时自动聚焦输入框 (nextTick), ESC/遮罩关闭走 Modal 既有行为. */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Modal from '@/components/Modal.vue';
 import Select from '@/components/Select.vue';
 import Input from '@/components/Input.vue';
@@ -60,6 +61,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 
 /** 草稿 localStorage key (input-history.ts DRAFT_KEY_PREFIX 后缀). */
 const DRAFT_KEY = 'quickcreate';
@@ -87,11 +89,15 @@ const selectedSnapshot = computed<Snapshot | null>(
 );
 
 const snapshotOptions = computed<Array<{ value: string; label: string }>>(() => [
-  { value: '', label: '默认配置（自动审批 · high · 200 轮）' },
+  { value: '', label: t('tasks.quickCreate.defaultSnapshot') },
   ...snapshots.value.map((s) => ({
     value: s.id,
     label: `${s.name}${
-      s.scope === 'version' ? '（版本）' : s.scope === 'project' ? '（项目）' : '（全局）'
+      s.scope === 'version'
+        ? t('tasks.quickCreate.scopeVersion')
+        : s.scope === 'project'
+          ? t('tasks.quickCreate.scopeProject')
+          : t('tasks.quickCreate.scopeGlobal')
     }`,
   })),
 ]);
@@ -124,7 +130,7 @@ watch(
       projectId.value = preferred;
       if (unchanged) await loadVersions(preferred, pendingPreferVersion);
     } catch {
-      toast.error('项目列表加载失败');
+      toast.error(t('tasks.quickCreate.errLoadProjects'));
     } finally {
       loadingProjects.value = false;
     }
@@ -150,13 +156,13 @@ let pendingPreferVersion: string | null = null;
     (R56-B22 同款坑), 旧代码 is_current===1 永远 false → 永远选第一个版本. */
 async function loadVersions(pid: string, preferVersion?: string | null): Promise<void> {
   versionId.value = '';
-  versionOptions.value = [{ value: '', label: '不挂版本' }];
+  versionOptions.value = [{ value: '', label: t('tasks.quickCreate.noVersion') }];
   if (!pid) return;
   try {
     const { versions: list } = await listVersions(pid);
     versions.value = list ?? [];
     versionOptions.value = [
-      { value: '', label: '不挂版本' },
+      { value: '', label: t('tasks.quickCreate.noVersion') },
       ...versions.value.map((v) => ({ value: v.id, label: v.name })),
     ];
     versionId.value = pickDefaultVersionId(versions.value, {
@@ -164,7 +170,7 @@ async function loadVersions(pid: string, preferVersion?: string | null): Promise
       currentVersionId: projects.value.find((p) => p.id === pid)?.current_version_id,
     });
   } catch {
-    toast.error('版本列表加载失败');
+    toast.error(t('tasks.quickCreate.errLoadVersions'));
   }
 }
 
@@ -310,11 +316,11 @@ async function submit(): Promise<void> {
     goalText.value = '';
     goalRounds.value = '';
     advancedOpen.value = false;
-    toast.success('任务已创建并启动');
+    toast.success(t('tasks.quickCreate.createdToast'));
     emit('created', taskId);
     emit('update:modelValue', false);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : '创建失败';
+    const msg = err instanceof Error ? err.message : t('tasks.quickCreate.createFailed');
     toast.error(msg);
   } finally {
     sending.value = false;
@@ -325,7 +331,7 @@ async function submit(): Promise<void> {
 <template>
   <Modal
     :model-value="modelValue"
-    title="新建任务"
+    :title="t('tasks.quickCreate.title')"
     size="md"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
@@ -334,26 +340,25 @@ async function submit(): Promise<void> {
         <Select
           v-model="projectId"
           :options="projectOptions"
-          :placeholder="loadingProjects ? '加载中…' : '选择项目'"
+          :placeholder="loadingProjects ? t('common.loading') : t('tasks.quickCreate.selectProject')"
           class-name="tqc-select"
           @change="onProjectManuallyChanged"
         />
         <Select
           v-model="versionId"
           :options="versionOptions"
-          placeholder="版本"
+          :placeholder="t('tasks.quickCreate.version')"
           class-name="tqc-select"
         />
       </div>
       <div class="tqc-hint-bubble">
-        输入指令直接发送，任务会<span class="tqc-hint-strong">立即启动</span>。
-        附件与高级选项在输入框下方，↑ 可翻历史指令。Enter 发送，Shift+Enter 换行。
+        {{ t('tasks.quickCreate.hintPrefix') }}<span class="tqc-hint-strong">{{ t('tasks.quickCreate.hintStrong') }}</span>{{ t('tasks.quickCreate.hintSuffix') }}
       </div>
       <ul v-if="pendingFiles.length > 0" class="tqc-files">
         <li v-for="(f, i) in pendingFiles" :key="i" class="tqc-file-chip">
           <span class="tqc-file-name">{{ f.name }}</span>
           <span class="tqc-file-size">({{ formatSize(f.size) }})</span>
-          <button type="button" class="tqc-file-x" title="移除附件" @click="removePendingFile(i)">×</button>
+          <button type="button" class="tqc-file-x" :title="t('tasks.input.removeAttachment')" @click="removePendingFile(i)">×</button>
         </li>
       </ul>
       <div
@@ -366,7 +371,7 @@ async function submit(): Promise<void> {
           v-model="prompt"
           class="tqc-input"
           rows="3"
-          placeholder="给这个项目/版本下达任务指令…"
+          :placeholder="t('tasks.quickCreate.promptPlaceholder')"
           :disabled="sending"
           @keydown="onInputKeydown"
         />
@@ -375,7 +380,7 @@ async function submit(): Promise<void> {
             <button
               type="button"
               class="tqc-tool-btn"
-              title="添加附件"
+              :title="t('tasks.input.attachTitle')"
               @click="fileInputEl?.open()"
             >
               <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -386,22 +391,22 @@ async function submit(): Promise<void> {
               type="button"
               class="tqc-tool-btn"
               :class="{ active: advancedOpen }"
-              :title="advancedOpen ? '收起高级选项' : '高级选项（配置快照 / 完成条件）'"
+              :title="advancedOpen ? t('tasks.quickCreate.advCollapseTitle') : t('tasks.quickCreate.advExpandTitle')"
               @click="advancedOpen = !advancedOpen"
             >
               <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="8" cy="8" r="2.2" />
                 <path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.5 1.5M10.9 10.9l1.5 1.5M12.4 3.6l-1.5 1.5M5.1 10.9l-1.5 1.5" />
               </svg>
-              <span>高级</span>
+              <span>{{ t('tasks.quickCreate.adv') }}</span>
             </button>
           </div>
-          <span class="tqc-scope-name">{{ projectOptions.find((o) => o.value === projectId)?.label ?? '未选项目' }}<template v-if="versionId"> · {{ versionOptions.find((o) => o.value === versionId)?.label }}</template></span>
+          <span class="tqc-scope-name">{{ projectOptions.find((o) => o.value === projectId)?.label ?? t('tasks.quickCreate.noProjectSelected') }}<template v-if="versionId"> · {{ versionOptions.find((o) => o.value === versionId)?.label }}</template></span>
           <button
             type="button"
             class="tqc-send"
             :disabled="!canSubmit()"
-            :title="sending ? '发送中…' : '发送 (Enter)'"
+            :title="sending ? t('tasks.quickCreate.sending') : t('tasks.quickCreate.sendEnterTitle')"
             @click="submit()"
           >
             <span v-if="sending" class="tqc-send-spinner" />
@@ -409,13 +414,13 @@ async function submit(): Promise<void> {
               <path d="M14 2 L7 9" />
               <path d="M14 2 L9.5 14 L7 9 L2 6.5 Z" />
             </svg>
-            <span>{{ sending ? '发送中' : '发送' }}</span>
+            <span>{{ sending ? t('tasks.quickCreate.sendingShort') : t('tasks.quickCreate.send') }}</span>
           </button>
         </div>
       </div>
       <div v-if="advancedOpen" class="tqc-advanced">
         <div class="tqc-adv-field">
-          <label class="tqc-adv-lbl">配置</label>
+          <label class="tqc-adv-lbl">{{ t('tasks.quickCreate.configLabel') }}</label>
           <Select
             v-model="snapshotId"
             :options="snapshotOptions"
@@ -424,28 +429,28 @@ async function submit(): Promise<void> {
           />
         </div>
         <div class="tqc-adv-field">
-          <label class="tqc-adv-lbl">完成条件（goal loop，可选）</label>
+          <label class="tqc-adv-lbl">{{ t('tasks.quickCreate.goalLabel') }}</label>
           <textarea
             v-model="goalText"
             class="tqc-adv-goal"
             rows="2"
-            placeholder="例：docs/foo.md 第一段第一个词是 'bar'（且其他内容不变）"
+            :placeholder="t('tasks.quickCreate.goalPlaceholder')"
           />
           <div class="tqc-goal-rounds-row">
-            <label class="tqc-adv-lbl-inline">最大轮次</label>
+            <label class="tqc-adv-lbl-inline">{{ t('tasks.chat.maxTurnsLabel') }}</label>
             <Input
               v-model="goalRounds"
               type="number"
               :min="0"
               :max="1000"
               :disabled="!goalText.trim()"
-              placeholder="留空=默认 20, 0=不限"
+              :placeholder="t('tasks.quickCreate.goalRoundsPlaceholder')"
               class-name="tqc-goal-num"
             />
-            <span v-if="!goalText.trim() && goalRounds.trim()" class="tqc-goal-warn">⚠ goal_text 为空, 该数字无效</span>
+            <span v-if="!goalText.trim() && goalRounds.trim()" class="tqc-goal-warn">⚠ {{ t('tasks.quickCreate.goalRoundsWarn') }}</span>
           </div>
           <p class="tqc-adv-hint">
-            提交时拼成 <code>&lt;goal&gt;...&lt;/goal&gt;</code> 追加到指令末尾，每轮由 grader 判定是否达成，未达成自动续跑。
+            {{ t('tasks.quickCreate.goalHintPrefix') }} <code>&lt;goal&gt;...&lt;/goal&gt;</code> {{ t('tasks.quickCreate.goalHintSuffix') }}
           </p>
         </div>
       </div>

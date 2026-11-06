@@ -12,9 +12,11 @@
    - 失败/未加载 = 父级不渲染本组件 (与 R14-vault rev-chip 同款: 父级按
      aggregatesById[id] 判定 v-if). 组件本身不接 partial state. */
 
+import { useI18n } from 'vue-i18n';
 import type { RequirementAggregates } from '@/api/requirements';
 
 defineProps<{ aggregates: RequirementAggregates }>();
+const { t } = useI18n();
 
 /** completion_pct 阈值染色 — 与 master §R74 拍板一致 (绿/橙/红三段). */
 function completionStyle(pct: number): Record<string, string> {
@@ -25,18 +27,18 @@ function completionStyle(pct: number): Record<string, string> {
 </script>
 
 <template>
-  <span class="agg-chip agg-chip-task" title="关联任务数">
+  <span class="agg-chip agg-chip-task" :title="t('requirements.agg.taskCountTitle')">
     📋 {{ aggregates.task_count }}
   </span>
   <span
     class="agg-chip agg-chip-pct"
-    :title="`完成 ${aggregates.completion_pct}%`"
+    :title="t('requirements.agg.pctTitle', { pct: aggregates.completion_pct })"
     :style="completionStyle(aggregates.completion_pct)"
   >
     📈 {{ aggregates.completion_pct }}%
   </span>
-  <span class="agg-chip agg-chip-feedback" title="最近反馈时间">
-    💬 {{ aggregates.latest_feedback ?? '无反馈' }}
+  <span class="agg-chip agg-chip-feedback" :title="t('requirements.agg.feedbackTitle')">
+    💬 {{ aggregates.latest_feedback ?? t('requirements.agg.noFeedback') }}
   </span>
 </template>
 

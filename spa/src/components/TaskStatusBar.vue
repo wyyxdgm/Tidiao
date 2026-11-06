@@ -15,7 +15,10 @@
      复用 TaskNew.vue URL prefill (R107 R 列同款), 任何状态下可点 (有 projectId
      才显示, 同 💬聊天视图 口径). mobile 同步折叠到 ⋯ 下拉. */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import IconSvg from '@/components/IconSvg.vue';
+
+const { t } = useI18n();
 
 interface Props {
   taskId: string;
@@ -133,25 +136,26 @@ const STATUS_LABEL_BG: Record<string, string> = {
   await_user: 'var(--tw-amber-100)',
 };
 
+// i18n: 复用 tasks.kanban.status.* / tasks.kanban.type.* locale key.
 const STATUS_LABELS: Record<string, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  verifying: '验收中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
-  await_user: '等用户介入',
+  pending: 'tasks.kanban.status.pending',
+  queued: 'tasks.kanban.status.queued',
+  running: 'tasks.kanban.status.running',
+  verifying: 'tasks.kanban.status.verifying',
+  paused: 'tasks.kanban.status.paused',
+  reviewing: 'tasks.kanban.status.reviewing',
+  completed: 'tasks.kanban.status.completed',
+  failed: 'tasks.kanban.status.failed',
+  rejected: 'tasks.kanban.status.rejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'tasks.kanban.status.cancelled',
+  await_user: 'tasks.kanban.status.await_user',
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  design: '设计',
-  dev: '开发',
-  test: '测试',
-  deploy: '部署',
+  design: 'tasks.kanban.type.design',
+  dev: 'tasks.kanban.type.dev',
+  test: 'tasks.kanban.type.test',
+  deploy: 'tasks.kanban.type.deploy',
 };
 
 /* 跟 STATUS_DOT 同口径 — Tailwind bg/text/border-* 在 SPA 不可用, 全部 hex
@@ -174,15 +178,16 @@ const statusDotStyle = computed<{ background: string }>(() => ({
 const statusDotClass = computed<string>(() =>
   STATUS_DOT_ANIMATE[props.status] ? 'tsb-dot-pulse' : '',
 );
-const statusLabel = computed<string>(
-  () => STATUS_LABELS[props.status] ?? props.status,
-);
+const statusLabel = computed<string>(() => {
+  const key = STATUS_LABELS[props.status];
+  return key ? t(key) : props.status;
+});
 const statusLabelStyle = computed<{ color: string; background: string }>(() => ({
   color: STATUS_LABEL_FG[props.status] ?? 'var(--color-text)',
   background: STATUS_LABEL_BG[props.status] ?? 'transparent',
 }));
 const typeLabel = computed<string | null>(() =>
-  props.taskType ? TYPE_LABELS[props.taskType] ?? props.taskType : null,
+  props.taskType ? (TYPE_LABELS[props.taskType] ? t(TYPE_LABELS[props.taskType]) : props.taskType) : null,
 );
 const typeClass = computed<string | null>(() => null);
 const typeChipStyle = computed<{ color: string; background: string; borderColor: string } | null>(() => {
@@ -203,10 +208,10 @@ const chatViewHref = computed<string | null>(() => {
     (跳详情页); 否则原「聊天视图」. 都没有 → 不渲染. */
 const viewLink = computed<{ href: string; icon: string; label: string; title: string } | null>(() => {
   if (props.taskViewHref) {
-    return { href: props.taskViewHref, icon: '🗗', label: '任务视图', title: '在任务详情页查看 (更大视图)' };
+    return { href: props.taskViewHref, icon: '🗗', label: t('tasks.statusBar.taskView'), title: t('tasks.statusBar.taskViewTitle') };
   }
   if (chatViewHref.value) {
-    return { href: chatViewHref.value, icon: '💬', label: '聊天视图', title: '在聊天视图中查看' };
+    return { href: chatViewHref.value, icon: '💬', label: t('tasks.statusBar.chatView'), title: t('tasks.statusBar.chatViewTitle') };
   }
   return null;
 });
@@ -338,9 +343,9 @@ function onCycleDisplayModeFromMenu(): void {
         target="_blank"
         rel="noopener noreferrer"
         class="tsb-link"
-        title="完整会话转录"
+        :title="t('tasks.statusBar.transcriptTitle')"
       >
-        📜 <span class="tsb-link-text">完整会话</span>
+        📜 <span class="tsb-link-text">{{ t('tasks.statusBar.transcript') }}</span>
       </a>
 
       <!-- R217v6: 视图链接 — 详情页嵌 = 💬聊天视图; 聊天模式嵌 (ChatView 传
@@ -364,16 +369,16 @@ function onCycleDisplayModeFromMenu(): void {
           type="button"
           class="tsb-tbtn"
           :class="props.dockCollapsed ? '' : 'tsb-tbtn-active-blue'"
-          :title="props.dockCollapsed ? '展开右侧面板' : '收起右侧面板'"
+          :title="props.dockCollapsed ? t('tasks.statusBar.expandDock') : t('tasks.statusBar.collapseDock')"
           @click="onToggleDockCollapsed"
         >
-          {{ props.dockCollapsed ? '◧ 面板' : '◨' }}
+          {{ props.dockCollapsed ? t('tasks.statusBar.panelCollapsedIcon') : '◨' }}
         </button>
         <button
           type="button"
           class="tsb-tbtn"
           :class="(props.searchOpen || props.searchQuery) ? 'tsb-tbtn-active-sky' : ''"
-          title="搜索消息"
+          :title="t('tasks.statusBar.searchMessages')"
           @click="onToggleSearch"
         >
           🔍
@@ -383,7 +388,7 @@ function onCycleDisplayModeFromMenu(): void {
           type="button"
           class="tsb-tbtn"
           :class="props.evalOpen ? 'tsb-tbtn-active-amber' : ''"
-          title="评分"
+          :title="t('tasks.statusBar.eval')"
           @click="onToggleEval"
         >
           ⭐
@@ -392,7 +397,7 @@ function onCycleDisplayModeFromMenu(): void {
           v-if="canFork"
           type="button"
           class="tsb-tbtn"
-          title="Fork 当前 session"
+          :title="t('tasks.statusBar.forkSession')"
           @click="onOpenFork"
         >
           <span><IconSvg name="fork" /></span><span class="tsb-tbtn-text">Fork</span>
@@ -404,15 +409,15 @@ function onCycleDisplayModeFromMenu(): void {
           v-if="newTaskHref"
           :href="newTaskHref"
           class="tsb-tbtn"
-          title="新建任务（基于当前版本）"
+          :title="t('tasks.statusBar.newTaskTitle')"
         >
-          <span>➕</span><span class="tsb-tbtn-text">新建</span>
+          <span>➕</span><span class="tsb-tbtn-text">{{ t('tasks.statusBar.new') }}</span>
         </a>
         <button
           type="button"
           class="tsb-tbtn"
           :class="displayModeTbtnClass"
-          :title="`显示模式：${props.displayModeLabel}（点击切换）`"
+          :title="t('tasks.statusBar.displayModeTitle', { mode: props.displayModeLabel })"
           @click="onCycleDisplayMode"
         >
           <IconSvg :name="props.displayModeIcon" />
@@ -426,7 +431,7 @@ function onCycleDisplayModeFromMenu(): void {
           type="button"
           class="tsb-tbtn"
           :class="moreMenuOpen ? 'tsb-tbtn-active-blue' : ''"
-          title="操作菜单"
+          :title="t('tasks.statusBar.menuAria')"
           aria-haspopup="menu"
           :aria-expanded="moreMenuOpen"
           @click="toggleMoreMenu"
@@ -446,7 +451,7 @@ function onCycleDisplayModeFromMenu(): void {
           @click="onCycleDisplayModeFromMenu"
         >
           <span><IconSvg :name="props.displayModeIcon" /></span>
-          <span>视图：{{ props.displayModeLabel }}</span>
+          <span>{{ t('tasks.statusBar.viewPrefix') }}{{ props.displayModeLabel }}</span>
         </button>
         <div class="tsb-more-divider" />
         <!-- 「完整会话」从 ⋯ 下拉里删 — 状态栏已经始终有 📜 图标 (R56 之前
@@ -457,14 +462,14 @@ function onCycleDisplayModeFromMenu(): void {
           @click="onToggleDockCollapsedFromMenu"
         >
           <span>{{ props.dockCollapsed ? '◧' : '◨' }}</span>
-          <span>{{ props.dockCollapsed ? '展开右侧面板' : '收起右侧面板' }}</span>
+          <span>{{ props.dockCollapsed ? t('tasks.statusBar.expandDock') : t('tasks.statusBar.collapseDock') }}</span>
         </button>
         <button
           type="button"
           class="tsb-more-item"
           @click="onToggleSearchFromMenu"
         >
-          <span>🔍</span><span>搜索消息</span>
+          <span>🔍</span><span>{{ t('tasks.statusBar.searchMessages') }}</span>
         </button>
         <button
           v-if="canEval"
@@ -472,7 +477,7 @@ function onCycleDisplayModeFromMenu(): void {
           class="tsb-more-item"
           @click="onToggleEvalFromMenu"
         >
-          <span>⭐</span><span>评分</span>
+          <span>⭐</span><span>{{ t('tasks.statusBar.eval') }}</span>
         </button>
         <button
           v-if="canFork"
@@ -480,7 +485,7 @@ function onCycleDisplayModeFromMenu(): void {
           class="tsb-more-item"
           @click="onOpenForkFromMenu"
         >
-          <span><IconSvg name="fork" /></span><span>Fork 当前 session</span>
+          <span><IconSvg name="fork" /></span><span>{{ t('tasks.statusBar.forkSession') }}</span>
         </button>
         <!-- R50.5: ➕ 新建任务 (mobile 折叠到下拉, 同 fork 兜底). -->
         <a
@@ -489,7 +494,7 @@ function onCycleDisplayModeFromMenu(): void {
           class="tsb-more-item"
           @click="closeMoreMenu"
         >
-          <span>➕</span><span>新建任务（基于当前版本）</span>
+          <span>➕</span><span>{{ t('tasks.statusBar.newTaskTitle') }}</span>
         </a>
       </div>
     </template>

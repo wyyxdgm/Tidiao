@@ -7,10 +7,12 @@
    - 多选用 Set 维护, 提交时 ", " 拼接.
    - 提交后乐观移除 (SSE 通常在 5s 内送达 user_dialog_response). */
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { post, HttpError } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 
 const toast = useToast();
+const { t } = useI18n();
 
 interface UserDialogOption {
   label: string;
@@ -92,7 +94,7 @@ function isAllAnswered(d: PendingDialog): boolean {
 async function submit(d: PendingDialog): Promise<void> {
   if (busyIds.value.has(d.requestId)) return;
   if (!isAllAnswered(d)) {
-    toast.warn('请先回答每个问题');
+    toast.warn(t('tasks.dialogs.answerAllFirst'));
     return;
   }
   const answers: Record<string, string> = {};
@@ -107,8 +109,8 @@ async function submit(d: PendingDialog): Promise<void> {
     });
     setTimeout(() => emit('resolved', d.requestId), 5000);
   } catch (e) {
-    if (e instanceof HttpError) toast.error(`提交答案失败: ${e.message}`);
-    else toast.error('提交答案失败');
+    if (e instanceof HttpError) toast.error(t('tasks.dialogs.submitFailedMsg', { msg: e.message }));
+    else toast.error(t('tasks.dialogs.submitFailed'));
   } finally {
     busyIds.value.delete(d.requestId);
   }
@@ -124,8 +126,8 @@ async function cancel(d: PendingDialog): Promise<void> {
     });
     setTimeout(() => emit('resolved', d.requestId), 5000);
   } catch (e) {
-    if (e instanceof HttpError) toast.error(`取消失败: ${e.message}`);
-    else toast.error('取消失败');
+    if (e instanceof HttpError) toast.error(t('tasks.dialogs.cancelFailedMsg', { msg: e.message }));
+    else toast.error(t('tasks.dialogs.cancelFailed'));
   } finally {
     busyIds.value.delete(d.requestId);
   }
@@ -135,12 +137,12 @@ async function cancel(d: PendingDialog): Promise<void> {
 <template>
   <div v-if="hasDialogs" class="pending-dialogs" :style="{ maxHeight: dialogMaxHeight }">
     <div class="dialogs-header">
-      <div class="header-left">❓ Agent 提问 ({{ dialogs.length }})</div>
-      <div class="header-hint">回答前无法发送消息</div>
+      <div class="header-left">❓ {{ t('tasks.dialogs.header', { n: dialogs.length }) }}</div>
+      <div class="header-hint">{{ t('tasks.dialogs.headerHint') }}</div>
     </div>
     <div v-for="d in dialogs" :key="d.requestId" class="dialog-card">
       <div v-if="d.stale" class="stale-warn">
-        ⚠ 服务端已重启，原问题可能已超时；提交可能无效。
+        ⚠ {{ t('tasks.dialogs.staleWarn') }}
       </div>
       <div class="dialog-scroll">
         <div v-for="q in d.questions" :key="q.question" class="question">
@@ -174,7 +176,7 @@ async function cancel(d: PendingDialog): Promise<void> {
           :disabled="busyIds.has(d.requestId)"
           @click="cancel(d)"
         >
-          取消
+          {{ t('common.cancel') }}
         </button>
         <button
           type="button"
@@ -182,7 +184,7 @@ async function cancel(d: PendingDialog): Promise<void> {
           :disabled="!isAllAnswered(d) || busyIds.has(d.requestId)"
           @click="submit(d)"
         >
-          提交
+          {{ t('tasks.dialogs.submit') }}
         </button>
       </div>
     </div>

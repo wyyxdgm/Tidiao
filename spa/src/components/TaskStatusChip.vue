@@ -10,50 +10,55 @@
    - 不挂 onClick / href, 纯展示. 父级若把 chip 嵌在 <Link> 内不需要 stopPropagation. */
 
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 interface Props {
   /** 最新 checkpoint status 字符串 (原始值). null/undefined → 不渲染. */
   status: string | null | undefined;
 }
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 interface Tone {
-  label: string;
+  // i18n: 键仍是后端产出的原始 status 值 (含中文值, 不可翻), label 走 locale key.
+  labelKey: string;
   bg: string;
   text: string;
 }
 
 // 镜像 master src/lib/checkpoints/status-display.ts STATUS_MAP (键小写归一后查).
 const TONE_MAP: Record<string, Tone> = {
-  等回复: { label: '等回复', bg: 'bg-blue-100', text: 'text-blue-700' },
-  有建议: { label: '有建议', bg: 'bg-purple-100', text: 'text-purple-700' },
-  需拍板: { label: '需拍板', bg: 'bg-orange-100', text: 'text-orange-700' },
-  卡住: { label: '卡住', bg: 'bg-red-100', text: 'text-red-700' },
-  waiting: { label: '等回复', bg: 'bg-blue-100', text: 'text-blue-700' },
-  suggestion: { label: '有建议', bg: 'bg-purple-100', text: 'text-purple-700' },
-  decision: { label: '需拍板', bg: 'bg-orange-100', text: 'text-orange-700' },
-  blocked: { label: '卡住', bg: 'bg-red-100', text: 'text-red-700' },
+  等回复: { labelKey: 'tasks.kanban.marker.waitingReply', bg: 'bg-blue-100', text: 'text-blue-700' },
+  有建议: { labelKey: 'tasks.kanban.marker.suggestion', bg: 'bg-purple-100', text: 'text-purple-700' },
+  需拍板: { labelKey: 'tasks.kanban.marker.review', bg: 'bg-orange-100', text: 'text-orange-700' },
+  卡住: { labelKey: 'tasks.kanban.marker.stuck', bg: 'bg-red-100', text: 'text-red-700' },
+  waiting: { labelKey: 'tasks.kanban.marker.waitingReply', bg: 'bg-blue-100', text: 'text-blue-700' },
+  suggestion: { labelKey: 'tasks.kanban.marker.suggestion', bg: 'bg-purple-100', text: 'text-purple-700' },
+  decision: { labelKey: 'tasks.kanban.marker.review', bg: 'bg-orange-100', text: 'text-orange-700' },
+  blocked: { labelKey: 'tasks.kanban.marker.stuck', bg: 'bg-red-100', text: 'text-red-700' },
   // 自然措辞 alias (同 master)
-  待拍板: { label: '需拍板', bg: 'bg-orange-100', text: 'text-orange-700' },
-  请选择: { label: '请选择', bg: 'bg-orange-100', text: 'text-orange-700' },
+  待拍板: { labelKey: 'tasks.kanban.marker.review', bg: 'bg-orange-100', text: 'text-orange-700' },
+  请选择: { labelKey: 'tasks.chip.pleaseSelect', bg: 'bg-orange-100', text: 'text-orange-700' },
 };
 
 const display = computed<Tone | null>(() => {
   if (!props.status) return null;
   return TONE_MAP[props.status.trim().toLowerCase()] ?? null;
 });
+
+const displayLabel = computed<string | null>(() => (display.value ? t(display.value.labelKey) : null));
 </script>
 
 <template>
   <span
     v-if="display"
-    :title="`最新 checkpoint 子状态：${display.label}`"
+    :title="t('tasks.chip.latestSubStatus', { s: displayLabel ?? '' })"
     :class="[
       'px-2 py-0.5 rounded-full text-xs whitespace-nowrap',
       display.bg,
       display.text,
     ]"
   >
-    {{ display.label }}
+    {{ displayLabel }}
   </span>
 </template>

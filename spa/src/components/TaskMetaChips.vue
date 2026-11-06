@@ -5,6 +5,7 @@
    无数据的 chip 整个隐藏 (v-if), 不留空壳; 容器 white-space:nowrap, 溢出由
    父级 flex 布局裁决 (本组件不自行截断). */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 interface Props {
   model?: string | null;
@@ -19,11 +20,13 @@ const props = withDefaults(defineProps<Props>(), {
   cost: null,
 });
 
+const { t } = useI18n();
+
 function formatTokenCount(n: number): string {
   return n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
 }
 
-const modelLabel = computed<string>(() => props.model || '默认');
+const modelLabel = computed<string>(() => props.model || t('tasks.meta.default'));
 
 const ctxPct = computed<number | null>(() => {
   if (props.contextTokens == null || props.contextTokens <= 0) return null;
@@ -54,14 +57,14 @@ const costText = computed<string | null>(() =>
 
 <template>
   <span class="tmc-root">
-    <span class="tmc-chip" :title="`模型: ${modelLabel}`">{{ modelLabel }}</span>
+    <span class="tmc-chip" :title="t('tasks.meta.modelTitle', { m: modelLabel })">{{ modelLabel }}</span>
     <span
       v-if="ctxText"
       class="tmc-chip"
       :class="ctxColor"
-      title="任务停止时的上下文占用（据此判断是否需要 fork/压缩后继续）"
+      :title="t('tasks.meta.ctxTitle')"
     >{{ ctxText }}</span>
-    <span v-if="costText" class="tmc-chip" :title="`累计成本 ${costText}`">{{ costText }}</span>
+    <span v-if="costText" class="tmc-chip" :title="t('tasks.meta.costTitle', { c: costText })">{{ costText }}</span>
   </span>
 </template>
 

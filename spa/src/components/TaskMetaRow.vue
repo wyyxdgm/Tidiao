@@ -3,6 +3,7 @@
    关注点: 上下文占用配色 (≥85% 红 / ≥60% 橙 / 其它灰), 超时剩余配色 (<1min 红 /
    <5min 橙 / 其它灰). 配色阈值与 master TaskMetaRow 完全一致 (R22 镜像). */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { parseDbTime } from '@/lib/datetime';
 
 interface Props {
@@ -75,12 +76,14 @@ const timeoutColor = computed<string>(() => {
   return 'meta-neutral';
 });
 
+const { t } = useI18n();
+
 const timeoutTooltip = computed<string>(() => {
   if (props.timeoutRemainingMs == null) return '';
   if (props.timeoutTotalMs) {
-    return `总超时 ${Math.round(props.timeoutTotalMs / 60_000)} 分钟（剩余时间到点会暂停任务）`;
+    return t('tasks.metaRow.timeoutTotal', { n: Math.round(props.timeoutTotalMs / 60_000) });
   }
-  return '剩余时间到点会暂停任务';
+  return t('tasks.metaRow.timeoutRemainingHint');
 });
 
 const ctxText = computed<string>(() => {
@@ -95,20 +98,20 @@ const ctxText = computed<string>(() => {
 <template>
   <div class="task-meta-row">
     <span class="meta-item">
-      模型: <strong>{{ model || '默认' }}</strong>
+      {{ t('tasks.metaRow.model') }}<strong>{{ model || t('tasks.meta.default') }}</strong>
     </span>
-    <span v-if="effort" class="meta-item">强度: {{ effort }}</span>
-    <span v-if="maxTurns" class="meta-item">最大轮次: {{ maxTurns }}</span>
+    <span v-if="effort" class="meta-item">{{ t('tasks.metaRow.effort') }}{{ effort }}</span>
+    <span v-if="maxTurns" class="meta-item">{{ t('tasks.metaRow.maxTurns') }}{{ maxTurns }}</span>
     <span v-if="createdAt" class="meta-item">
-      创建: <strong>{{ formatCreatedAt(createdAt) }}</strong>
+      {{ t('tasks.metaRow.created') }}<strong>{{ formatCreatedAt(createdAt) }}</strong>
     </span>
     <span
       v-if="ctxText"
       class="meta-item"
       :class="ctxColor"
-      title="任务停止时的上下文占用（据此判断是否需要 fork/压缩后继续）"
+      :title="t('tasks.meta.ctxTitle')"
     >
-      上下文: {{ ctxText }}
+      {{ t('tasks.metaRow.ctx') }}{{ ctxText }}
     </span>
     <span
       v-if="timeoutRemainingMs != null"
@@ -116,14 +119,14 @@ const ctxText = computed<string>(() => {
       :class="timeoutColor"
       :title="timeoutTooltip"
     >
-      剩余: {{ formatRemaining(timeoutRemainingMs) }}
+      {{ t('tasks.metaRow.remaining') }}{{ formatRemaining(timeoutRemainingMs) }}
     </span>
     <span
       v-if="cost != null && cost > 0"
       class="meta-item"
       :title="costCoefficient != null
-        ? `本任务模型成本系数 ×${costCoefficient.toFixed(2)}（相对平台基准模型；金额按配置单价折算）`
-        : '按任务模型配置的单价折算（cost_source=priced 时精确，其余为折中价估算）'"
+        ? t('tasks.metaRow.costCoefficientTitle', { c: costCoefficient.toFixed(2) })
+        : t('tasks.metaRow.costDefaultTitle')"
     >💰 ${{ cost.toFixed(3) }}<template v-if="costCoefficient != null">（×{{ costCoefficient.toFixed(2) }}）</template></span>
   </div>
 </template>

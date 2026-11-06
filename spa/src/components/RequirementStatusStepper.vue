@@ -6,12 +6,14 @@
    - pending → done 主轴, 中间态环 (has_suggestion/awaiting_reply/blocked) 都用蓝/紫/橙区分.
    - closed 单独一行, 不与 done 共线. */
 
+import { useI18n } from 'vue-i18n';
 import type { RequirementStatus } from '@/api/requirements';
 
 interface Props {
   current: RequirementStatus;
 }
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 /** 主流程顺序 (pending → done) — 中间态不进主轴. */
 const MAIN_FLOW: RequirementStatus[] = ['pending', 'done'];
@@ -21,13 +23,14 @@ const INTERMEDIATE: RequirementStatus[] = [
   'blocked',
 ];
 
+/** 状态 locale key — 复用 requirements.status.* 六键. */
 const STATUS_LABEL: Record<RequirementStatus, string> = {
-  pending: '未开始',
-  done: '已完成',
-  awaiting_reply: '等回复',
-  has_suggestion: '有建议',
-  blocked: '需拍板',
-  closed: '已关闭',
+  pending: 'requirements.status.pending',
+  done: 'requirements.status.done',
+  awaiting_reply: 'requirements.status.awaiting_reply',
+  has_suggestion: 'requirements.status.has_suggestion',
+  blocked: 'requirements.status.blocked',
+  closed: 'requirements.status.closed',
 };
 
 const INTERMEDIATE_COLOR: Record<RequirementStatus, string> = {
@@ -48,8 +51,8 @@ const INTERMEDIATE_COLOR: Record<RequirementStatus, string> = {
   >
     <div class="flex items-center gap-2 text-sm">
       <span class="inline-block w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-      <span class="text-gray-500 font-medium">已关闭</span>
-      <span class="text-xs text-gray-400 ml-2">软删, 后续可改回其他状态</span>
+      <span class="text-gray-500 font-medium">{{ t('requirements.status.closed') }}</span>
+      <span class="text-xs text-gray-400 ml-2">{{ t('requirements.stepper.closedHint') }}</span>
     </div>
   </div>
 
@@ -86,7 +89,7 @@ const INTERMEDIATE_COLOR: Record<RequirementStatus, string> = {
                     : 'text-gray-400',
               ]"
             >
-              {{ STATUS_LABEL[s] }}
+              {{ t(STATUS_LABEL[s]) }}
             </span>
           </div>
           <span
@@ -102,14 +105,14 @@ const INTERMEDIATE_COLOR: Record<RequirementStatus, string> = {
         v-if="INTERMEDIATE.includes(current)"
         class="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200"
       >
-        <span class="text-xs text-gray-400">当前:</span>
+        <span class="text-xs text-gray-400">{{ t('requirements.stepper.current') }}</span>
         <span
           :class="[
             'text-xs px-2 py-0.5 rounded-full border',
             INTERMEDIATE_COLOR[current],
           ]"
         >
-          {{ STATUS_LABEL[current] }}
+          {{ t(STATUS_LABEL[current]) }}
         </span>
       </div>
     </div>

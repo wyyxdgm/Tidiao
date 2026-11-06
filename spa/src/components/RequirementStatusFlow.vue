@@ -12,6 +12,7 @@
    - eligibleForDone=false 时, 「已完成」项 disabled + tooltip 解释. */
 
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { updateRequirement, type RequirementStatus } from '@/api/requirements';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { useToast } from '@/composables/useToast';
@@ -30,13 +31,14 @@ const REQUIREMENT_STATUSES: RequirementStatus[] = [
   'closed',
 ];
 
+/** 状态 locale key — 复用 requirements.status.* 六键. */
 const STATUS_LABEL: Record<RequirementStatus, string> = {
-  pending: '未开始',
-  done: '已完成',
-  awaiting_reply: '等回复',
-  has_suggestion: '有建议',
-  blocked: '需拍板',
-  closed: '已关闭',
+  pending: 'requirements.status.pending',
+  done: 'requirements.status.done',
+  awaiting_reply: 'requirements.status.awaiting_reply',
+  has_suggestion: 'requirements.status.has_suggestion',
+  blocked: 'requirements.status.blocked',
+  closed: 'requirements.status.closed',
 };
 
 const STATUS_COLOR: Record<RequirementStatus, string> = {
@@ -71,6 +73,12 @@ const emit = defineEmits<{
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
+
+/** status → 显示标签 (t(STATUS_LABEL[status])). */
+function statusLabel(s: RequirementStatus): string {
+  return t(STATUS_LABEL[s]);
+}
 const status = ref<RequirementStatus>(props.initialStatus);
 const open = ref<boolean>(false);
 const pending = ref<boolean>(false);
@@ -108,12 +116,12 @@ async function patchStatus(next: RequirementStatus): Promise<void> {
   try {
     await updateRequirement(props.requirementId, { status: next });
     status.value = next;
-    toast.success(`状态已改为「${STATUS_LABEL[next]}」`);
+    toast.success(t('requirements.flow.changedToast', { status: statusLabel(next) }));
     open.value = false;
     emit('changed', next);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '未知错误';
-    toast.error(`改状态失败: ${msg}`);
+    const msg = err instanceof Error ? err.message : t('common.unknownError');
+    toast.error(t('requirements.flow.changeFailed', { msg }));
   } finally {
     pending.value = false;
   }
@@ -129,9 +137,7 @@ function onPick(next: RequirementStatus): void {
     return;
   }
   if (next === 'done' && !props.eligibleForDone) {
-    toast.error(
-      '需要至少一个「实现/测试/部署」任务完成, 才能把需求点标为已完成。',
-    );
+    toast.error(t('requirements.flow.doneBlocked'));
     return;
   }
   void patchStatus(next);
@@ -143,7 +149,7 @@ function onPick(next: RequirementStatus): void {
     <button
       type="button"
       :disabled="pending"
-      :title="'点击选择其他需求状态'"
+      :title="t('requirements.flow.pickTitle')"
       :class="[
         'text-xs px-3 py-1 rounded-full whitespace-nowrap',
         STATUS_COLOR[status],
@@ -151,7 +157,7 @@ function onPick(next: RequirementStatus): void {
       ]"
       @click="() => !pending && (open = !open)"
     >
-      {{ pending ? '更新中…' : STATUS_LABEL[status] }}
+      {{ pending ? t('requirements.flow.updating') : statusLabel(status) }}
       <span class="ml-1 opacity-60">▾</span>
     </button>
 
@@ -165,7 +171,7 @@ function onPick(next: RequirementStatus): void {
           :disabled="s === 'done' && !eligibleForDone"
           :title="
             s === 'done' && !eligibleForDone
-              ? '需要至少一个「实现/测试/部署」任务完成'
+              ? t('requirements.flow.doneBlockedTitle')
               : undefined
           "
           :class="[
@@ -178,21 +184,21 @@ function onPick(next: RequirementStatus): void {
           ]"
           @click="() => onPick(s)"
         >
-          <span>{{ STATUS_LABEL[s] }}</span>
+          <span>{{ statusLabel(s) }}</span>
           <span v-if="s === status" class="text-xs">✓</span>
         </button>
       </li>
       <li class="px-3 py-1.5 text-[10px] text-gray-400 border-t">
-        closed = 软删, 后续可改回
+        {{ t('requirements.flow.closedHint') }}
       </li>
     </ul>
 
     <ConfirmDialog
       :open="confirmClosed"
-      title="关闭这个需求点？"
-      :message="`关闭后状态变为「${STATUS_LABEL.closed}」，可随时改回。`"
-      confirm-text="确认关闭"
-      cancel-text="取消"
+      :title="t('requirements.flow.closeTitle')"
+      :message="t('requirements.flow.closeMessage', { status: statusLabel('closed') })"
+      :confirm-text="t('requirements.flow.closeConfirm')"
+      :cancel-text="t('common.cancel')"
       type="danger"
       @confirm="
         () => {

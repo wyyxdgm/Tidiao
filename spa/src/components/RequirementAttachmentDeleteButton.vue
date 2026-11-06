@@ -9,6 +9,7 @@
    - R64 红线: 用 ConfirmDialog (type=danger) 二次确认 + Toast 提示. */
 
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { deleteAttachment } from '@/api/requirements';
 import { HttpError } from '@/api/http';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { t } = useI18n();
 const confirmOpen = ref<boolean>(false);
 const pending = ref<boolean>(false);
 
@@ -33,10 +35,10 @@ async function handleDelete(): Promise<void> {
   try {
     const result = await deleteAttachment(props.attachmentId);
     if (!result.ok) {
-      toast.error(`删除失败: ${result.error ?? 'unknown'}`);
+      toast.error(t('requirements.attach.deleteFailedMsg', { msg: result.error ?? 'unknown' }));
       return;
     }
-    toast.success('附件已删除');
+    toast.success(t('requirements.attach.deleted'));
     emit('deleted', props.attachmentId);
   } catch (err: unknown) {
     const msg =
@@ -45,7 +47,7 @@ async function handleDelete(): Promise<void> {
         : err instanceof Error
           ? err.message
           : String(err);
-    toast.error(`删除失败: ${msg}`);
+    toast.error(t('requirements.attach.deleteFailedMsg', { msg }));
   } finally {
     pending.value = false;
   }
@@ -56,18 +58,18 @@ async function handleDelete(): Promise<void> {
   <button
     type="button"
     :disabled="pending"
-    :title="'删除附件'"
+    :title="t('requirements.attach.deleteTitle')"
     class="text-xs text-gray-400 hover:text-red-600 px-2 py-1 rounded disabled:opacity-50"
     @click="() => (confirmOpen = true)"
   >
-    {{ pending ? '删除中…' : '删除' }}
+    {{ pending ? t('requirements.attach.deleting') : t('common.delete') }}
   </button>
   <ConfirmDialog
     :open="confirmOpen"
-    title="删除附件"
-    message="确认删除这个附件？文件本身也会一起删除。"
-    confirm-text="删除"
-    cancel-text="取消"
+    :title="t('requirements.attach.deleteTitle')"
+    :message="t('requirements.attach.confirmMessage')"
+    :confirm-text="t('common.delete')"
+    :cancel-text="t('common.cancel')"
     type="danger"
     @confirm="handleDelete"
     @cancel="() => (confirmOpen = false)"

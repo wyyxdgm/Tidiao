@@ -10,6 +10,7 @@
      R19 当时的简化选择. ⚙️ 改 toggle button, 展开/折叠状态 = 纯前端, 不持久化.
    - PATCH /api/tasks/[id] 同步 advanced settings (model/effort/maxTurns). */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { patch, post, HttpError } from '@/api/http';
 import { useAvailableModels } from '@/composables/useAvailableModels';
 import Button from './Button.vue';
@@ -30,6 +31,9 @@ import {
 } from '@/lib/chat/input-history';
 
 const toast = useToast();
+// 注意: 本文件多个函数内有局部 `const t` (textarea ref), 与这里的 i18n t 同名
+// 但函数作用域内遮罩 — 遮罩函数内不需要翻译, 无冲突.
+const { t } = useI18n();
 
 /** 拖拽手柄持久化 key (per-task 隔离). localStorage 沉默失败, 失败不阻断
     功能 — 仅丢偏好. 与 master task-detail-client.tsx §消息输入手柄 同款口径. */
@@ -203,13 +207,13 @@ const advMaxTurns = ref<string>(
 );
 const advSaving = ref<boolean>(false);
 
-const EFFORT_OPTIONS = [
-  { value: '', label: '默认' },
+const EFFORT_OPTIONS = computed(() => [
+  { value: '', label: t('tasks.meta.default') },
   { value: 'low', label: 'low' },
   { value: 'medium', label: 'medium' },
   { value: 'high', label: 'high' },
   { value: 'max', label: 'max' },
-];
+]);
 
 // R56-B4: 模型下拉统一走 useAvailableModels() (configured + builtin + used 三源并集),
 // 取代 R19 简化的本地 MODEL_OPTIONS (只有 4 条且不含用户已配置的).
@@ -234,9 +238,9 @@ async function toggleAutoApprove(): Promise<void> {
   } catch (e) {
     autoApprove.value = !next;
     if (e instanceof HttpError) {
-      toast.error(`设置失败: ${e.message}`);
+      toast.error(t('tasks.input.setFailedMsg', { msg: e.message }));
     } else {
-      toast.error('设置失败');
+      toast.error(t('tasks.input.setFailed'));
     }
   }
 }
@@ -256,9 +260,9 @@ async function setModel(v: string | null): Promise<void> {
   } catch (e) {
     advModel.value = prev;
     if (e instanceof HttpError) {
-      toast.error(`模型设置失败: ${e.message}`);
+      toast.error(t('tasks.input.modelFailedMsg', { msg: e.message }));
     } else {
-      toast.error('模型设置失败');
+      toast.error(t('tasks.input.modelFailed'));
     }
   }
 }
@@ -274,9 +278,9 @@ async function setEffort(v: string | null): Promise<void> {
   } catch (e) {
     advEffort.value = prev;
     if (e instanceof HttpError) {
-      toast.error(`强度设置失败: ${e.message}`);
+      toast.error(t('tasks.input.effortFailedMsg', { msg: e.message }));
     } else {
-      toast.error('强度设置失败');
+      toast.error(t('tasks.input.effortFailed'));
     }
   }
 }
@@ -292,9 +296,9 @@ async function setMaxTurns(v: string): Promise<void> {
   } catch (e) {
     advMaxTurns.value = prev;
     if (e instanceof HttpError) {
-      toast.error(`最大轮次设置失败: ${e.message}`);
+      toast.error(t('tasks.input.maxTurnsFailedMsg', { msg: e.message }));
     } else {
-      toast.error('最大轮次设置失败');
+      toast.error(t('tasks.input.maxTurnsFailed'));
     }
   }
 }
@@ -387,13 +391,13 @@ async function send(): Promise<void> {
     inputHistory.value = [];
     rebuildHistoryBrowser();
     text.value = '';
-    toast.success('已清除本任务的输入历史和草稿');
+    toast.success(t('tasks.input.historyCleared'));
     sending.value = false;
     return;
   }
   if (slash.kind === 'goal') {
     if (!slash.prompt) {
-      toast.error('/goal 后请输入目标条件');
+      toast.error(t('tasks.input.goalNeedsPrompt'));
       sending.value = false;
       return;
     }
@@ -403,7 +407,7 @@ async function send(): Promise<void> {
   }
   if (slash.kind === 'loop') {
     if (!slash.prompt) {
-      toast.error('/loop 后请输入任务指令');
+      toast.error(t('tasks.input.loopNeedsPrompt'));
       sending.value = false;
       return;
     }
@@ -431,9 +435,9 @@ async function send(): Promise<void> {
     emit('sent');
   } catch (e) {
     if (e instanceof HttpError) {
-      toast.error(`发送失败: ${e.message}`);
+      toast.error(t('tasks.input.sendFailedMsg', { msg: e.message }));
     } else {
-      toast.error('发送失败');
+      toast.error(t('tasks.input.sendFailed'));
     }
     // 附件 chip 故意不清 — 发送失败保留, 用户重试时附件仍随消息带上.
   } finally {
@@ -457,15 +461,15 @@ async function handleSlashGoal(prompt: string, original: string): Promise<void> 
       model: props.contextModel || undefined,
       effort: props.contextEffort || undefined,
     });
-    toast.success(`已创建 goal task #${created.id.slice(0, 8)}`);
+    toast.success(t('tasks.input.goalCreated', { id: created.id.slice(0, 8) }));
     recordHistory(original); // R179: slash 命令也算"输入过的内容"
     // hash 路由 SPA: 用 location.change 而不是 viewport 跳转
     window.location.href = `/#/tasks/${created.id}`;
     return;
   } catch (e) {
     console.error('[slash /goal] failed:', e);
-    const msg = e instanceof HttpError ? e.message : '未知错误';
-    toast.error(`创建 goal task 失败: ${msg}`);
+    const msg = e instanceof HttpError ? e.message : t('common.unknownError');
+    toast.error(t('tasks.input.goalCreateFailed', { msg }));
     text.value = original; // 还原输入框
   }
 }
@@ -491,13 +495,13 @@ async function handleSlashLoop(
       project_id: props.contextProjectId || undefined,
       version_id: props.contextVersionId || undefined,
     });
-    toast.success(`已创建 cron schedule #${schedule.id.slice(0, 8)} (${interval})`);
+    toast.success(t('tasks.input.loopCreated', { id: schedule.id.slice(0, 8), interval }));
     recordHistory(original); // R179: slash 命令也算"输入过的内容"
     return;
   } catch (e) {
     console.error('[slash /loop] failed:', e);
-    const msg = e instanceof HttpError ? e.message : '未知错误';
-    toast.error(`创建 /loop schedule 失败: ${msg}`);
+    const msg = e instanceof HttpError ? e.message : t('common.unknownError');
+    toast.error(t('tasks.input.loopCreateFailed', { msg }));
     text.value = original; // 还原输入框
   }
 }
@@ -588,9 +592,9 @@ async function onFileChange(e: Event): Promise<void> {
       pendingAttachments.value.push(created);
     } catch (err) {
       if (err instanceof HttpError) {
-        toast.error(`上传失败: ${err.message}`);
+        toast.error(t('tasks.input.uploadFailedMsg', { msg: err.message }));
       } else {
-        toast.error(`上传失败: ${(err as Error).message ?? '未知错误'}`);
+        toast.error(t('tasks.input.uploadFailedMsg', { msg: (err as Error).message ?? t('common.unknownError') }));
       }
     }
   }
@@ -618,7 +622,7 @@ async function uploadAttachment(
     throw new HttpError({ status: res.status, message: msg });
   }
   const body = await res.json() as { attachment?: PendingAttachment };
-  if (!body.attachment) throw new HttpError({ status: 502, message: '服务端未返回附件信息' });
+  if (!body.attachment) throw new HttpError({ status: 502, message: t('tasks.input.noAttachmentInResponse') });
   return body.attachment;
 }
 
@@ -644,10 +648,10 @@ const canSend = computed<boolean>(
 );
 
 const placeholder = computed<string>(() => {
-  if (props.disabled) return props.disabledReason || '当前状态下不可发送';
+  if (props.disabled) return props.disabledReason || t('tasks.input.disabledFallback');
   // R143 五轮 SPA 端口化: 跟 master 端对齐 — 让用户知道支持 slash 命令.
   //   R179 加 ↑ 历史召回提示 (/clearhistory 见 04-task-detail 文档, 太长不塞).
-  return '输入消息后按 Enter 发送（Shift+Enter 换行）· ↑↓ 召回历史输入 · /goal <目标> 创建 goal task · /loop 30m <指令> 周期任务';
+  return t('tasks.input.placeholder');
 });
 </script>
 
@@ -662,7 +666,7 @@ const placeholder = computed<string>(() => {
          主列 scroll 不出问题), 不让手柄出现干扰. -->
     <div
       class="msg-resize-handle"
-      title="拖动调整输入框高度（向上调高，向下调低）"
+      :title="t('tasks.input.resizeHandleTitle')"
       @mousedown="onDragStart"
     >
       <span class="msg-resize-grip" />
@@ -678,7 +682,7 @@ const placeholder = computed<string>(() => {
         target="_blank"
         rel="noreferrer"
         class="pending-chip"
-        title="点击在新窗口打开附件"
+        :title="t('tasks.input.openAttachmentTitle')"
       >
         <span aria-hidden="true">{{ a.media_type.startsWith('image/') ? '🖼️' : '📄' }}</span>
         <span class="pending-chip-name">{{ a.filename }}</span>
@@ -686,7 +690,7 @@ const placeholder = computed<string>(() => {
         <button
           type="button"
           class="pending-chip-x"
-          title="移除附件"
+          :title="t('tasks.input.removeAttachment')"
           @click.prevent="removePending(a.id)"
           @click.stop
         >×</button>
@@ -710,15 +714,15 @@ const placeholder = computed<string>(() => {
          master tdc.tsx:2787 `flex justify-between items-center mt-1.5 sm:mt-2`. -->
     <div class="msg-toolbar">
       <div class="msg-toolbar-left">
-        <label class="auto-approve" title="自动审批：开启后 agent 工具调用无需逐个审核">
+        <label class="auto-approve" :title="t('tasks.input.autoApproveTitle')">
           <Checkbox :model-value="autoApprove" @update:model-value="toggleAutoApprove" />
-          <span class="auto-approve-label">自动审批</span>
+          <span class="auto-approve-label">{{ t('tasks.chat.autoApprove') }}</span>
         </label>
         <button
           type="button"
           class="tool-btn"
           :class="{ 'tool-btn-active': showAdvanced }"
-          title="发送时覆盖模型/强度/最大轮次"
+          :title="t('tasks.input.advOverrideTitle')"
           @click="showAdvanced = !showAdvanced"
         >⚙️</button>
       </div>
@@ -733,7 +737,7 @@ const placeholder = computed<string>(() => {
         <button
           type="button"
           class="tool-btn"
-          title="上传附件"
+          :title="t('tasks.input.attachTitle')"
           :disabled="disabled"
           @click="pickFile"
         >📎</button>
@@ -744,7 +748,7 @@ const placeholder = computed<string>(() => {
           :disabled="!canSend"
           type="submit"
         >
-          发送
+          {{ t('tasks.chat.send') }}
         </Button>
       </div>
     </div>
@@ -754,25 +758,25 @@ const placeholder = computed<string>(() => {
          status=running 时显示"配置将在下次恢复/重启时生效"提示. -->
     <div v-if="showAdvanced" class="adv-inline">
       <div v-if="status === 'running'" class="adv-running-hint">
-        💡 任务运行中：配置将在下次恢复/重启时生效，本次发送仅推送消息。
+        💡 {{ t('tasks.input.runningHint') }}
       </div>
       <div class="adv-grid">
         <label class="adv-cell">
-          <span class="adv-label">模型</span>
+          <span class="adv-label">{{ t('tasks.chat.modelLabel') }}</span>
           <Select :model-value="advModel" :options="modelOptions" :disabled="modelOptionsLoading" @update:model-value="(v) => void setModel(v)" />
         </label>
         <label class="adv-cell">
-          <span class="adv-label">强度</span>
+          <span class="adv-label">{{ t('tasks.chat.effortLabel') }}</span>
           <Select :model-value="advEffort" :options="EFFORT_OPTIONS" @update:model-value="(v) => void setEffort(v)" />
         </label>
         <label class="adv-cell">
-          <span class="adv-label">最大轮次</span>
+          <span class="adv-label">{{ t('tasks.chat.maxTurnsLabel') }}</span>
           <Input
             :model-value="advMaxTurns"
             type="number"
             :min="1"
             :max="500"
-            placeholder="不限制"
+            :placeholder="t('tasks.input.maxTurnsUnlimited')"
             @update:model-value="(v) => void setMaxTurns(v)"
           />
         </label>
