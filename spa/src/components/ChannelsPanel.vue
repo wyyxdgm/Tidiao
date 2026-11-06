@@ -3,6 +3,7 @@
    Channel config = 多渠道消息接入配置 (如一个 Telegram bot), 绑定 project +
    可选默认 role (intake 首 task 挂载). secret 只写不读 (has_secret 显示). */
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Button from '@/components/Button.vue';
 import Input from '@/components/Input.vue';
 import Select from '@/components/Select.vue';
@@ -29,6 +30,7 @@ import { listProjects, listVersions, type Project, type Version } from '@/api/pr
 
 const toast = useToast();
 const { confirm } = useConfirm();
+const { t } = useI18n();
 
 /* 渠道类型五值 (damo 2026-10-13 拍板三值解禁; 扫码绑定 D2 增 lark; D3 增 weixin):
    telegram / wecom / feishu / lark / weixin 五条 intake 线路均已落地消费
@@ -85,7 +87,7 @@ const roleOptions = computed<{ value: string; label: string }[]>(() => {
   const opts = usable.map((r) => ({ value: r.id, label: r.name }));
   if (draft.role_id && !opts.some((o) => o.value === draft.role_id)) {
     const cur = roles.value.find((r) => r.id === draft.role_id);
-    opts.unshift({ value: draft.role_id, label: `${cur?.name ?? draft.role_id.slice(0, 8)}（不在当前项目可用集）` });
+    opts.unshift({ value: draft.role_id, label: t('settings.channels.roleNotAvailable', { name: cur?.name ?? draft.role_id.slice(0, 8) }) });
   }
   return opts;
 });
@@ -103,7 +105,7 @@ async function load(): Promise<void> {
     projects.value = ps;
     roles.value = rs;
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '加载渠道失败';
+    error.value = e instanceof Error ? e.message : t('settings.channels.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -120,9 +122,9 @@ onUnmounted(() => {
 async function copyBindCode(code: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(code);
-    toast.success(`绑定码 ${code} 已复制`);
+    toast.success(t('settings.channels.bindCodeCopied', { code }));
   } catch {
-    toast.error('复制失败，请手动选择复制');
+    toast.error(t('settings.common.copyFailedManual'));
   }
 }
 
@@ -135,8 +137,8 @@ const qrLoading = ref<boolean>(false);
 const qrChannel = ref<ChannelConfig | null>(null);
 const qr = ref<BindQr | null>(null);
 
-/* wecom 凭据即绑定, 无扫码动作: 行内只显示 hint 不给按钮 */
-const WECOM_BIND_HINT = '凭据绑定，无需扫码';
+/* wecom 凭据即绑定, 无扫码动作: 行内只显示 hint 不给按钮 (i18n key, 模板 t()) */
+const WECOM_BIND_HINT_KEY = 'settings.channels.wecomHint';
 
 async function openQr(c: ChannelConfig): Promise<void> {
   qrChannel.value = c;
@@ -146,7 +148,7 @@ async function openQr(c: ChannelConfig): Promise<void> {
   try {
     qr.value = await getBindQr(c.id);
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '获取二维码失败');
+    toast.error(e instanceof Error ? e.message : t('settings.channels.qrFailed'));
     qrOpen.value = false;
   } finally {
     qrLoading.value = false;
@@ -158,9 +160,9 @@ async function copyCommand(): Promise<void> {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    toast.success('已复制');
+    toast.success(t('settings.common.copiedOk'));
   } catch {
-    toast.error('复制失败，请手动选择复制');
+    toast.error(t('settings.common.copyFailedManual'));
   }
 }
 
@@ -203,7 +205,7 @@ function openWxLogin(): void {
 
 async function startWxLogin(): Promise<void> {
   if (!wxProjectId.value) {
-    toast.error('请先选择绑定项目');
+    toast.error(t('settings.channels.errProjectRequired'));
     return;
   }
   wxCreating.value = true;
@@ -215,11 +217,11 @@ async function startWxLogin(): Promise<void> {
     wxLoginId.value = res.login_id;
     wxQrSvg.value = res.qr_svg;
     wxExpired.value = false;
-    wxStatusText.value = '请用微信扫码并确认登录';
+    wxStatusText.value = t('settings.channels.wxScanPrompt');
     wxPhase.value = 'qr';
     scheduleWxPoll();
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '生成二维码失败');
+    toast.error(e instanceof Error ? e.message : t('settings.channels.qrGenFailed'));
   } finally {
     wxCreating.value = false;
   }
@@ -234,19 +236,19 @@ function scheduleWxPoll(): void {
       if (st.status === 'success') {
         wxPhase.value = 'done';
         wxBindCode.value = st.channel?.bind_code ?? '';
-        wxStatusText.value = `登录成功，已创建渠道「${st.channel?.name ?? 'weixin'}」`;
-        toast.success('微信登录成功，渠道已创建');
+        wxStatusText.value = t('settings.channels.wxSuccess', { name: st.channel?.name ?? 'weixin' });
+        toast.success(t('settings.channels.wxLoginOk'));
         await load();
         return; // 成功即停轮询
       }
       if (st.status === 'scanned') {
-        wxStatusText.value = '手机已扫描，请在微信上确认登录';
+        wxStatusText.value = t('settings.channels.wxScanned');
       } else if (st.status === 'expired') {
         wxExpired.value = true;
-        wxStatusText.value = st.message ?? '二维码已过期，请重新生成';
+        wxStatusText.value = st.message ?? t('settings.channels.wxExpired');
         return; // 过期停轮询, 等用户点重新生成
       } else if (st.status === 'error') {
-        wxStatusText.value = st.message ?? '微信服务返回错误，将继续重试';
+        wxStatusText.value = st.message ?? t('settings.channels.wxError');
       }
       scheduleWxPoll(); // pending / scanned / error 继续轮询
     } catch {
@@ -342,11 +344,11 @@ function draftToBody(): Record<string, unknown> {
 
 async function save(): Promise<void> {
   if (!draft.name.trim() || !draft.bound_project_id) {
-    toast.error('名称和绑定项目必填');
+    toast.error(t('settings.channels.errRequired'));
     return;
   }
   if (!editing.value && !draft.secret) {
-    toast.error('新建渠道需填写 secret（bot token 等凭据）');
+    toast.error(t('settings.channels.errSecretRequired'));
     return;
   }
   saving.value = true;
@@ -354,15 +356,15 @@ async function save(): Promise<void> {
     const body = draftToBody();
     if (editing.value) {
       await updateChannel(editing.value.id, body);
-      toast.success('渠道已更新');
+      toast.success(t('settings.channels.updated'));
     } else {
       await createChannel(body as never);
-      toast.success('渠道已创建');
+      toast.success(t('settings.channels.created'));
     }
     modalOpen.value = false;
     await load();
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '保存失败');
+    toast.error(e instanceof Error ? e.message : t('settings.common.saveFailed'));
   } finally {
     saving.value = false;
   }
@@ -370,16 +372,16 @@ async function save(): Promise<void> {
 
 async function remove(c: ChannelConfig): Promise<void> {
   const ok = await confirm(
-    `确定删除渠道「${c.name}」？绑定码 ${c.bind_code} 随之失效；已有会话历史保留。`,
-    { title: '删除渠道', type: 'danger', confirmText: '删除' },
+    t('settings.channels.confirmDelete', { name: c.name, code: c.bind_code }),
+    { title: t('settings.channels.deleteTitle'), type: 'danger', confirmText: t('settings.common.delete') },
   );
   if (!ok) return;
   try {
     await deleteChannel(c.id);
-    toast.success('已删除');
+    toast.success(t('settings.common.deleted'));
     await load();
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '删除失败');
+    toast.error(e instanceof Error ? e.message : t('settings.common.deleteFailed'));
   }
 }
 </script>
@@ -387,31 +389,31 @@ async function remove(c: ChannelConfig): Promise<void> {
 <template>
   <section class="card section-card">
     <div class="section-head">
-      <h2 class="section-title">📡 渠道接入</h2>
-      <span class="badge badge-info">IM 渠道 → 绑定项目 → intake 建 task</span>
-      <Button variant="secondary" class="head-action" @click="openWxLogin">扫码登录微信</Button>
-      <Button variant="primary" @click="openCreate">＋ 新建渠道</Button>
+      <h2 class="section-title">{{ t('settings.channels.title') }}</h2>
+      <span class="badge badge-info">{{ t('settings.channels.badge') }}</span>
+      <Button variant="secondary" class="head-action" @click="openWxLogin">{{ t('settings.channels.wxLoginBtn') }}</Button>
+      <Button variant="primary" @click="openCreate">{{ t('settings.channels.create') }}</Button>
     </div>
 
     <Loading v-if="loading" />
-    <ErrorView v-else-if="error" title="加载渠道失败" :description="error" @retry="load" />
+    <ErrorView v-else-if="error" :title="t('settings.channels.loadFailed')" :description="error" @retry="load" />
     <template v-else>
       <Empty
         v-if="channels.length === 0"
-        title="还没有渠道配置"
-        description="渠道 = 一个 IM 机器人实例（如 Telegram bot）。绑定一个项目、可选配默认角色，外部用户给 bot 发消息即可在该项目下建 task。点右上角「新建渠道」开始。"
+        :title="t('settings.channels.emptyTitle')"
+        :description="t('settings.channels.emptyDesc')"
       />
       <table v-else class="channels-table">
         <thead>
           <tr>
-            <th>类型</th>
-            <th>名称</th>
-            <th>绑定项目</th>
-            <th>绑定版本</th>
-            <th>默认角色</th>
-            <th>状态</th>
-            <th>绑定码</th>
-            <th class="col-actions">操作</th>
+            <th>{{ t('settings.channels.thType') }}</th>
+            <th>{{ t('settings.channels.thName') }}</th>
+            <th>{{ t('settings.channels.thProject') }}</th>
+            <th>{{ t('settings.channels.thVersion') }}</th>
+            <th>{{ t('settings.channels.thRole') }}</th>
+            <th>{{ t('settings.channels.thStatus') }}</th>
+            <th>{{ t('settings.channels.thBindCode') }}</th>
+            <th class="col-actions">{{ t('settings.channels.thActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -419,164 +421,162 @@ async function remove(c: ChannelConfig): Promise<void> {
             <td><span class="badge badge-muted">{{ c.channel }}</span></td>
             <td>
               <div class="ch-name">{{ c.name }}</div>
-              <div class="muted small">{{ c.has_secret ? '凭据已配置' : '未配凭据' }}</div>
+              <div class="muted small">{{ c.has_secret ? t('settings.channels.secretSet') : t('settings.channels.secretMissing') }}</div>
             </td>
             <td>{{ projectName(c.bound_project_id) }}</td>
             <td>
               <span v-if="c.version_name" class="badge badge-info">{{ c.version_name }}</span>
-              <span v-else class="muted small">跟随 current</span>
+              <span v-else class="muted small">{{ t('settings.channels.followCurrent') }}</span>
             </td>
             <td>
               <span v-if="c.role_name" class="badge badge-info">{{ c.role_name }}</span>
-              <span v-else class="muted small">未配</span>
+              <span v-else class="muted small">{{ t('settings.channels.roleNone') }}</span>
             </td>
             <td>
               <span class="badge" :class="c.enabled ? 'badge-ok' : 'badge-warn'">
-                {{ c.enabled ? '启用' : '停用' }}
+                {{ c.enabled ? t('settings.channels.enabled') : t('settings.channels.disabled') }}
               </span>
             </td>
             <td>
-              <code class="bind-code" role="button" tabindex="0" :title="'点击复制'" @click="copyBindCode(c.bind_code)" @keyup.enter="copyBindCode(c.bind_code)">{{ c.bind_code }}</code>
+              <code class="bind-code" role="button" tabindex="0" :title="t('settings.channels.clickCopy')" @click="copyBindCode(c.bind_code)" @keyup.enter="copyBindCode(c.bind_code)">{{ c.bind_code }}</code>
             </td>
             <td class="col-actions">
-              <Button v-if="c.channel !== 'wecom'" variant="ghost" size="sm" @click="openQr(c)">扫码绑定</Button>
-              <span v-else class="muted small">{{ WECOM_BIND_HINT }}</span>
-              <Button variant="ghost" size="sm" @click="openEdit(c)">编辑</Button>
-              <Button variant="danger" size="sm" @click="remove(c)">删除</Button>
+              <Button v-if="c.channel !== 'wecom'" variant="ghost" size="sm" @click="openQr(c)">{{ t('settings.channels.qrBind') }}</Button>
+              <span v-else class="muted small">{{ t(WECOM_BIND_HINT_KEY) }}</span>
+              <Button variant="ghost" size="sm" @click="openEdit(c)">{{ t('settings.common.edit') }}</Button>
+              <Button variant="danger" size="sm" @click="remove(c)">{{ t('settings.common.delete') }}</Button>
             </td>
           </tr>
         </tbody>
       </table>
       <p class="muted small form-aside">
-        外部用户给 bot 发「bind &lt;绑定码&gt;」完成会话绑定；之后该用户消息直接在绑定项目下建 task
-        （首 task 挂默认角色）。停用的渠道不响应绑定与新消息。绑定码点击即复制。
+        {{ t('settings.channels.aside') }}
       </p>
     </template>
 
     <!-- 新建 / 编辑 -->
-    <Modal v-model="modalOpen" :title="editing ? `编辑渠道：${editing.name}` : '新建渠道'" size="lg">
+    <Modal v-model="modalOpen" :title="editing ? t('settings.channels.editTitle', { name: editing.name }) : t('settings.channels.createTitle')" size="lg">
       <div class="channel-form">
         <div class="form-grid">
           <div>
-            <label class="lbl">渠道类型 <span class="req">*</span></label>
+            <label class="lbl">{{ t('settings.channels.lblType') }} <span class="req">*</span></label>
             <Select
               v-model="draft.channel"
               :options="CHANNEL_TYPES"
               :disabled="saving || !!editing"
             />
             <p class="muted small role-hint">
-              {{ editing ? '渠道类型决定消费方协议，创建后不可更改。' : 'telegram / wecom / feishu 均已接入；openclaw 是内部线程通道，不在此配置。' }}
+              {{ editing ? t('settings.channels.typeHintEdit') : t('settings.channels.typeHintNew') }}
             </p>
           </div>
           <div>
-            <label class="lbl">名称 <span class="req">*</span></label>
-            <Input v-model="draft.name" placeholder="如 派单 bot / 客服号" :disabled="saving" />
+            <label class="lbl">{{ t('settings.channels.lblName') }} <span class="req">*</span></label>
+            <Input v-model="draft.name" :placeholder="t('settings.channels.namePh')" :disabled="saving" />
           </div>
         </div>
         <div>
-          <label class="lbl">Secret（bot token 等凭据）<span v-if="!editing" class="req">*</span></label>
+          <label class="lbl">{{ t('settings.channels.lblSecret') }}<span v-if="!editing" class="req">*</span></label>
           <Input
             v-model="draft.secret"
             type="password"
-            :placeholder="editing ? '留空 = 不修改' : 'bot token / app secret'"
+            :placeholder="editing ? t('settings.channels.secretKeepPh') : t('settings.channels.secretPh')"
             autocomplete="new-password"
             :disabled="saving"
           />
           <p v-if="draft.channel === 'weixin'" class="muted small role-hint">
-            weixin 渠道推荐用顶部「扫码登录微信」自动写入凭据；手动填写格式：
-            {"bot_token":"...","ilink_bot_id":"..."} 或纯 bot_token。
+            {{ t('settings.channels.weixinHint') }}
           </p>
         </div>
         <div>
-          <label class="lbl">绑定项目 <span class="req">*</span></label>
+          <label class="lbl">{{ t('settings.channels.lblProject') }} <span class="req">*</span></label>
           <Select
             v-model="draft.bound_project_id"
             :options="projectOptions"
-            placeholder="选择项目"
+            :placeholder="t('settings.channels.projectPh')"
             :disabled="saving"
           />
         </div>
         <div v-if="draft.bound_project_id">
-          <label class="lbl">绑定版本（可选）</label>
+          <label class="lbl">{{ t('settings.channels.lblVersion') }}</label>
           <Select
             v-model="draft.bound_version_id"
-            :options="[{ value: '', label: '跟随项目 current_version' }, ...versionOptions]"
+            :options="[{ value: '', label: t('settings.channels.followVersion') }, ...versionOptions]"
             :disabled="saving"
           />
-          <p class="muted small role-hint">指定后该渠道进来的需求固定落在所选版本；不指定 = 项目当前版本。</p>
+          <p class="muted small role-hint">{{ t('settings.channels.versionHint') }}</p>
         </div>
         <div>
-          <label class="lbl">默认角色（intake 首 task 挂载，可选）</label>
+          <label class="lbl">{{ t('settings.channels.lblRole') }}</label>
           <Select
             v-model="draft.role_id"
-            :options="[{ value: '', label: '未配（用项目默认）' }, ...roleOptions]"
+            :options="[{ value: '', label: t('settings.channels.roleNoneOption') }, ...roleOptions]"
             :disabled="saving || !draft.bound_project_id"
           />
-          <p class="muted small role-hint">可选集 = 全局角色 + 绑定项目专属角色；换绑定项目后原角色不在可用集时会标注提示。</p>
+          <p class="muted small role-hint">{{ t('settings.channels.roleHint') }}</p>
         </div>
         <Checkbox
           v-if="editing"
           :model-value="draft.enabled"
           :disabled="saving"
-          label="启用（停用后不响应绑定与新消息）"
+          :label="t('settings.channels.enabledLabel')"
           @update:model-value="(v: boolean) => draft.enabled = v"
         />
       </div>
       <template #footer>
         <div class="modal-actions">
-          <Button variant="ghost" :disabled="saving" @click="modalOpen = false">取消</Button>
+          <Button variant="ghost" :disabled="saving" @click="modalOpen = false">{{ t('settings.common.cancel') }}</Button>
           <Button variant="primary" :loading="saving" @click="save">
-            {{ editing ? '保存' : '创建' }}
+            {{ editing ? t('settings.common.save') : t('settings.common.create') }}
           </Button>
         </div>
       </template>
     </Modal>
     <!-- 扫码绑定 (D1): 服务端 SVG + hint + 一键复制命令 -->
-    <Modal v-model="qrOpen" :title="`扫码绑定：${qrChannel?.name ?? ''}`" size="sm">
+    <Modal v-model="qrOpen" :title="t('settings.channels.qrTitle', { name: qrChannel?.name ?? '' })" size="sm">
       <div class="qr-body">
         <Loading v-if="qrLoading" />
         <template v-else-if="qr">
           <div v-if="qr.qr_svg" class="qr-svg" v-html="qr.qr_svg"></div>
           <p class="hint">{{ qr.hint }}</p>
           <code v-if="qr.copy_text" class="qr-cmd">{{ qr.copy_text }}</code>
-          <Button v-if="qr.copy_text" variant="primary" @click="copyCommand">复制命令</Button>
+          <Button v-if="qr.copy_text" variant="primary" @click="copyCommand">{{ t('settings.channels.copyCommand') }}</Button>
         </template>
       </div>
     </Modal>
     <!-- 微信扫码登录 (D3): 选项目 → iLink QR → 3s 轮询 → 自动建渠道行 -->
-    <Modal v-model="wxOpen" title="扫码登录微信" size="sm" @update:model-value="(v: boolean) => { if (!v) closeWxModal(); }">
+    <Modal v-model="wxOpen" :title="t('settings.channels.wxTitle')" size="sm" @update:model-value="(v: boolean) => { if (!v) closeWxModal(); }">
       <div class="qr-body">
         <template v-if="wxPhase === 'form'">
-          <p class="hint">用个人微信扫码登录，平台自动创建 weixin 渠道行（凭据加密落库）。</p>
+          <p class="hint">{{ t('settings.channels.wxFormHint') }}</p>
           <div class="wx-field">
-            <label class="lbl">绑定项目 <span class="req">*</span></label>
-            <Select v-model="wxProjectId" :options="projectOptions" placeholder="选择项目" />
+            <label class="lbl">{{ t('settings.channels.lblProject') }} <span class="req">*</span></label>
+            <Select v-model="wxProjectId" :options="projectOptions" :placeholder="t('settings.channels.projectPh')" />
           </div>
           <div class="wx-field">
-            <label class="lbl">默认角色（可选）</label>
+            <label class="lbl">{{ t('settings.channels.roleOptional') }}</label>
             <Select
               v-model="wxRoleId"
-              :options="[{ value: '', label: '未配（用项目默认）' }, ...roleOptions]"
+              :options="[{ value: '', label: t('settings.channels.roleNoneOption') }, ...roleOptions]"
               :disabled="!wxProjectId"
             />
           </div>
           <Button variant="primary" :loading="wxCreating" :disabled="!wxProjectId" @click="startWxLogin">
-            生成登录二维码
+            {{ t('settings.channels.genQr') }}
           </Button>
         </template>
         <template v-else-if="wxPhase === 'qr'">
           <div class="qr-svg" v-html="wxQrSvg"></div>
           <p class="hint" :class="{ 'wx-warn': wxExpired }">{{ wxStatusText }}</p>
-          <Button v-if="wxExpired" variant="primary" @click="startWxLogin">重新生成二维码</Button>
+          <Button v-if="wxExpired" variant="primary" @click="startWxLogin">{{ t('settings.channels.regenerateQr') }}</Button>
         </template>
         <template v-else>
           <p class="hint wx-ok">✅ {{ wxStatusText }}</p>
           <div v-if="wxBindCode" class="wx-bindcode-box">
-            <p class="hint">用此微信向机器人发以下消息完成绑定：</p>
+            <p class="hint">{{ t('settings.channels.bindInstruction') }}</p>
             <code class="wx-bindcode">{{ wxBindCode }}</code>
-            <Button variant="primary" size="sm" @click="copyBindCode(wxBindCode)">复制绑定码</Button>
+            <Button variant="primary" size="sm" @click="copyBindCode(wxBindCode)">{{ t('settings.channels.copyBindCodeBtn') }}</Button>
           </div>
-          <Button variant="primary" @click="closeWxModal">完成</Button>
+          <Button variant="primary" @click="closeWxModal">{{ t('settings.channels.done') }}</Button>
         </template>
       </div>
     </Modal>

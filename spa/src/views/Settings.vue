@@ -18,6 +18,7 @@
    - 维护模式 admin only, 非 admin 拿到 403 → 整块 UI 不渲染. */
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import {
   getAppConfig,
@@ -33,6 +34,7 @@ import { get, post, patch, put, del, isHttpError } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 import { useAvailableModels } from '@/composables/useAvailableModels';
 import { useProviderCatalog, type CatalogProvider } from '@/composables/useProviderCatalog';
+import { getLang, setLang, SUPPORTED_LANGS, type Lang } from '@/i18n';
 import Button from '@/components/Button.vue';
 import Input from '@/components/Input.vue';
 import Textarea from '@/components/Textarea.vue';
@@ -61,6 +63,19 @@ const isAdmin = computed<boolean>(() => auth.user?.role === 'admin');
 
 const auth = useAuthStore();
 const toast = useToast();
+const { t } = useI18n();
+
+/* ------------------------------------------------------------------ */
+/*  语言 / Language 设置 (W2a) — 读 getLang() 显当前, 切换走 setLang      */
+/* ------------------------------------------------------------------ */
+
+// 语言原生名不翻译 (每种语言显示自己的名字).
+const LANG_LABELS: Record<Lang, string> = { 'zh-CN': '简体中文', 'en-US': 'English' };
+const langOptions = SUPPORTED_LANGS.map((l) => ({ value: l, label: LANG_LABELS[l] }));
+const currentLang = computed<Lang>(() => getLang());
+function onLangChange(v: string | null): void {
+  if (v) setLang(v as Lang);
+}
 
 /* 模型下拉数据源 (configured + builtin + used) — 个人/admin LLM 编辑表单的
    Model 字段用 datalist 喂建议, 用户仍可输入自定义 model 名. 与 master
@@ -77,7 +92,7 @@ const modelStringList = computed<string[]>(() =>
 const { providers: catalogProviders, catalogUpdatedAt } = useProviderCatalog();
 
 const providerSelectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '手动填写（自定义中转 / Anthropic 官方）' },
+  { value: '', label: t('settings.llm.providerManual') },
   ...catalogProviders.value.map((p) => ({ value: p.id, label: `${p.name} · ${p.vendor}` })),
 ]);
 
@@ -163,7 +178,7 @@ async function loadConfig(showRetrying = false) {
     config.value = c;
     hydrateAppForm(c);
   } catch (e) {
-    configError.value = isHttpError(e) ? e.message : '加载失败';
+    configError.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   } finally {
     configLoading.value = false;
     configRetrying.value = false;
@@ -172,12 +187,12 @@ async function loadConfig(showRetrying = false) {
 
 function serializePortPool(): { ok: true; value: number[][] } | { ok: false; error: string } {
   const c = config.value;
-  if (!c) return { ok: false, error: '尚未加载配置' };
+  if (!c) return { ok: false, error: t('settings.sched.notLoaded') };
   if (appForm.portPoolSegments.length === 0) {
-    return { ok: false, error: '端口池至少 1 段' };
+    return { ok: false, error: t('settings.sched.minSegments') };
   }
   if (appForm.portPoolSegments.length > c.port_pool_max_segments) {
-    return { ok: false, error: `端口池最多 ${c.port_pool_max_segments} 段, 当前 ${appForm.portPoolSegments.length}` };
+    return { ok: false, error: t('settings.sched.maxSegments', { max: c.port_pool_max_segments, cur: appForm.portPoolSegments.length }) };
   }
   const portLo = c.port_pool_min;
   const portHi = c.port_pool_max;
@@ -189,7 +204,7 @@ function serializePortPool(): { ok: true; value: number[][] } | { ok: false; err
     if (!Number.isFinite(s) || !Number.isFinite(e)
       || !Number.isInteger(s) || !Number.isInteger(e)
       || s < portLo || e > portHi || s > e) {
-      return { ok: false, error: `端口池第 ${i + 1} 段非法: 需 ${portLo}-${portHi} 整数且 start≤end` };
+      return { ok: false, error: t('settings.sched.segInvalid', { idx: i + 1, lo: portLo, hi: portHi }) };
     }
     out.push([s, e]);
   }
@@ -199,7 +214,7 @@ function serializePortPool(): { ok: true; value: number[][] } | { ok: false; err
 function addPortPoolSegment() {
   if (!config.value) return;
   if (appForm.portPoolSegments.length >= config.value.port_pool_max_segments) {
-    toast.warn(`端口段最多 ${config.value.port_pool_max_segments} 段`);
+    toast.warn(t('settings.sched.maxSegmentsToast', { max: config.value.port_pool_max_segments }));
     return;
   }
   appForm.portPoolSegments.push({ start: '', end: '' });
@@ -221,18 +236,18 @@ async function saveAppConfig() {
   const concurrency = Number(concurrencyStr);
   if (concurrencyStr === '' || !Number.isInteger(concurrency)
     || concurrency < c.concurrency_min || concurrency > c.concurrency_max) {
-    appFieldErrors.concurrency = `并发数需在 ${c.concurrency_min} - ${c.concurrency_max}`;
+    appFieldErrors.concurrency = t('settings.sched.concurrencyRange', { min: c.concurrency_min, max: c.concurrency_max });
     return;
   }
   const taskTimeout = Number(taskTimeoutStr);
   if (taskTimeoutStr === '' || !Number.isInteger(taskTimeout)
     || taskTimeout < c.task_timeout_min || taskTimeout > c.task_timeout_max) {
-    appFieldErrors.task_timeout_minutes = `超时需在 ${c.task_timeout_min} - ${c.task_timeout_max} 分钟`;
+    appFieldErrors.task_timeout_minutes = t('settings.sched.timeoutRange', { min: c.task_timeout_min, max: c.task_timeout_max });
     return;
   }
   if (portPool === null || portPool.ok === false) {
     appFieldErrors.port_pool = portPool === null
-      ? '端口段格式不合法 (每段 start ≤ end 且为整数)'
+      ? t('settings.sched.portFormatInvalid')
       : portPool.error;
     return;
   }
@@ -246,7 +261,7 @@ async function saveAppConfig() {
     });
     config.value = updated;
     hydrateAppForm(updated);
-    toast.success('应用配置已保存');
+    toast.success(t('settings.sched.savedOk'));
   } catch (e) {
     if (isHttpError(e)) {
       const fe = e.fieldErrors;
@@ -255,12 +270,12 @@ async function saveAppConfig() {
           appFieldErrors[k] = v;
         }
       } else if (e.status === 403) {
-        toast.error('需要管理员权限');
+        toast.error(t('settings.sched.needAdmin'));
       } else {
         toast.error(e.message);
       }
     } else {
-      toast.error('保存失败');
+      toast.error(t('settings.common.saveFailed'));
     }
   } finally {
     appSaving.value = false;
@@ -343,7 +358,7 @@ async function loadProfile(showRetrying = false) {
     hydrateProfileForm(p);
     void loadFeishuWebhookMeta();
   } catch (e) {
-    profileError.value = isHttpError(e) ? e.message : '加载失败';
+    profileError.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   } finally {
     profileLoading.value = false;
     profileRetrying.value = false;
@@ -357,10 +372,10 @@ async function savePreflight(enabled: boolean) {
   try {
     const updated = await updateMyProfile({ preflight_enabled: enabled });
     profile.value = updated;
-    toast.success(enabled ? '已开启 preflight 自检' : '已关闭 preflight 自检');
+    toast.success(enabled ? t('settings.preflight.enabledOk') : t('settings.preflight.disabledOk'));
   } catch (e) {
     profileForm.preflight_enabled = prev;
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   } finally {
     preflightSaving.value = false;
   }
@@ -369,7 +384,7 @@ async function savePreflight(enabled: boolean) {
 async function saveNotifyEmail() {
   const trimmed = profileForm.notify_email.trim();
   if (!isValidEmail(trimmed)) {
-    toast.error('邮箱格式不正确');
+    toast.error(t('settings.notify.errEmail'));
     return;
   }
   notifySaving.value = true;
@@ -377,9 +392,9 @@ async function saveNotifyEmail() {
     const updated = await updateMyProfile({ notify_email: trimmed || null });
     profile.value = updated;
     hydrateProfileForm(updated);
-    toast.success(trimmed ? `已保存, 通知将发往 ${trimmed}` : '已清空, 通知发往系统邮箱');
+    toast.success(trimmed ? t('settings.notify.savedTo', { email: trimmed }) : t('settings.notify.clearedTo'));
   } catch (e) {
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   } finally {
     notifySaving.value = false;
   }
@@ -391,11 +406,11 @@ async function saveGitIdentity() {
   const trimmedName = profileForm.git_name.trim();
   const trimmedEmail = profileForm.git_email.trim();
   if (trimmedName && /[<>\n\r]/.test(trimmedName)) {
-    toast.error('git 用户名不能含 < > 或换行');
+    toast.error(t('settings.git.errNameChars'));
     return;
   }
   if (!isValidEmail(trimmedEmail)) {
-    toast.error('git 邮箱格式不正确');
+    toast.error(t('settings.git.errEmail'));
     return;
   }
   gitSaving.value = true;
@@ -408,9 +423,9 @@ async function saveGitIdentity() {
     hydrateProfileForm(updated);
     const effectiveEmail = updated.git_email || profile.value?.email || '';
     const effectiveName = updated.git_name || effectiveEmail.split('@')[0];
-    toast.success(`已保存, 此后 agent 提交将署名 ${effectiveName} <${effectiveEmail}>`);
+    toast.success(t('settings.git.savedWith', { name: effectiveName, email: effectiveEmail }));
   } catch (e) {
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   } finally {
     gitSaving.value = false;
   }
@@ -422,11 +437,11 @@ async function saveUserProfile() {
   const trimmedNickname = profileForm.nickname.trim();
   const trimmedBio = profileForm.bio.trim();
   if (trimmedNickname && /[\r\n]/.test(trimmedNickname)) {
-    toast.error('昵称不能含换行');
+    toast.error(t('settings.userProfile.errNicknameNewline'));
     return;
   }
   if (trimmedBio.length > 2000) {
-    toast.error('自我介绍过长 (≤2000 字符)');
+    toast.error(t('settings.userProfile.errBioTooLong'));
     return;
   }
   profileSaving.value = true;
@@ -437,9 +452,9 @@ async function saveUserProfile() {
     });
     profile.value = updated;
     hydrateProfileForm(updated);
-    toast.success(`已保存, agent 将称呼你「${updated.nickname || '用户'}」`);
+    toast.success(t('settings.userProfile.savedWithNickname', { name: updated.nickname || t('settings.userProfile.defaultNickname') }));
   } catch (e) {
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   } finally {
     profileSaving.value = false;
   }
@@ -462,12 +477,16 @@ async function handleNotifyEmailTest() {
       reason?: string;
     }>('/api/user/notify-email/test', {});
     if (res.sent) {
-      notifyMessage.value = `已发送到 ${res.to}${res.using_fallback ? ' (系统兜底邮箱)' : ''}, 请查收。SMTP 响应: ${res.response || '已接受'}`;
+      notifyMessage.value = t('settings.notify.sentOk', {
+        to: res.to,
+        fallback: res.using_fallback ? t('settings.notify.sentFallback') : '',
+        resp: res.response || t('settings.notify.respDefault'),
+      });
     } else {
-      notifyMessage.value = `未发送: ${res.reason || '未知原因'}`;
+      notifyMessage.value = t('settings.notify.notSent', { reason: res.reason || t('settings.notify.unknownReason') });
     }
   } catch (e) {
-    notifyMessage.value = `发送失败: ${getErrorMsg(e, '')}`;
+    notifyMessage.value = t('settings.notify.sendFailed', { msg: getErrorMsg(e, '') });
   } finally {
     notifyTesting.value = false;
   }
@@ -476,7 +495,7 @@ async function handleNotifyEmailTest() {
 async function saveFeishuWebhook() {
   const trimmed = profileForm.feishu_webhook_url.trim();
   if (!isValidFeishuWebhook(trimmed)) {
-    toast.error('Webhook URL 不合法 (需以 https://open.feishu.cn/hook/ 开头)');
+    toast.error(t('settings.feishu.errUrl'));
     return;
   }
   feishuSaving.value = true;
@@ -484,9 +503,9 @@ async function saveFeishuWebhook() {
     const updated = await updateMyProfile({ feishu_webhook_url: trimmed || null });
     profile.value = updated;
     hydrateProfileForm(updated);
-    toast.success(trimmed ? '已保存飞书 webhook' : '已清空飞书 webhook');
+    toast.success(trimmed ? t('settings.feishu.savedOk') : t('settings.feishu.clearedOk'));
   } catch (e) {
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   } finally {
     feishuSaving.value = false;
   }
@@ -534,7 +553,7 @@ async function handleFeishuWebhookTest() {
       try {
         parsed = JSON.parse(feishuPostContent.value);
       } catch {
-        feishuWebhookMessage.value = 'post.content JSON 解析失败, 请检查 textarea —— 用 [[{tag,text},{tag:"a",text,href},...],...] 二维数组格式';
+        feishuWebhookMessage.value = t('settings.feishu.parseFail');
         feishuWebhookTesting.value = false;
         return;
       }
@@ -550,12 +569,15 @@ async function handleFeishuWebhookTest() {
       reason?: string;
     }>('/api/user/notify-feishu/test', reqBody);
     if (res.sent) {
-      feishuWebhookMessage.value = `已发送到 ${res.masked_url || '飞书群'}, 请查收。HTTP 状态: ${res.status || '已接受'}`;
+      feishuWebhookMessage.value = t('settings.feishu.sentOk', {
+        to: res.masked_url || t('settings.feishu.groupDefault'),
+        status: res.status || t('settings.feishu.statusDefault'),
+      });
     } else {
-      feishuWebhookMessage.value = `未发送: ${res.reason || '未知原因'}`;
+      feishuWebhookMessage.value = t('settings.notify.notSent', { reason: res.reason || t('settings.notify.unknownReason') });
     }
   } catch (e) {
-    feishuWebhookMessage.value = `发送失败: ${getErrorMsg(e, '')}`;
+    feishuWebhookMessage.value = t('settings.notify.sendFailed', { msg: getErrorMsg(e, '') });
   } finally {
     feishuWebhookTesting.value = false;
   }
@@ -585,14 +607,15 @@ interface SoundSettings {
   events: Record<SoundEventKey, boolean>;
 }
 
-const SOUND_EVENT_OPTIONS: { key: SoundEventKey; label: string; desc: string }[] = [
-  { key: 'tool_approval', label: '工具审批', desc: 'agent 请求工具权限时' },
-  { key: 'user_dialog', label: '用户对话', desc: 'agent 向你提问时' },
-  { key: 'reviewing', label: '进入 review', desc: '任务进入评审态时' },
-  { key: 'failed', label: '失败', desc: '任务失败时' },
-  { key: 'paused', label: '挂起 (自动)', desc: 'agent 自动暂停任务时' },
-  { key: 'queued', label: '排队', desc: '任务进入排队时' },
-  { key: 'cancelled', label: '取消', desc: '任务被取消时' },
+/* label/desc 存 i18n key, 模板里 t() 翻译 (语言切换即时生效) */
+const SOUND_EVENT_OPTIONS: { key: SoundEventKey; labelKey: string; descKey: string }[] = [
+  { key: 'tool_approval', labelKey: 'settings.sound.ev.toolApproval.label', descKey: 'settings.sound.ev.toolApproval.desc' },
+  { key: 'user_dialog', labelKey: 'settings.sound.ev.userDialog.label', descKey: 'settings.sound.ev.userDialog.desc' },
+  { key: 'reviewing', labelKey: 'settings.sound.ev.reviewing.label', descKey: 'settings.sound.ev.reviewing.desc' },
+  { key: 'failed', labelKey: 'settings.sound.ev.failed.label', descKey: 'settings.sound.ev.failed.desc' },
+  { key: 'paused', labelKey: 'settings.sound.ev.paused.label', descKey: 'settings.sound.ev.paused.desc' },
+  { key: 'queued', labelKey: 'settings.sound.ev.queued.label', descKey: 'settings.sound.ev.queued.desc' },
+  { key: 'cancelled', labelKey: 'settings.sound.ev.cancelled.label', descKey: 'settings.sound.ev.cancelled.desc' },
 ];
 
 const SOUND_DEFAULTS: SoundSettings = {
@@ -716,7 +739,7 @@ const createdToken = ref<string | null>(null);
 function copyCreatedToken() {
   if (!createdToken.value) return;
   navigator.clipboard?.writeText(createdToken.value).catch(() => {
-    toast.error('复制失败, 请手动选中');
+    toast.error(t('settings.common.copyFailedManual'));
   });
 }
 const tokenSaving = ref<boolean>(false);
@@ -737,7 +760,7 @@ async function loadApiTokens() {
     const data = await get<{ tokens: ApiToken[] }>('/api/api-tokens');
     apiTokens.value = data.tokens;
   } catch (e) {
-    apiTokensError.value = isHttpError(e) ? e.message : '加载失败';
+    apiTokensError.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   } finally {
     apiTokensLoading.value = false;
   }
@@ -746,7 +769,7 @@ async function loadApiTokens() {
 async function handleCreateApiToken() {
   const name = newTokenName.value.trim();
   if (!name) {
-    tokenMessage.value = '请输入 Token 名称';
+    tokenMessage.value = t('settings.token.nameRequired');
     return;
   }
   tokenSaving.value = true;
@@ -756,25 +779,25 @@ async function handleCreateApiToken() {
     createdToken.value = res.token;
     newTokenName.value = '';
     await loadApiTokens();
-    tokenMessage.value = '✅ Token 已创建 (明文仅显示一次)';
+    tokenMessage.value = t('settings.token.createdMsg');
   } catch (e) {
-    tokenMessage.value = isHttpError(e) ? e.message : '创建失败';
+    tokenMessage.value = isHttpError(e) ? e.message : t('settings.token.createFailed');
   } finally {
     tokenSaving.value = false;
   }
 }
 
 async function handleDeleteApiToken(id: string, name: string) {
-  if (!confirm(`确定删除 Token「${name}」？删除后 JWT 在轮换 JWT_SECRET 前仍有效。`)) return;
+  if (!confirm(t('settings.token.deleteConfirm', { name }))) return;
   tokenSaving.value = true;
   tokenMessage.value = null;
   try {
     await del(`/api/api-tokens/${id}`);
     await loadApiTokens();
     selectedTokenIds.value.delete(id);
-    tokenMessage.value = '✅ 已删除';
+    tokenMessage.value = t('settings.common.deleted');
   } catch (e) {
-    tokenMessage.value = isHttpError(e) ? e.message : '删除失败';
+    tokenMessage.value = isHttpError(e) ? e.message : t('settings.common.deleteFailed');
   } finally {
     tokenSaving.value = false;
   }
@@ -815,8 +838,8 @@ async function handleBatchDeleteApiTokens() {
     (id) => filteredTokens.value.find((t) => t.id === id)?.name === 'switch-account',
   );
   const message = includesSwitch
-    ? `确定批量删除 ${targetIds.length} 个 token？其中包含 switch-account（删除后下次登录会自动重建）。`
-    : `确定批量删除 ${targetIds.length} 个 token？`;
+    ? t('settings.token.batchDeleteConfirmSwitch', { n: targetIds.length })
+    : t('settings.token.batchDeleteConfirm', { n: targetIds.length });
   if (!confirm(message)) return;
 
   tokenSaving.value = true;
@@ -828,9 +851,9 @@ async function handleBatchDeleteApiTokens() {
     );
     selectedTokenIds.value = new Set();
     await loadApiTokens();
-    tokenMessage.value = `✅ 已删除 ${res.deleted} / ${res.requested}`;
+    tokenMessage.value = t('settings.token.batchDeleted', { deleted: res.deleted, requested: res.requested });
   } catch (e) {
-    tokenMessage.value = isHttpError(e) ? e.message : '批量删除失败';
+    tokenMessage.value = isHttpError(e) ? e.message : t('settings.common.deleteFailed');
   } finally {
     tokenSaving.value = false;
   }
@@ -860,7 +883,7 @@ async function loadMediaKey() {
     mediaKey.value = await get<MediaKeyInfo>('/api/user/media-key');
     if (mediaKey.value?.region) regionInput.value = mediaKey.value.region;
   } catch (e) {
-    mediaMessage.value = isHttpError(e) ? e.message : '加载失败';
+    mediaMessage.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   }
 }
 
@@ -874,27 +897,27 @@ async function handleMediaKeySave() {
     if (mediaKeyInput.value) body.api_key = mediaKeyInput.value;
     /* 后端 route 只导 GET/PUT/DELETE, 没有 POST — 用 put 而非 post (R56-B5 修复) */
     await put('/api/user/media-key', body);
-    mediaMessage.value = '✅ 已保存';
+    mediaMessage.value = t('settings.common.saved');
     mediaKeyInput.value = '';
     showMediaKeyInput.value = false;
     await loadMediaKey();
   } catch (e) {
-    mediaMessage.value = isHttpError(e) ? e.message : '保存失败';
+    mediaMessage.value = isHttpError(e) ? e.message : t('settings.common.saveFailed');
   } finally {
     mediaSaving.value = false;
   }
 }
 
 async function handleClearMediaKey() {
-  if (!confirm('确定清除多模态 API Key？')) return;
+  if (!confirm(t('settings.media.clearConfirm'))) return;
   mediaSaving.value = true;
   try {
     /* 后端 route 只导 GET/PUT/DELETE, 没有 POST — 用 put (R56-B5 修复) */
     await put('/api/user/media-key', { clear_api_key: true, region: regionInput.value });
-    mediaMessage.value = '✅ 已清除';
+    mediaMessage.value = t('settings.media.cleared');
     await loadMediaKey();
   } catch (e) {
-    mediaMessage.value = isHttpError(e) ? e.message : '清除失败';
+    mediaMessage.value = isHttpError(e) ? e.message : t('settings.media.clearFailed');
   } finally {
     mediaSaving.value = false;
   }
@@ -904,17 +927,17 @@ async function handleClearMediaKey() {
    关注点: 与「清除」不同, 删除会清掉整条 user_media_keys 记录 + 清 mmx 配置目录,
    后续 agent 进程拿不到 media key. 仅在用户明确想彻底下掉时用. */
 async function handleDeleteMediaKey() {
-  if (!confirm('确定删除多模态 API Key 配置？删除后 agent 任务中将无法使用 mmx-cli 生成图片/视频/音乐。')) return;
+  if (!confirm(t('settings.media.deleteConfirm'))) return;
   mediaSaving.value = true;
   mediaMessage.value = null;
   try {
     await del('/api/user/media-key');
-    mediaMessage.value = '✅ 多模态 API Key 已删除';
+    mediaMessage.value = t('settings.media.deleted');
     await loadMediaKey();
     mediaKeyInput.value = '';
     showMediaKeyInput.value = false;
   } catch (e) {
-    mediaMessage.value = isHttpError(e) ? e.message : '删除失败';
+    mediaMessage.value = isHttpError(e) ? e.message : t('settings.common.deleteFailed');
   } finally {
     mediaSaving.value = false;
   }
@@ -928,9 +951,9 @@ async function handleTestMediaKey() {
       '/api/user/media-key/test',
       {},
     );
-    mediaMessage.value = res.ok ? `✅ ${res.quota ?? '通过'}` : `❌ ${res.error ?? '失败'}`;
+    mediaMessage.value = res.ok ? t('settings.media.testOk', { msg: res.quota ?? t('settings.media.testDefault') }) : t('settings.media.testFail', { msg: res.error ?? t('settings.media.testFailDefault') });
   } catch (e) {
-    mediaMessage.value = isHttpError(e) ? e.message : '测试失败';
+    mediaMessage.value = isHttpError(e) ? e.message : t('settings.media.testFailed');
   } finally {
     mediaTesting.value = false;
   }
@@ -997,7 +1020,7 @@ async function loadMaintenance() {
     if (isHttpError(e) && e.status === 403) {
       maintenance.value = null; // 非 admin, 不渲染
     } else {
-      maintenanceError.value = isHttpError(e) ? e.message : '加载失败';
+      maintenanceError.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
     }
   } finally {
     maintenanceLoading.value = false;
@@ -1005,25 +1028,25 @@ async function loadMaintenance() {
 }
 
 async function handleEnterMaintenance() {
-  const reason = prompt('进入维护模式的原因（可选）:');
+  const reason = prompt(t('settings.maint.reasonPrompt'));
   if (reason === null) return;
   try {
     await post('/api/admin/maintenance/enter', { reason: reason || null });
     await loadMaintenance();
-    toast.success('已进入维护模式');
+    toast.success(t('settings.maint.enteredOk'));
   } catch (e) {
-    toast.error(getErrorMsg(e, '进入维护模式失败'));
+    toast.error(getErrorMsg(e, t('settings.maint.enterFailed')));
   }
 }
 
 async function handleExitMaintenance() {
-  if (!confirm('确定退出维护模式？挂起的任务将自动恢复。')) return;
+  if (!confirm(t('settings.maint.exitConfirm'))) return;
   try {
     await post('/api/admin/maintenance/exit');
     await loadMaintenance();
-    toast.success('已退出维护模式');
+    toast.success(t('settings.maint.exitedOk'));
   } catch (e) {
-    toast.error(getErrorMsg(e, '退出维护模式失败'));
+    toast.error(getErrorMsg(e, t('settings.maint.exitFailed')));
   }
 }
 
@@ -1082,7 +1105,7 @@ async function loadQuotaUsers() {
     quotaTotal.value = typeof data.total === 'number' ? data.total : 0;
   } catch (e) {
     if (!(isHttpError(e) && e.status === 403)) {
-      quotaMessage.value = getErrorMsg(e, '加载账号配额失败');
+      quotaMessage.value = getErrorMsg(e, t('settings.quotaAdmin.loadFailed'));
     }
   }
 }
@@ -1111,7 +1134,7 @@ async function fetchQuotaLog(userId: string) {
       [userId]: data.log || [],
     };
   } catch (e) {
-    quotaMessage.value = `❌ 拉变更历史失败: ${getErrorMsg(e, '')}`;
+    quotaMessage.value = t('settings.quotaAdmin.logFailed', { msg: getErrorMsg(e, '') });
   }
 }
 
@@ -1128,10 +1151,10 @@ async function saveQuota(
   quotaMessage.value = null;
   try {
     await patch(`/api/admin/users/${userId}`, body);
-    quotaMessage.value = `✅ 已更新 ${userId.slice(0, 8)} 的配额`;
+    quotaMessage.value = t('settings.quotaAdmin.updatedOk', { id: userId.slice(0, 8) });
     await loadQuotaUsers();
   } catch (e) {
-    quotaMessage.value = `❌ ${getErrorMsg(e, '保存失败')}`;
+    quotaMessage.value = `❌ ${getErrorMsg(e, t('settings.common.saveFailed'))}`;
   } finally {
     quotaSaving.value = { ...quotaSaving.value, [userId]: false };
   }
@@ -1168,7 +1191,7 @@ function onExpireAtBlur(user: UserWithQuota, raw: string) {
   const trimmed = raw.trim();
   const next: string | null = trimmed === '' ? null : trimmed;
   if (next !== null && !Number.isFinite(Date.parse(next))) {
-    quotaMessage.value = `❌ 日期格式不对: ${next}`;
+    quotaMessage.value = t('settings.quotaAdmin.invalidDate', { date: next });
     return;
   }
   if (next === user.quota_expire_at) return;
@@ -1272,12 +1295,12 @@ function fillPriceInput(v: number | null | undefined): string {
   return v != null ? String(v) : '';
 }
 const MAX_FALLBACK_ENTRIES = 5;
-/** R175: 视觉能力三态下拉选项 (Select 组件 value 是 string) */
-const visionSelectOptions = [
-  { value: 'unset', label: '未设置（按模型名推断）' },
-  { value: 'yes', label: '👁 支持视觉' },
-  { value: 'no', label: '🚫 不支持视觉' },
-];
+/** R175: 视觉能力三态下拉选项 (Select 组件 value 是 string); label 走 t() 随语言切换 */
+const visionSelectOptions = computed(() => [
+  { value: 'unset', label: t('settings.llm.visionUnset') },
+  { value: 'yes', label: t('settings.llm.visionYes') },
+  { value: 'no', label: t('settings.llm.visionNo') },
+]);
 const llmVisionSelect = computed<string | null>({
   get: () => (llmDraft.supports_vision === true ? 'yes' : llmDraft.supports_vision === false ? 'no' : 'unset'),
   set: (v) => {
@@ -1304,7 +1327,7 @@ function visionBadge(v: boolean | null): string {
 }
 /** R239: 系数列文案 — 基准模型显「基准」，没配价/没设基准显「—」 */
 function coefficientLabel(cfg: { id: string; coefficient: number | null }, baselineId: string | null): string {
-  if (baselineId && cfg.id === baselineId) return '基准 ×1';
+  if (baselineId && cfg.id === baselineId) return t('settings.llm.baselineCoef');
   return cfg.coefficient != null ? `×${cfg.coefficient.toFixed(2)}` : '—';
 }
 const llmSaving = ref<boolean>(false);
@@ -1322,7 +1345,7 @@ async function loadLlmConfigs() {
   } catch (e) {
     // 用户没配过 / 后端 401 都静默 (老账号路径) —— 不阻断设置页其它卡片
     if (isHttpError(e) && (e.status === 401 || e.status === 404)) return;
-    llmMessage.value = getErrorMsg(e, '加载 LLM 配置失败');
+    llmMessage.value = getErrorMsg(e, t('settings.llm.loadFailed'));
   }
 }
 
@@ -1386,15 +1409,15 @@ async function handleLlmSave() {
     } else if (editingLlmId.value) {
       await put(`/api/user/llm-config/${editingLlmId.value}`, body);
     } else {
-      llmMessage.value = '无正在编辑的配置';
+      llmMessage.value = t('settings.llm.noneEditing');
       llmSaving.value = false;
       return;
     }
-    llmMessage.value = '✅ 已保存';
+    llmMessage.value = t('settings.common.saved');
     cancelEditLlm();
     await loadLlmConfigs();
   } catch (e) {
-    llmMessage.value = isHttpError(e) ? e.message : '保存失败';
+    llmMessage.value = isHttpError(e) ? e.message : t('settings.common.saveFailed');
   } finally {
     llmSaving.value = false;
   }
@@ -1405,10 +1428,10 @@ async function handleDuplicateLlmConfig(id: string, name: string) {
   llmMessage.value = null;
   try {
     const data = await post<{ name?: string }>(`/api/user/llm-config/${id}/duplicate`, {});
-    llmMessage.value = `✅ 已拷贝为「${data.name ?? name + ' - 拷贝'}」`;
+    llmMessage.value = t('settings.llm.dupOk', { name: data.name ?? t('settings.llm.copySuffix', { name }) });
     await loadLlmConfigs();
   } catch (e) {
-    llmMessage.value = isHttpError(e) ? e.message : '拷贝失败';
+    llmMessage.value = isHttpError(e) ? e.message : t('settings.llm.dupFailed');
   } finally {
     llmSaving.value = false;
   }
@@ -1416,19 +1439,19 @@ async function handleDuplicateLlmConfig(id: string, name: string) {
 
 async function handleCopyLlmConfigText(cfg: LlmConfigSafe) {
   const lines = [
-    `名称: ${cfg.name}`,
-    `Base URL: ${cfg.base_url || '(默认)'}`,
-    `Model: ${cfg.model || '(默认)'}`,
-    `API Key: ${cfg.has_api_key ? cfg.api_key_masked : '(未配)'}`,
-    `类型: ${cfg.type}`,
-    `单价: ${cfg.price_in ?? '—'} / ${cfg.price_out ?? '—'} / ${cfg.price_cache_read ?? '—'} USD每百万token (入/出/缓存读)`,
-    cfg.is_default ? '状态: 默认' : '状态: 普通',
+    t('settings.llm.lineName', { name: cfg.name }),
+    t('settings.llm.lineBaseUrl', { value: cfg.base_url || t('settings.llm.valueDefault') }),
+    t('settings.llm.lineModel', { value: cfg.model || t('settings.llm.valueDefault') }),
+    t('settings.llm.lineKey', { value: cfg.has_api_key ? cfg.api_key_masked : t('settings.llm.valueNotSet') }),
+    t('settings.llm.lineType', { type: cfg.type }),
+    t('settings.llm.linePrice', { pin: cfg.price_in ?? '—', pout: cfg.price_out ?? '—', pcache: cfg.price_cache_read ?? '—' }),
+    cfg.is_default ? t('settings.llm.statusDefault') : t('settings.llm.statusNormal'),
   ];
   try {
     await navigator.clipboard.writeText(lines.join('\n'));
-    llmMessage.value = `✅ 已复制「${cfg.name}」到剪贴板`;
+    llmMessage.value = t('settings.llm.copiedMsg', { name: cfg.name });
   } catch (err) {
-    llmMessage.value = `❌ 复制失败: ${(err as Error).message}`;
+    llmMessage.value = t('settings.llm.copyFailedMsg', { msg: (err as Error).message });
   }
 }
 
@@ -1437,26 +1460,26 @@ async function handleSetLlmDefault(id: string) {
   llmMessage.value = null;
   try {
     await post(`/api/user/llm-config/${id}/default`, {});
-    llmMessage.value = '✅ 已设为默认';
+    llmMessage.value = t('settings.llm.setDefaultOk');
     await loadLlmConfigs();
   } catch (e) {
-    llmMessage.value = isHttpError(e) ? e.message : '设置失败';
+    llmMessage.value = isHttpError(e) ? e.message : t('settings.common.saveFailed');
   } finally {
     llmSaving.value = false;
   }
 }
 
 function handleDeleteLlmConfig(id: string, name: string) {
-  if (!confirm(`确定删除「${name}」？删除后回落到平台默认 LLM 配置。`)) return;
+  if (!confirm(t('settings.llm.deleteConfirm', { name }))) return;
   void (async () => {
     llmSaving.value = true;
     llmMessage.value = null;
     try {
       await del(`/api/user/llm-config/${id}`);
-      llmMessage.value = '✅ 已删除';
+      llmMessage.value = t('settings.common.deleted');
       await loadLlmConfigs();
     } catch (e) {
-      llmMessage.value = isHttpError(e) ? e.message : '删除失败';
+      llmMessage.value = isHttpError(e) ? e.message : t('settings.common.deleteFailed');
     } finally {
       llmSaving.value = false;
     }
@@ -1579,10 +1602,10 @@ async function handleSetBaseline(id: string | null): Promise<void> {
   adminLlmSaving.value = true;
   try {
     await post('/api/admin/llm-config/baseline', { config_id: id });
-    toast.success(id ? '已设为成本基准' : '已清除成本基准');
+    toast.success(id ? t('settings.adminLlm.setBaselineOk') : t('settings.adminLlm.clearBaselineOk'));
     await loadAdminLlm();
   } catch (e: unknown) {
-    toast.error(getErrorMsg(e, '设置成本基准失败'));
+    toast.error(getErrorMsg(e, t('settings.adminLlm.setBaselineFailed')));
   } finally {
     adminLlmSaving.value = false;
   }
@@ -1612,7 +1635,7 @@ async function loadAdminLlm(): Promise<void> {
     adminLlmConfigs.value = Array.isArray(configs) ? configs : [];
     costBaselineId.value = baseline_id ?? null;
   } catch (e: unknown) {
-    adminLlmMessage.value = isHttpError(e) ? e.message : '加载失败';
+    adminLlmMessage.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   } finally {
     adminLlmLoading.value = false;
   }
@@ -1677,11 +1700,11 @@ async function saveAdminLlm(): Promise<void> {
     } else {
       return;
     }
-    adminLlmMessage.value = '✅ 已保存';
+    adminLlmMessage.value = t('settings.common.saved');
     editingAdminLlmId.value = null;
     await loadAdminLlm();
   } catch (e: unknown) {
-    adminLlmMessage.value = getErrorMsg(e, '保存失败');
+    adminLlmMessage.value = getErrorMsg(e, t('settings.common.saveFailed'));
   } finally {
     adminLlmSaving.value = false;
   }
@@ -1693,7 +1716,7 @@ async function handleAdminLlmDefault(id: string): Promise<void> {
     await post(`/api/admin/llm-config/${id}/default`);
     await loadAdminLlm();
   } catch (e: unknown) {
-    adminLlmMessage.value = getErrorMsg(e, '设为默认失败');
+    adminLlmMessage.value = getErrorMsg(e, t('settings.adminLlm.setDefaultFailed'));
   } finally {
     adminLlmSaving.value = false;
   }
@@ -1703,10 +1726,10 @@ async function handleAdminLlmDuplicate(id: string, name: string): Promise<void> 
   adminLlmSaving.value = true;
   try {
     await post(`/api/admin/llm-config/${id}/duplicate`);
-    toast.success(`已拷贝「${name}」`);
+    toast.success(t('settings.adminLlm.dupOk', { name }));
     await loadAdminLlm();
   } catch (e: unknown) {
-    toast.error(getErrorMsg(e, '拷贝失败'));
+    toast.error(getErrorMsg(e, t('settings.llm.dupFailed')));
   } finally {
     adminLlmSaving.value = false;
   }
@@ -1725,21 +1748,21 @@ async function handleAdminLlmCopyText(cfg: AdminLlmConfig): Promise<void> {
   }, null, 2);
   try {
     await navigator.clipboard.writeText(text);
-    toast.success('已复制到剪贴板');
+    toast.success(t('settings.common.copiedOk'));
   } catch {
-    toast.error('复制失败 (浏览器权限?)');
+    toast.error(t('settings.common.copyFailedManual'));
   }
 }
 
 async function handleAdminLlmDelete(id: string, name: string): Promise<void> {
-  if (!confirm(`确认删除平台 LLM 配置「${name}」?`)) return;
+  if (!confirm(t('settings.adminLlm.deleteConfirm', { name }))) return;
   adminLlmSaving.value = true;
   try {
     await del(`/api/admin/llm-config/${id}`);
-    toast.success(`已删除「${name}」`);
+    toast.success(t('settings.adminLlm.deletedOk', { name }));
     await loadAdminLlm();
   } catch (e: unknown) {
-    toast.error(getErrorMsg(e, '删除失败'));
+    toast.error(getErrorMsg(e, t('settings.common.deleteFailed')));
   } finally {
     adminLlmSaving.value = false;
   }
@@ -1789,7 +1812,7 @@ async function loadGrants(): Promise<void> {
     const { users } = await get<{ users: UserGrant[] }>('/api/admin/llm-grants');
     grants.value = Array.isArray(users) ? users : [];
   } catch (e: unknown) {
-    grantsMessage.value = isHttpError(e) ? e.message : '加载失败';
+    grantsMessage.value = isHttpError(e) ? e.message : t('settings.common.loadFailed');
   } finally {
     grantsLoading.value = false;
   }
@@ -1801,7 +1824,7 @@ async function handleGrantToggle(userId: string, enabled: boolean): Promise<void
     await put('/api/admin/llm-grants', { user_id: userId, enabled });
     await loadGrants();
   } catch (e: unknown) {
-    toast.error(getErrorMsg(e, '授权切换失败'));
+    toast.error(getErrorMsg(e, t('settings.grants.toggleFailed')));
   } finally {
     grantsSaving.value = false;
   }
@@ -1815,7 +1838,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
     const n = Number(trimmed);
     if (!Number.isInteger(n) || n < 1 || n > 10) {
       concurrencyStatus[userId] = 'error';
-      toast.error('并发上限需为 1-10 整数, 留空不限');
+      toast.error(t('settings.grants.concurrencyInvalid'));
       return;
     }
     val = n;
@@ -1830,16 +1853,16 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
     }, 1500);
   } catch (e: unknown) {
     concurrencyStatus[userId] = 'error';
-    toast.error(getErrorMsg(e, '保存失败'));
+    toast.error(getErrorMsg(e, t('settings.common.saveFailed')));
   }
 }
 </script>
 
 <template>
   <div class="settings-page">
-    <h1 class="page-title">设置</h1>
+    <h1 class="page-title">{{ t('settings.title') }}</h1>
     <p class="muted small page-subtitle">
-      通用设置 — 账户 / 通知 / 调度 / 平台管理 (admin)
+      {{ t('settings.subtitle') }}
     </p>
 
     <!-- Tab 导航 -->
@@ -1849,38 +1872,38 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
         class="tab-btn"
         :class="{ active: activeTab === 'account' }"
         @click="activeTab = 'account'"
-      >账户</button>
+      >{{ t('settings.tabs.account') }}</button>
       <button
         type="button"
         class="tab-btn"
         :class="{ active: activeTab === 'notify' }"
         @click="activeTab = 'notify'"
-      >通知</button>
+      >{{ t('settings.tabs.notify') }}</button>
       <button
         type="button"
         class="tab-btn"
         :class="{ active: activeTab === 'schedule' }"
         @click="activeTab = 'schedule'"
-      >调度</button>
+      >{{ t('settings.tabs.schedule') }}</button>
       <button
         type="button"
         class="tab-btn"
         :class="{ active: activeTab === 'roles' }"
         @click="activeTab = 'roles'"
-      >角色</button>
+      >{{ t('settings.tabs.roles') }}</button>
       <button
         type="button"
         class="tab-btn"
         :class="{ active: activeTab === 'channels' }"
         @click="activeTab = 'channels'"
-      >渠道</button>
+      >{{ t('settings.tabs.channels') }}</button>
       <button
         v-if="showPlatformTab"
         type="button"
         class="tab-btn"
         :class="{ active: activeTab === 'platform' }"
         @click="activeTab = 'platform'"
-      >平台管理</button>
+      >{{ t('settings.tabs.platform') }}</button>
     </div>
 
     <!-- R56-B5: admin 跳转 banner (admin only, 不在 platform tab 时显示).
@@ -1897,8 +1920,8 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
     >
       <span class="banner-icon">🚀</span>
       <span class="banner-text">
-        你是管理员，平台 LLM 配置 / 用户授权 / 账号配额 在
-        <strong>「平台管理」</strong> tab 里
+        {{ t('settings.banner.pre') }}
+        <strong>「{{ t('settings.tabs.platform') }}」</strong> {{ t('settings.banner.post') }}
       </span>
       <span class="banner-cta">→</span>
     </div>
@@ -1907,37 +1930,56 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
     <!--  Tab: 账户 (account)                                              -->
     <!-- ============================================================== -->
     <div v-show="activeTab === 'account'" class="tab-panel">
+      <!-- 语言 / Language (W2a) -->
+      <section class="card section-card">
+        <div class="section-head">
+          <h2 class="section-title">{{ t('settings.lang.title') }}</h2>
+        </div>
+
+        <div class="form-block">
+          <div class="form-row">
+            <label class="form-label">{{ t('settings.lang.label') }}</label>
+            <Select
+              :model-value="currentLang"
+              :options="langOptions"
+              @update:model-value="onLangChange"
+            />
+            <span class="form-aside">{{ t('settings.lang.desc') }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- 身份 -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">👤 身份</h2>
+          <h2 class="section-title">{{ t('settings.identity.title') }}</h2>
         </div>
 
-        <Loading v-if="profileLoading && !profile" label="加载账号信息…" />
+        <Loading v-if="profileLoading && !profile" :label="t('settings.identity.loading')" />
         <ErrorView
           v-else-if="profileError"
           variant="error"
-          title="加载账号信息失败"
+          :title="t('settings.identity.loadFailed')"
           :description="profileError"
           :retrying="profileRetrying"
           @retry="loadProfile(true)"
         />
-        <Empty v-else-if="!profile" variant="doc" title="暂无账号信息" />
+        <Empty v-else-if="!profile" variant="doc" :title="t('settings.identity.empty')" />
 
         <div v-else class="kv-block">
           <div class="kv-row">
-            <span class="kv-key">邮箱</span>
+            <span class="kv-key">{{ t('settings.identity.email') }}</span>
             <span class="kv-val mono">{{ profile.email }}</span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">角色</span>
+            <span class="kv-key">{{ t('settings.identity.role') }}</span>
             <span class="kv-val">
               <span
                 class="role-chip"
                 :class="profile.role === 'admin' ? 'admin' : 'user'"
               >{{ profile.role }}</span>
               <span v-if="profile.admin_llm_granted" class="badge badge-info small">
-                已授权平台 LLM
+                {{ t('settings.identity.grantedBadge') }}
               </span>
             </span>
           </div>
@@ -1947,28 +1989,28 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 用户身份: 昵称 + 自我介绍 (v518, 飞书 R222) -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🪪 用户身份（agent 视角）</h2>
-          <span class="badge badge-info">账号级 · 注入此后所有任务的 agent 上下文</span>
+          <h2 class="section-title">{{ t('settings.userProfile.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.userProfile.badge') }}</span>
         </div>
 
         <div v-if="profile" class="form-block">
           <div class="form-row">
             <label for="user-nickname" class="form-label">
-              昵称
-              <span class="form-hint">(留空 = agent 称呼「用户」)</span>
+              {{ t('settings.userProfile.nickname') }}
+              <span class="form-hint">{{ t('settings.userProfile.nicknameHint') }}</span>
             </label>
             <Input
               id="user-nickname"
               v-model="profileForm.nickname"
               :disabled="profileSaving"
-              placeholder="用户"
+              :placeholder="t('settings.userProfile.nicknamePlaceholder')"
               class-name="form-input-md"
             />
           </div>
           <div class="form-row">
             <label for="user-bio" class="form-label">
-              自我介绍
-              <span class="form-hint">(留空 = 省略; 你是谁、喜好、忌讳等)</span>
+              {{ t('settings.userProfile.bio') }}
+              <span class="form-hint">{{ t('settings.userProfile.bioHint') }}</span>
             </label>
             <Textarea
               id="user-bio"
@@ -1977,17 +2019,16 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               :rows="3"
               :maxlength="2000"
               show-count
-              placeholder="例: 叫我老王; 偏好 terse 风格汇报; 讨论技术时直接给结论…"
+              :placeholder="t('settings.userProfile.bioPlaceholder')"
             />
           </div>
 
           <p class="muted small form-aside">
-            agent 每个任务会话开头会收到这段身份 (每会话一次, 不逐轮重复)。参考 OpenClaw
-            USER.md 的「About Your Human」设计。不配置时 agent 默认称呼「用户」。
+            {{ t('settings.userProfile.aside') }}
           </p>
           <div class="form-actions">
             <Button variant="primary" :loading="profileSaving" @click="saveUserProfile">
-              保存用户身份
+              {{ t('settings.userProfile.save') }}
             </Button>
           </div>
         </div>
@@ -1996,18 +2037,18 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- Preflight -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">⚡ 任务启动前自检 (Preflight)</h2>
+          <h2 class="section-title">{{ t('settings.preflight.title') }}</h2>
         </div>
 
         <div v-if="profile" class="form-block">
           <Checkbox
             :model-value="profileForm.preflight_enabled"
             :disabled="preflightSaving"
-            label="开启 preflight 自检 (推荐)"
+            :label="t('settings.preflight.label')"
             @update:model-value="savePreflight"
           />
           <p class="muted small form-aside">
-            开启后, 任务启动前会先做环境检查 (git/Node/依赖), 减少失败率。
+            {{ t('settings.preflight.aside') }}
           </p>
         </div>
       </section>
@@ -2015,28 +2056,28 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- Git 提交身份 (v515, 飞书 R178) -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🌿 Git 提交身份</h2>
-          <span class="badge badge-info">账号级 · 影响此后所有任务的 git commit</span>
+          <h2 class="section-title">{{ t('settings.git.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.git.badge') }}</span>
         </div>
 
         <div v-if="profile" class="form-block">
           <div class="form-row">
             <label for="user-git-name" class="form-label">
-              用户名 (user.name)
-              <span class="form-hint">(留空 = 邮箱前缀)</span>
+              {{ t('settings.git.nameLabel') }}
+              <span class="form-hint">{{ t('settings.git.nameHint') }}</span>
             </label>
             <Input
               id="user-git-name"
               v-model="profileForm.git_name"
               :disabled="gitSaving"
-              placeholder="(账号邮箱前缀)"
+              :placeholder="t('settings.git.namePlaceholder')"
               class-name="form-input-md"
             />
           </div>
           <div class="form-row">
             <label for="user-git-email" class="form-label">
-              邮箱 (user.email)
-              <span class="form-hint">(留空 = 账号邮箱)</span>
+              {{ t('settings.git.emailLabel') }}
+              <span class="form-hint">{{ t('settings.git.emailHint') }}</span>
             </label>
             <Input
               id="user-git-email"
@@ -2053,19 +2094,21 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               />
               {{
                 profile.git_email || profile.git_name
-                  ? `已自定义: ${(profile.git_name || (profile.git_email || profile.email).split('@')[0])} <${profile.git_email || profile.email}>`
-                  : `默认: ${profile.email.split('@')[0]} <${profile.email}>`
+                  ? t('settings.git.customized', {
+                    name: profile.git_name || (profile.git_email || profile.email).split('@')[0],
+                    email: profile.git_email || profile.email,
+                  })
+                  : t('settings.git.defaultLabel', { name: profile.email.split('@')[0], email: profile.email })
               }}
             </span>
           </div>
 
           <p class="muted small form-aside">
-            agent 子进程 git commit 的作者/提交者署名 (git log 可见)。通过环境变量注入,
-            不改各仓库的 .git/config。留空回落默认 = 账号邮箱 + 邮箱前缀。
+            {{ t('settings.git.aside') }}
           </p>
           <div class="form-actions">
             <Button variant="primary" :loading="gitSaving" @click="saveGitIdentity">
-              保存 Git 身份
+              {{ t('settings.git.save') }}
             </Button>
           </div>
         </div>
@@ -2074,17 +2117,17 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 提示音设置 -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🔔 提示音设置</h2>
-          <span class="badge badge-info">仅当前浏览器生效 (localStorage)</span>
+          <h2 class="section-title">{{ t('settings.sound.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.sound.badge') }}</span>
         </div>
 
         <div class="form-block">
           <div class="kv-row">
-            <span class="kv-key">总开关</span>
+            <span class="kv-key">{{ t('settings.sound.master') }}</span>
             <span class="kv-val">
               <Checkbox
                 :model-value="soundSettings.enabled"
-                label="开启提示音"
+                :label="t('settings.sound.enable')"
                 @update:model-value="(v: boolean) => { soundSettings.enabled = v; }"
               />
             </span>
@@ -2097,8 +2140,8 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               class="event-row"
             >
               <div class="event-meta">
-                <div class="event-label">{{ opt.label }}</div>
-                <div class="event-desc muted small">{{ opt.desc }}</div>
+                <div class="event-label">{{ t(opt.labelKey) }}</div>
+                <div class="event-desc muted small">{{ t(opt.descKey) }}</div>
               </div>
               <Checkbox
                 :model-value="soundSettings.events[opt.key]"
@@ -2110,10 +2153,10 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
           <div class="form-actions">
             <Button
               variant="ghost"
-             
+
               :disabled="!soundSettings.enabled"
               @click="playNotifySound"
-            >🔔 测试提示音</Button>
+            >{{ t('settings.sound.test') }}</Button>
           </div>
         </div>
       </section>
@@ -2121,14 +2164,14 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- Fork 自动压缩阈值 -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🔀 Fork 自动压缩阈值</h2>
-          <span class="badge badge-info">仅当前浏览器生效</span>
+          <h2 class="section-title">{{ t('settings.fork.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.fork.badge') }}</span>
         </div>
 
         <div class="form-block">
           <div class="form-row">
             <label class="form-label">
-              阈值 (tokens)
+              {{ t('settings.fork.threshold') }}
             </label>
             <Input
               :model-value="String(forkThreshold)"
@@ -2140,8 +2183,8 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               @update:model-value="(v: string) => { const n = parseInt(v, 10); forkThreshold = Number.isFinite(n) && n >= 0 ? n : FORK_DEFAULT; }"
             />
             <span class="form-aside">
-              Fork 弹窗打开时, 若父任务上下文超过此值, 自动勾选「压缩后继续」。
-              当前: {{ (forkThreshold / 1000).toFixed(0) }}k tokens (默认 {{ FORK_DEFAULT / 1000 }}k)
+              {{ t('settings.fork.aside') }}
+              {{ t('settings.fork.current', { cur: (forkThreshold / 1000).toFixed(0), def: FORK_DEFAULT / 1000 }) }}
             </span>
           </div>
         </div>
@@ -2150,68 +2193,67 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 多模态 API Key (mmx-cli) -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🎨 多模态 API Key (mmx-cli)</h2>
+          <h2 class="section-title">{{ t('settings.media.title') }}</h2>
         </div>
 
         <div class="form-block">
           <p class="muted small">
-            用于在任务中调用 minimax 全模态平台 (mmx-cli) 生成图片/视频/音乐等。
-            凭据加密存储于数据库, agent 进程下次启动即用。
+            {{ t('settings.media.desc') }}
           </p>
 
           <div
             v-if="mediaKey?.has_api_key && mediaKey.api_key_masked?.includes('解密失败')"
             class="warn-box small"
           >
-            ⚠️ 已存的 key 解密失败 (通常因为 ENCRYPTION_KEY 变更)。请重新输入。
+            {{ t('settings.media.decryptFail') }}
           </div>
 
           <div class="form-row">
-            <label class="form-label">API Key</label>
+            <label class="form-label">{{ t('settings.media.keyLabel') }}</label>
             <div v-if="mediaKey?.has_api_key && !showMediaKeyInput" class="kv-row">
               <code class="mono small flex-1">{{ mediaKey.api_key_masked }}</code>
               <Button
                 variant="ghost"
-               
+
                 @click="showMediaKeyInput = true"
-              >更换</Button>
+              >{{ t('settings.media.change') }}</Button>
               <Button
                 variant="danger"
-               
+
                 :disabled="mediaSaving"
                 @click="handleClearMediaKey"
-              >清除</Button>
+              >{{ t('settings.media.clear') }}</Button>
             </div>
             <div v-else class="kv-row">
               <Input
                 v-model="mediaKeyInput"
                 type="password"
                 class-name="form-input-md"
-                placeholder="输入 minimax API Key"
+                :placeholder="t('settings.media.keyPlaceholder')"
               />
               <Button
                 v-if="mediaKey?.has_api_key"
                 variant="ghost"
-               
+
                 @click="showMediaKeyInput = false; mediaKeyInput = ''"
-              >取消</Button>
+              >{{ t('settings.common.cancel') }}</Button>
             </div>
           </div>
 
           <div class="form-row">
-            <label class="form-label">区域</label>
+            <label class="form-label">{{ t('settings.media.region') }}</label>
             <Select
               v-model="regionInput"
               :options="[
-                { value: 'cn', label: 'cn (国内端点)' },
-                { value: 'global', label: 'global (海外端点)' },
+                { value: 'cn', label: t('settings.media.regionCn') },
+                { value: 'global', label: t('settings.media.regionGlobal') },
               ]"
             />
           </div>
 
           <div class="form-actions">
             <Button variant="primary" :loading="mediaSaving" @click="handleMediaKeySave">
-              保存
+              {{ t('settings.common.save') }}
             </Button>
             <Button
               v-if="mediaKey?.has_api_key"
@@ -2219,13 +2261,13 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               :loading="mediaTesting"
               :disabled="mediaSaving"
               @click="handleTestMediaKey"
-            >测试 (mmx quota)</Button>
+            >{{ t('settings.media.test') }}</Button>
             <Button
               v-if="mediaKey?.has_api_key"
               variant="danger"
               :disabled="mediaSaving"
               @click="handleDeleteMediaKey"
-            >删除全部</Button>
+            >{{ t('settings.media.deleteAll') }}</Button>
           </div>
           <div v-if="mediaMessage" class="message-box small">{{ mediaMessage }}</div>
         </div>
@@ -2234,54 +2276,54 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- API Token -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🔑 API Token</h2>
+          <h2 class="section-title">{{ t('settings.token.title') }}</h2>
         </div>
 
         <div class="form-block">
           <p class="muted small">
-            不过期的个人访问令牌。CLI / 脚本用 <code class="mono small">Authorization: Bearer &lt;token&gt;</code> 调用所有接口。
+            {{ t('settings.token.desc1') }} <code class="mono small">Authorization: Bearer &lt;token&gt;</code> {{ t('settings.token.desc2') }}
           </p>
 
           <!-- 已创建 token (明文仅显示一次) -->
           <div v-if="createdToken" class="success-box">
-            <div class="small font-medium mb-1">Token 已创建 (仅显示一次, 请立即复制)</div>
+            <div class="small font-medium mb-1">{{ t('settings.token.createdTitle') }}</div>
             <div class="flex-row gap-2">
               <code class="mono small flex-1 break-all">{{ createdToken }}</code>
               <Button
                 variant="ghost"
-               
+
                 @click="copyCreatedToken"
-              >复制</Button>
+              >{{ t('settings.common.copy') }}</Button>
               <Button
                 variant="ghost"
-               
+
                 @click="createdToken = null"
-              >关闭</Button>
+              >{{ t('settings.common.close') }}</Button>
             </div>
           </div>
 
           <!-- 创建 -->
           <div class="form-row">
-            <label class="form-label">新建 Token</label>
+            <label class="form-label">{{ t('settings.token.newLabel') }}</label>
             <div class="flex-row gap-2">
               <Input
                 v-model="newTokenName"
                 type="text"
                 class-name="form-input-md"
-                placeholder="名称 (如 CLI-local)"
+                :placeholder="t('settings.token.namePlaceholder')"
                 :disabled="tokenSaving"
               />
               <Button
                 variant="primary"
                 :loading="tokenSaving"
                 @click="handleCreateApiToken"
-              >创建 Token</Button>
+              >{{ t('settings.token.create') }}</Button>
             </div>
           </div>
 
           <!-- 列表 -->
-          <Loading v-if="apiTokensLoading && apiTokens.length === 0" label="加载 Token…" />
-          <Empty v-else-if="!apiTokensLoading && apiTokens.length === 0" variant="doc" title="暂无 API Token" />
+          <Loading v-if="apiTokensLoading && apiTokens.length === 0" :label="t('settings.token.loading')" />
+          <Empty v-else-if="!apiTokensLoading && apiTokens.length === 0" variant="doc" :title="t('settings.token.empty')" />
           <div v-else class="token-list-wrap">
             <div class="token-toolbar flex-row gap-2">
               <label class="flex-row gap-1 small cursor-pointer">
@@ -2290,20 +2332,20 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                   :disabled="filteredTokens.length === 0"
                   @update:model-value="toggleSelectAllFiltered"
                 />
-                <span>全选</span>
+                <span>{{ t('settings.token.selectAll') }}</span>
               </label>
               <Input
                 v-model="tokenSearch"
                 type="text"
                 class-name="form-input-sm"
-                placeholder="按名称搜索"
+                :placeholder="t('settings.token.searchPlaceholder')"
               />
               <Button
                 variant="danger"
                 :disabled="selectedTokenIds.size === 0 || tokenSaving"
                 @click="handleBatchDeleteApiTokens"
               >
-                批量删除 {{ selectedTokenIds.size > 0 ? `(${selectedTokenIds.size})` : '' }}
+                {{ t('settings.token.batchDelete') }} {{ selectedTokenIds.size > 0 ? t('settings.token.batchCount', { n: selectedTokenIds.size }) : '' }}
               </Button>
             </div>
 
@@ -2311,27 +2353,27 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <div
                 v-if="filteredTokens.length === 0"
                 class="muted small text-center py-3"
-              >无匹配 token</div>
+              >{{ t('settings.token.noMatch') }}</div>
               <div
-                v-for="t in filteredTokens"
-                :key="t.id"
+                v-for="tok in filteredTokens"
+                :key="tok.id"
                 class="token-row"
-                :class="{ selected: selectedTokenIds.has(t.id) }"
+                :class="{ selected: selectedTokenIds.has(tok.id) }"
               >
                 <div class="flex-row gap-2 min-w-0 flex-1">
                   <Checkbox
-                    :model-value="selectedTokenIds.has(t.id)"
+                    :model-value="selectedTokenIds.has(tok.id)"
                     :disabled="tokenSaving"
-                    @update:model-value="toggleSelectToken(t.id)"
+                    @update:model-value="toggleSelectToken(tok.id)"
                   />
-                  <code class="mono small">{{ t.prefix }}…</code>
-                  <span class="truncate">{{ t.name }}</span>
+                  <code class="mono small">{{ tok.prefix }}…</code>
+                  <span class="truncate">{{ tok.name }}</span>
                 </div>
                 <Button
                   variant="danger"
                   :disabled="tokenSaving"
-                  @click="handleDeleteApiToken(t.id, t.name)"
-                >删除</Button>
+                  @click="handleDeleteApiToken(tok.id, tok.name)"
+                >{{ t('settings.common.delete') }}</Button>
               </div>
             </div>
           </div>
@@ -2342,7 +2384,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             curl -H "Authorization: Bearer &lt;token&gt;" https://&lt;host&gt;/api/projects
           </p>
           <p class="warn-text small">
-            ⚠️ Token 不过期。删除仅清理记录, token 在服务端轮换密钥后才彻底失效。
+            {{ t('settings.token.warn') }}
           </p>
         </div>
       </section>
@@ -2352,19 +2394,19 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
            5 操作按钮 (设默认/编辑/拷贝/复制/删除) + 可见的 LLM 配置聚合块. -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🤖 个人 LLM 配置</h2>
-          <span class="badge badge-warn small">至少 1 份</span>
+          <h2 class="section-title">{{ t('settings.llm.title') }}</h2>
+          <span class="badge badge-warn small">{{ t('settings.llm.minBadge') }}</span>
         </div>
 
         <p class="muted small">
-          可配置多份 LLM 配置（如生产 / 测试 / 火山方舟）。任务/模板从「可见的 LLM 配置」里选；列表里被授权的平台配置也会一起出现。
+          {{ t('settings.llm.desc') }}
         </p>
 
         <div
           v-if="profile?.admin_llm_granted && !isAdmin"
           class="success-box small"
         >
-          ✅ 你已被管理员授权使用平台 LLM 配置。授权收回后只能用自己的。
+          {{ t('settings.llm.granted') }}
         </div>
 
         <!-- 列表 -->
@@ -2372,13 +2414,13 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
           <table class="llm-table">
             <thead>
               <tr>
-                <th>名称</th>
+                <th>{{ t('settings.llm.thName') }}</th>
                 <th>Base URL</th>
                 <th>Model</th>
                 <th>Key</th>
-                <th title="相对平台设定的基准模型的成本系数（管理员在平台 LLM 配置里设基准；本配置配了单价才算得出）">系数</th>
-                <th>默认</th>
-                <th class="text-right">操作</th>
+                <th :title="t('settings.llm.thCoefTitle')">{{ t('settings.llm.thCoef') }}</th>
+                <th>{{ t('settings.llm.thDefault') }}</th>
+                <th class="text-right">{{ t('settings.llm.thActions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -2388,12 +2430,12 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                   <span
                     v-if="cfg.fallback_ids?.length"
                     class="badge small"
-                    :title="`fallback 链: ${cfg.fallback_ids.map(llmCfgName).join(' → ')}`"
+                    :title="t('settings.llm.fallbackChainTitle', { chain: cfg.fallback_ids.map(llmCfgName).join(' → ') })"
                   >⛓{{ cfg.fallback_ids.length }}</span>
                   <span
                     v-if="visionBadge(cfg.supports_vision)"
                     class="badge small"
-                    :title="cfg.supports_vision ? '支持视觉（可读图）' : '不支持视觉（读图会白读）'"
+                    :title="cfg.supports_vision ? t('settings.llm.visionYesTitle') : t('settings.llm.visionNoTitle')"
                   >{{ visionBadge(cfg.supports_vision) }}</span>
                 </td>
                 <td class="mono small truncate-cell" :title="cfg.base_url || ''">
@@ -2404,20 +2446,20 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 </td>
                 <td>
                   <code v-if="cfg.has_api_key" class="mono small key-chip">{{ cfg.api_key_masked }}</code>
-                  <span v-else class="text-warn small">未配</span>
+                  <span v-else class="text-warn small">{{ t('settings.llm.noKey') }}</span>
                 </td>
-                <td class="mono small" :title="`单价(入/出): ${cfg.price_in ?? '—'} / ${cfg.price_out ?? '—'} USD每百万token`">
+                <td class="mono small" :title="t('settings.llm.priceTitle', { pin: cfg.price_in ?? '—', pout: cfg.price_out ?? '—' })">
                   {{ coefficientLabel(cfg, userCostBaselineId) }}
                 </td>
                 <td>
-                  <span v-if="cfg.is_default" class="badge badge-info small">默认</span>
+                  <span v-if="cfg.is_default" class="badge badge-info small">{{ t('settings.llm.defaultBadge') }}</span>
                   <button
                     v-else
                     type="button"
                     class="link-btn small"
                     :disabled="llmSaving"
                     @click="handleSetLlmDefault(cfg.id)"
-                  >设为默认</button>
+                  >{{ t('settings.llm.setDefault') }}</button>
                 </td>
                 <td class="text-right nowrap">
                   <button
@@ -2425,26 +2467,26 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                     class="link-btn small"
                     :disabled="llmSaving"
                     @click="startEditLlm(cfg)"
-                  >编辑</button>
+                  >{{ t('settings.common.edit') }}</button>
                   <button
                     type="button"
                     class="link-btn small"
                     :disabled="llmSaving"
                     @click="handleDuplicateLlmConfig(cfg.id, cfg.name)"
-                  >拷贝</button>
+                  >{{ t('settings.common.duplicate') }}</button>
                   <button
                     type="button"
                     class="link-btn small"
                     :disabled="llmSaving"
-                    title="把这一行配置复制成文本到剪贴板"
+                    :title="t('settings.llm.copyTextTitle')"
                     @click="handleCopyLlmConfigText(cfg)"
-                  >📋 复制</button>
+                  >📋 {{ t('settings.common.copy') }}</button>
                   <button
                     type="button"
                     class="link-btn danger small"
                     :disabled="llmSaving"
                     @click="handleDeleteLlmConfig(cfg.id, cfg.name)"
-                  >删除</button>
+                  >{{ t('settings.common.delete') }}</button>
                 </td>
               </tr>
             </tbody>
@@ -2455,19 +2497,19 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
         <div class="llm-form-section">
           <div class="llm-form-head">
             <h3 v-if="editingLlmId !== null" class="small font-medium">
-              {{ editingLlmId === 'new' ? '新增个人配置' : '编辑个人配置' }}
+              {{ editingLlmId === 'new' ? t('settings.llm.newTitle') : t('settings.llm.editTitle') }}
             </h3>
             <Button
               v-if="editingLlmId === null"
               variant="primary"
-             
+
               :disabled="llmSaving"
               @click="startEditLlm('new')"
-            >+ 新增配置</Button>
+            >{{ t('settings.llm.add') }}</Button>
           </div>
           <div v-if="editingLlmId !== null" class="llm-form">
             <label class="form-label">
-              快捷选择供应商
+              {{ t('settings.llm.providerLabel') }}
               <Select
                 v-model="llmProviderId"
                 :options="providerSelectOptions"
@@ -2475,15 +2517,15 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 @update:model-value="(v: string | null) => applyProvider(llmDraft, v ?? '')"
               />
               <span v-if="catalogUpdatedAt" class="small text-muted">
-                内置 {{ catalogProviders.length }} 家国内厂商目录（模型列表日更于 {{ catalogUpdatedAt }}）。选中后自动填 Base URL，只需再填 Key。
+                {{ t('settings.llm.catalogHint', { count: catalogProviders.length, date: catalogUpdatedAt }) }}
               </span>
             </label>
             <label class="form-label">
-              名称 *
+              {{ t('settings.llm.nameLabel') }}
               <Input
                 v-model="llmDraft.name"
                 type="text"
-                placeholder="如：Claude 生产 / 火山方舟测试"
+                :placeholder="t('settings.llm.namePlaceholder')"
                 :disabled="llmSaving"
               />
             </label>
@@ -2501,7 +2543,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <Input
                 v-model="llmDraft.model"
                 type="text"
-                :placeholder="llmSelectedProvider ? `选择 ${llmSelectedProvider.name} 的模型` : '选择或输入自定义模型名'"
+                :placeholder="llmSelectedProvider ? t('settings.llm.modelProviderPlaceholder', { name: llmSelectedProvider.name }) : t('settings.llm.modelPlaceholder')"
                 list="llm-model-options"
                 :disabled="llmSaving"
               />
@@ -2514,7 +2556,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <Input
                 v-model="llmDraft.api_key"
                 type="password"
-                :placeholder="editingLlmId !== 'new' ? '留空保留现有 key' : '输入 API Key'"
+                :placeholder="editingLlmId !== 'new' ? t('settings.llm.keyKeepPlaceholder') : t('settings.llm.keyPlaceholder')"
                 :disabled="llmSaving"
                 @update:model-value="(v: string) => { if (v) llmDraft.clear_api_key = false; }"
               />
@@ -2525,39 +2567,39 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                   :disabled="llmSaving"
                   @update:model-value="(v: boolean) => llmDraft.clear_api_key = v"
                 />
-                <label for="clear-api-key" class="small">清除现有 key</label>
+                <label for="clear-api-key" class="small">{{ t('settings.llm.clearKey') }}</label>
               </span>
               <span v-if="llmSelectedProvider" class="small text-muted">
-                <a :href="llmSelectedProvider.api_key_url" target="_blank" rel="noopener">获取 {{ llmSelectedProvider.name }} API Key ↗</a>
+                <a :href="llmSelectedProvider.api_key_url" target="_blank" rel="noopener">{{ t('settings.llm.getKeyLink', { name: llmSelectedProvider.name }) }}</a>
               </span>
             </label>
             <label class="form-label">
-              支持视觉（能否读图）
+              {{ t('settings.llm.visionLabel') }}
               <Select
                 v-model="llmVisionSelect"
                 :options="visionSelectOptions"
                 :disabled="llmSaving"
-                placeholder="未设置（按模型名推断）"
+                :placeholder="t('settings.llm.visionUnset')"
               />
-              <span class="small text-muted">带图任务会自动换到链上能看图的模型（仅当本配置明确标为「不支持」时）</span>
+              <span class="small text-muted">{{ t('settings.llm.visionHint') }}</span>
             </label>
             <div class="form-label">
-              <span>单价（USD / 百万 token，R239 成本精确计费）</span>
+              <span>{{ t('settings.llm.priceLabel') }}</span>
               <div class="llm-price-row">
-                <label class="small">输入价
-                  <Input v-model="llmDraft.price_in" type="number" step="any" min="0" placeholder="如 3" :disabled="llmSaving" />
+                <label class="small">{{ t('settings.llm.priceIn') }}
+                  <Input v-model="llmDraft.price_in" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhIn')" :disabled="llmSaving" />
                 </label>
-                <label class="small">输出价
-                  <Input v-model="llmDraft.price_out" type="number" step="any" min="0" placeholder="如 15" :disabled="llmSaving" />
+                <label class="small">{{ t('settings.llm.priceOut') }}
+                  <Input v-model="llmDraft.price_out" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhOut')" :disabled="llmSaving" />
                 </label>
-                <label class="small">缓存读价
-                  <Input v-model="llmDraft.price_cache_read" type="number" step="any" min="0" placeholder="如 0.3" :disabled="llmSaving" />
+                <label class="small">{{ t('settings.llm.priceCacheRead') }}
+                  <Input v-model="llmDraft.price_cache_read" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhCache')" :disabled="llmSaving" />
                 </label>
               </div>
-              <span class="small text-muted">留空 = 未配。配了任一档，任务成本改按本配置单价精确折算（cost_source=priced），不再用全平台折中价；平台代理不回传缓存写价，该档不参与计算。</span>
+              <span class="small text-muted">{{ t('settings.llm.priceHint') }}</span>
             </div>
             <div v-if="otherLlmConfigs(editingLlmId === 'new' ? '' : editingLlmId || '').length" class="form-label">
-              <span>fallback 链（主模型失败按序换，点选即加入）</span>
+              <span>{{ t('settings.llm.fallbackLabel') }}</span>
               <div class="llm-fallback-chips">
                 <button
                   v-for="c in otherLlmConfigs(editingLlmId === 'new' ? '' : editingLlmId || '')"
@@ -2570,7 +2612,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 >{{ llmDraft.fallback_ids.includes(c.id) ? `${llmDraft.fallback_ids.indexOf(c.id) + 1}. ` : '' }}{{ c.name }}</button>
               </div>
               <span v-if="llmDraft.fallback_ids.length" class="small text-muted">
-                顺序：{{ llmDraft.fallback_ids.map((id, i) => `${i + 1}.${llmCfgName(id)}`).join(' → ') }}
+                {{ t('settings.llm.fallbackOrder', { list: llmDraft.fallback_ids.map((id, i) => `${i + 1}.${llmCfgName(id)}`).join(' → ') }) }}
               </span>
             </div>
             <div class="form-actions">
@@ -2579,12 +2621,12 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 :loading="llmSaving"
                 :disabled="!llmDraft.name.trim()"
                 @click="handleLlmSave"
-              >保存</Button>
+              >{{ t('settings.common.save') }}</Button>
               <Button
                 variant="ghost"
                 :disabled="llmSaving"
                 @click="cancelEditLlm"
-              >取消</Button>
+              >{{ t('settings.common.cancel') }}</Button>
               <span v-if="llmMessage" class="small">{{ llmMessage }}</span>
             </div>
           </div>
@@ -2592,7 +2634,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
 
         <!-- 可见的 LLM 配置聚合 (任务/模板选择器数据源) -->
         <div v-if="availableLlmConfigs.length > 0" class="llm-available">
-          <h3 class="small font-medium">可见的 LLM 配置（任务/模板可从这里选）</h3>
+          <h3 class="small font-medium">{{ t('settings.llm.availableTitle') }}</h3>
           <div class="llm-available-grid">
             <div
               v-for="cfg in availableLlmConfigs"
@@ -2603,12 +2645,12 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 <span
                   class="badge small"
                   :class="cfg.source === 'self' ? 'badge-info' : 'badge-warn'"
-                >{{ cfg.source === 'self' ? '我的' : '平台' }}</span>
+                >{{ cfg.source === 'self' ? t('settings.llm.mine') : t('settings.llm.platformBadge') }}</span>
                 <span class="font-medium small">{{ cfg.name }}</span>
-                <span v-if="cfg.is_default" class="text-info small">默认</span>
+                <span v-if="cfg.is_default" class="text-info small">{{ t('settings.llm.defaultBadge') }}</span>
               </div>
               <div class="muted small mono">
-                {{ cfg.model || '—' }} · {{ cfg.base_url || '默认' }}
+                {{ cfg.model || '—' }} · {{ cfg.base_url || t('settings.llm.baseUrlDefault') }}
               </div>
             </div>
           </div>
@@ -2624,14 +2666,14 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 通知邮箱 -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">📧 通知邮箱</h2>
+          <h2 class="section-title">{{ t('settings.notify.title') }}</h2>
         </div>
 
         <div v-if="profile" class="form-block">
           <div class="form-row">
             <label for="user-notify-email" class="form-label">
-              邮箱
-              <span class="form-hint">(留空 = 用系统邮箱)</span>
+              {{ t('settings.notify.emailLabel') }}
+              <span class="form-hint">{{ t('settings.notify.emailHint') }}</span>
             </label>
             <Input
               id="user-notify-email"
@@ -2646,32 +2688,31 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 class="status-dot"
                 :class="profile.notify_email ? 'ok' : 'warn'"
               />
-              {{ profile.notify_email ? `当前: ${profile.notify_email}` : '未配置, 通知将发往系统邮箱' }}
+              {{ profile.notify_email ? t('settings.notify.current', { email: profile.notify_email }) : t('settings.notify.notSet') }}
             </span>
           </div>
 
           <div v-if="profile.mailer_configured === false" class="warn-box small">
-            ⚠️ 平台尚未配置 SMTP (需设置 SMTP_HOST / SMTP_USER / SMTP_PASS / NOTIFY_FROM),
-            即使填了通知邮箱也发不出去。
+            {{ t('settings.notify.smtpWarn') }}
           </div>
 
           <div class="form-actions">
             <Button variant="primary" :loading="notifySaving" @click="saveNotifyEmail">
-              保存邮箱
+              {{ t('settings.notify.save') }}
             </Button>
             <Button
               variant="secondary"
               :loading="notifyTesting"
               :disabled="notifySaving"
-              title="发送到当前已保存的收件地址 (不是输入框里未保存的内容)"
+              :title="t('settings.notify.testTitle')"
               @click="handleNotifyEmailTest"
             >
-              {{ notifyTesting ? '发送中...' : '发送测试邮件' }}
+              {{ notifyTesting ? t('settings.notify.sending') : t('settings.notify.test') }}
             </Button>
           </div>
           <div v-if="notifyMessage" class="message-box small">{{ notifyMessage }}</div>
           <p v-if="profile.notify_fallback_to" class="muted small">
-            「发送测试邮件」发往<strong>已保存</strong>的地址 —— 改了输入框请先保存再测试。
+            {{ t('settings.notify.testAsidePre') }}<strong>{{ t('settings.notify.testAsideStrong') }}</strong>{{ t('settings.notify.testAsidePost') }}
           </p>
         </div>
       </section>
@@ -2679,14 +2720,14 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 飞书机器人 -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🤖 飞书机器人</h2>
+          <h2 class="section-title">{{ t('settings.feishu.title') }}</h2>
         </div>
 
         <div v-if="profile" class="form-block">
           <div class="form-row">
             <label for="user-feishu-url" class="form-label">
               Webhook URL
-              <span class="form-hint">(留空 = 不发飞书)</span>
+              <span class="form-hint">{{ t('settings.feishu.urlHint') }}</span>
             </label>
             <Input
               id="user-feishu-url"
@@ -2702,45 +2743,45 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               />
               {{
                 feishuWebhookMeta?.masked_url
-                  ? `当前: ${feishuWebhookMeta.masked_url}`
+                  ? t('settings.feishu.current', { url: feishuWebhookMeta.masked_url })
                   : profile.feishu_configured
-                    ? '已配置 (修改后将替换)'
-                    : '未配置'
+                    ? t('settings.feishu.configured')
+                    : t('settings.feishu.notConfigured')
               }}
             </span>
           </div>
 
           <div class="form-row">
-            <label class="form-label">消息类型</label>
+            <label class="form-label">{{ t('settings.feishu.msgType') }}</label>
             <div class="flex-row gap-2">
               <Select
                 v-model="feishuMsgType"
                 :options="[
-                  { value: 'text', label: 'text (纯文本, 最稳)' },
-                  { value: 'markdown', label: 'markdown (**加粗** 等)' },
-                  { value: 'post', label: 'post (富文本, 含链接/@人)' },
+                  { value: 'text', label: t('settings.feishu.optText') },
+                  { value: 'markdown', label: t('settings.feishu.optMarkdown') },
+                  { value: 'post', label: t('settings.feishu.optPost') },
                 ]"
                 :disabled="feishuWebhookTesting"
               />
               <span class="form-aside">
-                老 webhook 不支持 markdown 会静默拒收 (code:10208), 用 text 或 post
+                {{ t('settings.feishu.msgTypeAside') }}
               </span>
             </div>
           </div>
 
           <div v-if="feishuMsgType === 'post'" class="form-row">
-            <label class="form-label">post 模式</label>
+            <label class="form-label">{{ t('settings.feishu.postMode') }}</label>
             <Input
               v-model="feishuPostTitle"
               type="text"
-              placeholder="post 标题 (可选)"
+              :placeholder="t('settings.feishu.postTitlePh')"
               :disabled="feishuWebhookTesting"
               class-name="form-input-md"
             />
             <Textarea
               v-model="feishuPostContent"
               :rows="3"
-              placeholder="post 内容, 二维数组 JSON: [[{tag,text},{tag:'a',text,href},...], ...]"
+              :placeholder="t('settings.feishu.postContentPh')"
               :disabled="feishuWebhookTesting"
               class-name="form-textarea"
             />
@@ -2748,22 +2789,21 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
 
           <div class="form-actions">
             <Button variant="primary" :loading="feishuSaving" @click="saveFeishuWebhook">
-              保存 Webhook
+              {{ t('settings.feishu.save') }}
             </Button>
             <Button
               variant="secondary"
               :loading="feishuWebhookTesting"
               :disabled="feishuSaving || (!profile.feishu_configured && !profileForm.feishu_webhook_url.trim())"
-              title="直接发往输入框里的 webhook (无需先保存)"
+              :title="t('settings.feishu.testTitle')"
               @click="handleFeishuWebhookTest"
             >
-              {{ feishuWebhookTesting ? '发送中...' : '发送测试消息' }}
+              {{ feishuWebhookTesting ? t('settings.feishu.sending') : t('settings.feishu.test') }}
             </Button>
           </div>
           <div v-if="feishuWebhookMessage" class="message-box small">{{ feishuWebhookMessage }}</div>
           <p class="muted small">
-            「发送测试消息」直接发往输入框里的 webhook (无需先保存) —— 测通过后点「保存」才写入账户。
-            取得 webhook 路径: 飞书群 → 设置 → 群机器人 → 添加机器人 → 自定义机器人。
+            {{ t('settings.feishu.aside') }}
           </p>
         </div>
       </section>
@@ -2775,27 +2815,27 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
     <div v-show="activeTab === 'schedule'" class="tab-panel">
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">⚙️ 调度器参数</h2>
-          <span class="badge badge-info">所有用户可读, 管理员可写</span>
+          <h2 class="section-title">{{ t('settings.sched.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.sched.badge') }}</span>
         </div>
 
-        <Loading v-if="configLoading && !config" label="加载调度器配置…" />
+        <Loading v-if="configLoading && !config" :label="t('settings.sched.loading')" />
         <ErrorView
           v-else-if="configError"
           variant="error"
-          title="加载调度器配置失败"
+          :title="t('settings.sched.loadFailed')"
           :description="configError"
           :retrying="configRetrying"
           @retry="loadConfig(true)"
         />
-        <Empty v-else-if="!config" variant="doc" title="暂无配置" />
+        <Empty v-else-if="!config" variant="doc" :title="t('settings.sched.empty')" />
 
         <div v-else class="section-body">
           <div class="form-row">
             <label class="form-label">
-              并发上限
+              {{ t('settings.sched.concurrency') }}
               <span class="form-hint">
-                (范围 {{ config.concurrency_min }} - {{ config.concurrency_max }})
+                {{ t('settings.sched.rangeHint', { min: config.concurrency_min, max: config.concurrency_max }) }}
               </span>
             </label>
             <Input
@@ -2807,16 +2847,15 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               placeholder=""
             />
             <span class="form-aside">
-              当前队列: {{ config.running_count }} / {{ config.concurrency }} (running / cap),
-              队列深度 {{ config.queue_size }}
+              {{ t('settings.sched.queueAside', { running: config.running_count, cap: config.concurrency, depth: config.queue_size }) }}
             </span>
           </div>
 
           <div class="form-row">
             <label class="form-label">
-              任务壁钟超时 (分钟)
+              {{ t('settings.sched.timeout') }}
               <span class="form-hint">
-                (范围 {{ config.task_timeout_min }} - {{ config.task_timeout_max }})
+                {{ t('settings.sched.rangeHint', { min: config.task_timeout_min, max: config.task_timeout_max }) }}
               </span>
             </label>
             <Input
@@ -2828,16 +2867,15 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               placeholder=""
             />
             <span class="form-aside">
-              已在跑的任务按启动那一刻解析的值超时, 改全局值不会重挂定时器。
+              {{ t('settings.sched.timeoutAside') }}
             </span>
           </div>
 
           <div class="form-row">
             <label class="form-label">
-              端口池
+              {{ t('settings.sched.portPool') }}
               <span class="form-hint">
-                (段数 ≤ {{ config.port_pool_max_segments }},
-                每段 {{ config.port_pool_min }} - {{ config.port_pool_max }})
+                {{ t('settings.sched.portPoolHint', { segs: config.port_pool_max_segments, min: config.port_pool_min, max: config.port_pool_max }) }}
               </span>
             </label>
             <div v-if="!isAdmin" class="mono small">
@@ -2870,32 +2908,32 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 />
                 <Button
                   variant="ghost"
-                 
+
                   :disabled="appSaving"
                   @click="removePortPoolSegment(i)"
-                >删除</Button>
+                >{{ t('settings.common.delete') }}</Button>
               </div>
               <Button
                 variant="secondary"
-               
+
                 :disabled="appSaving"
                 @click="addPortPoolSegment"
-              >+ 段</Button>
+              >{{ t('settings.sched.addSegment') }}</Button>
             </div>
             <p v-if="appFieldErrors.port_pool" class="form-error small">
               {{ appFieldErrors.port_pool }}
             </p>
             <p v-else-if="isAdmin" class="muted small form-aside">
-              改端口池不会迁移已在用的项目端口。
+              {{ t('settings.sched.portPoolAside') }}
             </p>
           </div>
 
           <div v-if="isAdmin" class="form-actions">
             <Button variant="primary" :loading="appSaving" @click="saveAppConfig">
-              保存调度参数
+              {{ t('settings.sched.save') }}
             </Button>
             <Button variant="ghost" :disabled="appSaving" @click="resetAppForm">
-              重置
+              {{ t('settings.common.reset') }}
             </Button>
           </div>
         </div>
@@ -2910,44 +2948,43 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
         class="card section-card"
       >
         <div class="section-head">
-          <h2 class="section-title">📊 账号配额</h2>
-          <span class="badge badge-warn">甲方</span>
+          <h2 class="section-title">{{ t('settings.myQuota.title') }}</h2>
+          <span class="badge badge-warn">{{ t('settings.myQuota.badge') }}</span>
         </div>
 
         <p class="muted small">
-          你的账号已被管理员标记为甲方, 按 R88 三件套（费用上限 / 授予额度 / 到期日期）
-          触发任务创建拦截。
+          {{ t('settings.myQuota.desc') }}
         </p>
 
         <div class="kv-block">
           <div class="kv-row">
-            <span class="kv-key">费用上限</span>
+            <span class="kv-key">{{ t('settings.myQuota.spentCap') }}</span>
             <span class="kv-val mono">
               {{
                 profile.quota_total_spent_cap !== null && profile.quota_total_spent_cap !== undefined
                   ? `$${Number(profile.quota_total_spent_cap).toFixed(2)}`
-                  : '不限'
+                  : t('settings.common.unlimited')
               }}
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">授予上限 (仅展示)</span>
+            <span class="kv-key">{{ t('settings.myQuota.grantedCap') }}</span>
             <span class="kv-val mono">
               {{
                 profile.quota_granted_cap !== null && profile.quota_granted_cap !== undefined
                   ? `$${Number(profile.quota_granted_cap).toFixed(2)}`
-                  : '不限'
+                  : t('settings.common.unlimited')
               }}
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">到期日期</span>
-            <span class="kv-val mono">{{ profile.quota_expire_at ?? '不限' }}</span>
+            <span class="kv-key">{{ t('settings.myQuota.expireAt') }}</span>
+            <span class="kv-val mono">{{ profile.quota_expire_at ?? t('settings.common.unlimited') }}</span>
           </div>
         </div>
 
         <p class="muted small kv-hint">
-          累计费用明细与触发拦截提示, 在每次创建/启动任务时会显式提示。如需调整请联系管理员。
+          {{ t('settings.myQuota.hint') }}
         </p>
       </section>
     </div>
@@ -2973,7 +3010,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
       <!-- 系统 API 配置 (env) -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🌐 系统 API 配置 (环境变量)</h2>
+          <h2 class="section-title">{{ t('settings.sysApi.title') }}</h2>
         </div>
 
         <div v-if="config" class="kv-block">
@@ -2984,7 +3021,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 class="status-dot"
                 :class="config.api_key_configured ? 'ok' : 'fail'"
               />
-              {{ config.api_key_configured ? '已配置' : '未配置 — agent 无法运行' }}
+              {{ config.api_key_configured ? t('settings.sysApi.configured') : t('settings.sysApi.notConfigured') }}
             </span>
           </div>
           <div class="kv-row">
@@ -2992,11 +3029,11 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             <span class="kv-val mono">{{ config.base_url }}</span>
           </div>
           <div v-if="config.model" class="kv-row">
-            <span class="kv-key">默认模型</span>
+            <span class="kv-key">{{ t('settings.sysApi.defaultModel') }}</span>
             <span class="kv-val mono">{{ config.model }}</span>
           </div>
           <p class="muted small kv-hint">
-            ⚠️ 环境变量中的 API Key 仅作系统级 fallback, 普通用户必须配置自己的 API Key 或被管理员授权才能运行任务。
+            {{ t('settings.sysApi.hint') }}
           </p>
         </div>
       </section>
@@ -3007,34 +3044,33 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
         :class="{ 'maint-active': maintenance?.active }"
       >
         <div class="section-head">
-          <h2 class="section-title">🔧 维护模式</h2>
+          <h2 class="section-title">{{ t('settings.maint.title') }}</h2>
           <span
             class="badge"
             :class="maintenance?.active ? 'badge-warn' : 'badge-ok'"
           >
-            {{ maintenance?.active ? '🔧 维护中' : '✅ 正常运行' }}
+            {{ maintenance?.active ? t('settings.maint.activeBadge') : t('settings.maint.okBadge') }}
           </span>
         </div>
 
-        <Loading v-if="maintenanceLoading && !maintenance" label="加载维护模式…" />
+        <Loading v-if="maintenanceLoading && !maintenance" :label="t('settings.maint.loading')" />
         <ErrorView
           v-else-if="maintenanceError"
           variant="error"
-          title="加载维护模式失败"
+          :title="t('settings.maint.loadFailed')"
           :description="maintenanceError"
           @retry="loadMaintenance"
         />
 
         <div v-else-if="maintenance" class="form-block">
           <p class="muted small">
-            部署前关停: 暂停调度、挂起运行中的任务 (保留上下文, 恢复后可续完整对话)、摘下排队任务。
-            直接重启服务会连 agent 子进程一起杀掉, 在跑的任务就丢上下文了。
+            {{ t('settings.maint.desc') }}
           </p>
 
           <div v-if="maintenance.active" class="warn-box small">
-            <div>进入时间: {{ maintenance.entered_at || '—' }}</div>
-            <div v-if="maintenance.reason">原因: {{ maintenance.reason }}</div>
-            <div>挂起任务: {{ maintenance.suspended_count }} 个 (恢复时自动重启)</div>
+            <div>{{ t('settings.maint.enteredAt') }} {{ maintenance.entered_at || '—' }}</div>
+            <div v-if="maintenance.reason">{{ t('settings.maint.reason') }} {{ maintenance.reason }}</div>
+            <div>{{ t('settings.maint.suspended', { n: maintenance.suspended_count }) }}</div>
           </div>
 
           <!-- v53 上次维护: active=true 时不显示避免歧义 -->
@@ -3043,7 +3079,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             class="muted small maint-last"
           >
             <div class="flex-row gap-2">
-              <span class="font-medium">上次维护</span>
+              <span class="font-medium">{{ t('settings.maint.last') }}</span>
               <span
                 class="maint-result-chip"
                 :class="{
@@ -3053,9 +3089,9 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 }"
               >
                 {{
-                  maintenance.last_maintenance.result === 'failed' ? '有失败'
-                  : maintenance.last_maintenance.result === 'aborted' ? '异常中断'
-                  : '已完成'
+                  maintenance.last_maintenance.result === 'failed' ? t('settings.maint.resultFailed')
+                  : maintenance.last_maintenance.result === 'aborted' ? t('settings.maint.resultAborted')
+                  : t('settings.maint.resultDone')
                 }}
               </span>
             </div>
@@ -3065,23 +3101,26 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 → {{ formatMaintenanceDuration(maintenance.last_maintenance.duration_seconds) }}
               </template>
               <template v-if="maintenance.last_maintenance.reason">
-                · 原因: {{ maintenance.last_maintenance.reason }}
+                · {{ t('settings.maint.reason') }} {{ maintenance.last_maintenance.reason }}
               </template>
             </div>
             <div v-if="maintenance.last_maintenance.paused_count > 0 || maintenance.last_maintenance.dequeued_count > 0 || maintenance.last_maintenance.failed_count > 0">
-              影响: 暂停 {{ maintenance.last_maintenance.paused_count }} 个运行中
+              {{ t('settings.maint.impactPaused', { n: maintenance.last_maintenance.paused_count }) }}
               <template v-if="maintenance.last_maintenance.dequeued_count > 0">
-                , 摘下 {{ maintenance.last_maintenance.dequeued_count }} 个排队
+                {{ t('settings.maint.impactDequeued', { n: maintenance.last_maintenance.dequeued_count }) }}
               </template>
               <template v-if="maintenance.last_maintenance.failed_count > 0">
-                , {{ maintenance.last_maintenance.failed_count }} 个失败
+                {{ t('settings.maint.impactFailed', { n: maintenance.last_maintenance.failed_count }) }}
               </template>
             </div>
           </div>
 
           <div class="muted small">
-            调度器: {{ maintenance.scheduler_paused ? '已关闸' : '正常' }} ·
-            运行中 {{ maintenance.running_count }} · 排队 {{ maintenance.queue_size }}
+            {{ t('settings.maint.statusLine', {
+              state: maintenance.scheduler_paused ? t('settings.maint.pausedState') : t('settings.maint.normalState'),
+              running: maintenance.running_count,
+              queue: maintenance.queue_size,
+            }) }}
           </div>
 
           <div class="form-actions">
@@ -3089,12 +3128,12 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               v-if="!maintenance.active"
               variant="primary"
               @click="handleEnterMaintenance"
-            >进入维护模式</Button>
+            >{{ t('settings.maint.enter') }}</Button>
             <Button
               v-else
               variant="primary"
               @click="handleExitMaintenance"
-            >退出维护模式</Button>
+            >{{ t('settings.maint.exit') }}</Button>
           </div>
         </div>
       </section>
@@ -3104,18 +3143,18 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
            3 字段 onBlur 自动保存 + 「查看变更历史」按钮. -->
       <section class="card section-card quota-section">
         <div class="section-head">
-          <h2 class="section-title">💰 账号配额</h2>
-          <span class="badge badge-info">管理员</span>
+          <h2 class="section-title">{{ t('settings.quotaAdmin.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.common.adminBadge') }}</span>
         </div>
 
         <p class="muted small">
-          标记为甲方的用户 (party_a_enabled=1) 才会按 R88 三件套拦截。granted_cap 仅展示不参与拦截。
+          {{ t('settings.quotaAdmin.desc') }}
         </p>
 
         <div v-if="quotaMessage" class="message-box small">{{ quotaMessage }}</div>
 
         <div v-if="quotaUsers.length === 0" class="muted small text-center py-3">
-          暂无用户
+          {{ t('settings.quotaAdmin.noUsers') }}
         </div>
         <div v-else class="quota-list">
           <div
@@ -3129,13 +3168,13 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 <span
                   v-if="u.role === 'admin'"
                   class="badge badge-info small"
-                >管理员</span>
+                >{{ t('settings.common.adminBadge') }}</span>
                 <span
                   v-if="u.party_a_enabled"
                   class="badge badge-warn small"
-                >甲方</span>
+                >{{ t('settings.quotaAdmin.partyBadge') }}</span>
               </div>
-              <label class="party-toggle" :title="u.party_a_enabled ? '取消甲方标记' : '标记为甲方'">
+              <label class="party-toggle" :title="u.party_a_enabled ? t('settings.quotaAdmin.unmarkParty') : t('settings.quotaAdmin.markParty')">
                 <Checkbox
                   :model-value="u.party_a_enabled"
                   :disabled="!!quotaSaving[u.id]"
@@ -3152,8 +3191,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             >
               <div class="quota-progress-meta">
                 <span class="muted small">
-                  已用 ${{ (u.used_total_usd || 0).toFixed(2) }}
-                  / 上限 ${{ u.quota_total_spent_cap.toFixed(2) }}
+                  {{ t('settings.quotaAdmin.usedOf', { used: (u.used_total_usd || 0).toFixed(2), cap: u.quota_total_spent_cap.toFixed(2) }) }}
                 </span>
                 <span
                   class="small font-medium"
@@ -3172,37 +3210,37 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             <!-- 3 字段 onBlur 保存 -->
             <div class="quota-fields">
               <label class="form-label">
-                费用上限 (USD)
+                {{ t('settings.quotaAdmin.spentCapLabel') }}
                 <Input
                   :model-value="u.quota_total_spent_cap === null ? '' : String(u.quota_total_spent_cap)"
                   type="number"
                   :min="0"
                   :step="0.01"
-                  placeholder="不限"
+                  :placeholder="t('settings.common.unlimited')"
                   :disabled="!!quotaSaving[u.id]"
                   class-name="form-input-sm"
                   @update:model-value="(v: string) => onCapBlur(u, v)"
                 />
               </label>
               <label class="form-label">
-                授予上限 (仅展示)
+                {{ t('settings.quotaAdmin.grantedCapLabel') }}
                 <Input
                   :model-value="u.quota_granted_cap === null ? '' : String(u.quota_granted_cap)"
                   type="number"
                   :min="0"
                   :step="0.01"
-                  placeholder="不限"
+                  :placeholder="t('settings.common.unlimited')"
                   :disabled="!!quotaSaving[u.id]"
                   class-name="form-input-sm"
                   @update:model-value="(v: string) => onGrantedCapBlur(u, v)"
                 />
               </label>
               <label class="form-label">
-                到期日期 (ISO8601)
+                {{ t('settings.quotaAdmin.expireLabel') }}
                 <Input
                   :model-value="u.quota_expire_at ?? ''"
                   type="text"
-                  placeholder="不限 (e.g. 2027-01-01T00:00:00Z)"
+                  :placeholder="t('settings.quotaAdmin.expirePh')"
                   :disabled="!!quotaSaving[u.id]"
                   class-name="form-input-sm"
                   @update:model-value="(v: string) => onExpireAtBlur(u, v)"
@@ -3216,7 +3254,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 class="link-btn small"
                 @click="toggleQuotaLog(u.id)"
               >
-                {{ quotaLogOpen === u.id ? '收起' : '查看变更历史' }}
+                {{ quotaLogOpen === u.id ? t('settings.quotaAdmin.collapse') : t('settings.quotaAdmin.viewLog') }}
               </button>
             </div>
 
@@ -3224,11 +3262,11 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <div
                 v-if="quotaLogByUser[u.id] === undefined"
                 class="muted small"
-              >加载中…</div>
+              >{{ t('settings.common.loading') }}</div>
               <div
                 v-else-if="!quotaLogByUser[u.id] || quotaLogByUser[u.id]!.length === 0"
                 class="muted small"
-              >暂无变更记录</div>
+              >{{ t('settings.quotaAdmin.noLog') }}</div>
               <ul v-else class="quota-log-list">
                 <li
                   v-for="entry in quotaLogByUser[u.id]"
@@ -3269,38 +3307,38 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
            被授权用户在 task/template 选择 (与 account tab 文末的「可用 LLM」联动). -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">🤖 平台 LLM 配置</h2>
-          <span class="badge badge-info">管理员</span>
+          <h2 class="section-title">{{ t('settings.adminLlm.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.common.adminBadge') }}</span>
         </div>
 
         <p class="muted small">
-          任务 / 模板从「可见的 LLM 配置」里选。被授权用户也看得到这里的 admin 配置。
+          {{ t('settings.adminLlm.desc') }}
         </p>
 
         <div v-if="adminLlmMessage" class="message-box small">{{ adminLlmMessage }}</div>
 
-        <Loading v-if="adminLlmLoading && adminLlmConfigs.length === 0" label="加载平台 LLM…" />
-        <Empty v-else-if="adminLlmConfigs.length === 0" variant="doc" title="还没有平台 LLM" />
+        <Loading v-if="adminLlmLoading && adminLlmConfigs.length === 0" :label="t('settings.adminLlm.loading')" />
+        <Empty v-else-if="adminLlmConfigs.length === 0" variant="doc" :title="t('settings.adminLlm.empty')" />
 
         <p class="muted small">
-          任务 / 模板从「可见的 LLM 配置」里选。被授权用户也看得到这里的 admin 配置。
-          <span>「基准」= 成本系数的分母模型：点某行「设基准」，其它配置的系数 = 本行基准价(入+出) ÷ 该行基准价。全平台一个基准。</span>
+          {{ t('settings.adminLlm.desc') }}
+          <span>{{ t('settings.adminLlm.baselineHint') }}</span>
         </p>
 
         <div v-if="adminLlmMessage" class="message-box small">{{ adminLlmMessage }}</div>
 
-        <Loading v-if="adminLlmLoading && adminLlmConfigs.length === 0" label="加载平台 LLM…" />
-        <Empty v-else-if="adminLlmConfigs.length === 0" variant="doc" title="还没有平台 LLM" />
+        <Loading v-if="adminLlmLoading && adminLlmConfigs.length === 0" :label="t('settings.adminLlm.loading')" />
+        <Empty v-else-if="adminLlmConfigs.length === 0" variant="doc" :title="t('settings.adminLlm.empty')" />
 
         <div v-else class="admin-llm-table">
           <div class="admin-llm-head">
-            <span>名称</span>
+            <span>{{ t('settings.llm.thName') }}</span>
             <span>Base URL</span>
             <span>Model</span>
             <span>API Key</span>
-            <span title="相对基准模型的成本系数 = 本配置(入价+出价) ÷ 基准(入价+出价)；基准未设或没配价显 —">系数</span>
-            <span>默认</span>
-            <span class="ta-right">操作</span>
+            <span :title="t('settings.adminLlm.coefTitle')">{{ t('settings.llm.thCoef') }}</span>
+            <span>{{ t('settings.llm.thDefault') }}</span>
+            <span class="ta-right">{{ t('settings.llm.thActions') }}</span>
           </div>
           <div
             v-for="cfg in adminLlmConfigs"
@@ -3312,12 +3350,12 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <span
                 v-if="cfg.fallback_ids?.length"
                 class="badge small"
-                :title="`fallback 链: ${cfg.fallback_ids.map(adminLlmCfgName).join(' → ')}`"
+                :title="t('settings.llm.fallbackChainTitle', { chain: cfg.fallback_ids.map(adminLlmCfgName).join(' → ') })"
               >⛓{{ cfg.fallback_ids.length }}</span>
               <span
                 v-if="visionBadge(cfg.supports_vision)"
                 class="badge small"
-                :title="cfg.supports_vision ? '支持视觉（可读图）' : '不支持视觉（读图会白读）'"
+                :title="cfg.supports_vision ? t('settings.llm.visionYesTitle') : t('settings.llm.visionNoTitle')"
               >{{ visionBadge(cfg.supports_vision) }}</span>
             </span>
             <span
@@ -3330,61 +3368,61 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             >{{ cfg.model || '—' }}</span>
             <span>
               <code v-if="cfg.has_api_key" class="mono small bg-gray">{{ cfg.api_key_masked }}</code>
-              <span v-else class="text-warn small">未配</span>
+              <span v-else class="text-warn small">{{ t('settings.llm.noKey') }}</span>
             </span>
-            <span class="mono small" :title="`单价(入/出): ${cfg.price_in ?? '—'} / ${cfg.price_out ?? '—'} USD每百万token`">
+            <span class="mono small" :title="t('settings.llm.priceTitle', { pin: cfg.price_in ?? '—', pout: cfg.price_out ?? '—' })">
               {{ coefficientLabel(cfg, costBaselineId) }}
             </span>
             <span>
-              <span v-if="cfg.is_default" class="badge badge-info small">默认</span>
+              <span v-if="cfg.is_default" class="badge badge-info small">{{ t('settings.llm.defaultBadge') }}</span>
               <button
                 v-else
                 type="button"
                 class="link-btn small"
                 :disabled="adminLlmSaving"
                 @click="handleAdminLlmDefault(cfg.id)"
-              >设为默认</button>
+              >{{ t('settings.llm.setDefault') }}</button>
               <button
                 v-if="costBaselineId !== cfg.id"
                 type="button"
                 class="link-btn small"
                 :disabled="adminLlmSaving"
-                title="把本配置设为成本系数基准（其它配置的系数相对它算）"
+                :title="t('settings.adminLlm.setBaselineTitle')"
                 @click="handleSetBaseline(cfg.id)"
-              >设基准</button>
+              >{{ t('settings.adminLlm.setBaseline') }}</button>
               <button
                 v-else
                 type="button"
                 class="link-btn small link-btn-danger"
                 :disabled="adminLlmSaving"
-                title="清除成本基准（所有系数变 —）"
+                :title="t('settings.adminLlm.clearBaselineTitle')"
                 @click="handleSetBaseline(null)"
-              >清基准</button>
+              >{{ t('settings.adminLlm.clearBaseline') }}</button>
             </span>
             <span class="ta-right admin-llm-actions">
               <button
                 type="button"
                 class="link-btn small"
                 @click="startEditAdminLlm(cfg)"
-              >编辑</button>
+              >{{ t('settings.common.edit') }}</button>
               <button
                 type="button"
                 class="link-btn small"
                 :disabled="adminLlmSaving"
                 @click="handleAdminLlmDuplicate(cfg.id, cfg.name)"
-              >拷贝</button>
+              >{{ t('settings.common.duplicate') }}</button>
               <button
                 type="button"
                 class="link-btn small"
                 :disabled="adminLlmSaving"
                 @click="handleAdminLlmCopyText(cfg)"
-              >📋 复制</button>
+              >📋 {{ t('settings.common.copy') }}</button>
               <button
                 type="button"
                 class="link-btn small link-btn-danger"
                 :disabled="adminLlmSaving"
                 @click="handleAdminLlmDelete(cfg.id, cfg.name)"
-              >删除</button>
+              >{{ t('settings.common.delete') }}</button>
             </span>
           </div>
         </div>
@@ -3393,29 +3431,29 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
         <div class="admin-llm-form">
           <div class="admin-llm-form-head">
             <h3 class="small-section">
-              {{ editingAdminLlmId === 'new' ? '新增平台 LLM' : editingAdminLlmId ? '编辑平台 LLM' : '' }}
+              {{ editingAdminLlmId === 'new' ? t('settings.adminLlm.newTitle') : editingAdminLlmId ? t('settings.adminLlm.editTitle') : '' }}
             </h3>
             <Button
               v-if="editingAdminLlmId === null"
               variant="primary"
-             
+
               @click="startEditAdminLlm('new')"
-            >+ 新增配置</Button>
+            >{{ t('settings.llm.add') }}</Button>
           </div>
 
           <div v-if="editingAdminLlmId !== null" class="form-block">
-            <label class="form-label">快捷选择供应商
+            <label class="form-label">{{ t('settings.llm.providerLabel') }}
               <Select
                 v-model="adminLlmProviderId"
                 :options="providerSelectOptions"
                 @update:model-value="(v: string | null) => applyProvider(adminLlmDraft, v ?? '')"
               />
               <span v-if="catalogUpdatedAt" class="small text-muted">
-                内置 {{ catalogProviders.length }} 家国内厂商目录（模型列表日更于 {{ catalogUpdatedAt }}）。选中后自动填 Base URL，只需再填 Key。
+                {{ t('settings.llm.catalogHint', { count: catalogProviders.length, date: catalogUpdatedAt }) }}
               </span>
             </label>
-            <label class="form-label">名称 *</label>
-            <Input v-model="adminLlmDraft.name" placeholder="如: Claude 生产 / 火山方舟测试" />
+            <label class="form-label">{{ t('settings.llm.nameLabel') }}</label>
+            <Input v-model="adminLlmDraft.name" :placeholder="t('settings.llm.namePlaceholder')" />
 
             <label class="form-label">Base URL</label>
             <Input v-model="adminLlmDraft.base_url" placeholder="https://api.anthropic.com" />
@@ -3423,7 +3461,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             <label class="form-label">Model</label>
             <Input
               v-model="adminLlmDraft.model"
-              :placeholder="adminLlmSelectedProvider ? `选择 ${adminLlmSelectedProvider.name} 的模型` : '选择或输入自定义模型名'"
+              :placeholder="adminLlmSelectedProvider ? t('settings.llm.modelProviderPlaceholder', { name: adminLlmSelectedProvider.name }) : t('settings.llm.modelPlaceholder')"
               list="admin-llm-model-options"
             />
             <datalist id="admin-llm-model-options">
@@ -3434,43 +3472,43 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
             <Input
               v-model="adminLlmDraft.api_key"
               type="password"
-              :placeholder="editingAdminLlmId !== 'new' ? '留空保留现有 key' : '输入 API Key'"
+              :placeholder="editingAdminLlmId !== 'new' ? t('settings.llm.keyKeepPlaceholder') : t('settings.llm.keyPlaceholder')"
             />
             <label v-if="editingAdminLlmId !== 'new'" class="form-label small">
               <Checkbox v-model="adminLlmDraft.clear_api_key" />
-              清除现有 key
+              {{ t('settings.llm.clearKey') }}
             </label>
             <p v-if="adminLlmSelectedProvider" class="form-label small text-muted">
-              <a :href="adminLlmSelectedProvider.api_key_url" target="_blank" rel="noopener">获取 {{ adminLlmSelectedProvider.name }} API Key ↗</a>
+              <a :href="adminLlmSelectedProvider.api_key_url" target="_blank" rel="noopener">{{ t('settings.llm.getKeyLink', { name: adminLlmSelectedProvider.name }) }}</a>
             </p>
 
-            <label class="form-label">支持视觉（能否读图）</label>
+            <label class="form-label">{{ t('settings.llm.visionLabel') }}</label>
             <Select
               v-model="adminVisionSelect"
               :options="visionSelectOptions"
               :disabled="adminLlmSaving"
-              placeholder="未设置（按模型名推断）"
+              :placeholder="t('settings.llm.visionUnset')"
             />
 
-            <label class="form-label">单价（USD / 百万 token）</label>
+            <label class="form-label">{{ t('settings.adminLlm.priceLabel') }}</label>
             <div class="llm-price-row">
-              <label class="small">输入价
-                <Input v-model="adminLlmDraft.price_in" type="number" step="any" min="0" placeholder="如 3" :disabled="adminLlmSaving" />
+              <label class="small">{{ t('settings.llm.priceIn') }}
+                <Input v-model="adminLlmDraft.price_in" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhIn')" :disabled="adminLlmSaving" />
               </label>
-              <label class="small">输出价
-                <Input v-model="adminLlmDraft.price_out" type="number" step="any" min="0" placeholder="如 15" :disabled="adminLlmSaving" />
+              <label class="small">{{ t('settings.llm.priceOut') }}
+                <Input v-model="adminLlmDraft.price_out" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhOut')" :disabled="adminLlmSaving" />
               </label>
-              <label class="small">缓存读价
-                <Input v-model="adminLlmDraft.price_cache_read" type="number" step="any" min="0" placeholder="如 0.3" :disabled="adminLlmSaving" />
+              <label class="small">{{ t('settings.llm.priceCacheRead') }}
+                <Input v-model="adminLlmDraft.price_cache_read" type="number" step="any" min="0" :placeholder="t('settings.llm.pricePhCache')" :disabled="adminLlmSaving" />
               </label>
             </div>
-            <span class="small text-muted">配了任一档，用本配置的任务成本按单价精确折算（不再走全平台折中价）；系数 = (输入价+输出价) ÷ 基准模型同和，基准用上方「设基准」选。</span>
+            <span class="small text-muted">{{ t('settings.adminLlm.priceHint') }}</span>
 
             <div
               v-if="adminLlmConfigs.filter((c) => c.id !== (editingAdminLlmId === 'new' ? '' : editingAdminLlmId)).length"
               class="form-label"
             >
-              <span>fallback 链（主模型失败按序换，点选即加入）</span>
+              <span>{{ t('settings.llm.fallbackLabel') }}</span>
               <div class="llm-fallback-chips">
                 <button
                   v-for="c in adminLlmConfigs.filter((cc) => cc.id !== (editingAdminLlmId === 'new' ? '' : editingAdminLlmId))"
@@ -3483,20 +3521,20 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
                 >{{ adminLlmDraft.fallback_ids.includes(c.id) ? `${adminLlmDraft.fallback_ids.indexOf(c.id) + 1}. ` : '' }}{{ c.name }}</button>
               </div>
               <span v-if="adminLlmDraft.fallback_ids.length" class="small text-muted">
-                顺序：{{ adminLlmDraft.fallback_ids.map((id, i) => `${i + 1}.${adminLlmCfgName(id)}`).join(' → ') }}
+                {{ t('settings.llm.fallbackOrder', { list: adminLlmDraft.fallback_ids.map((id, i) => `${i + 1}.${adminLlmCfgName(id)}`).join(' → ') }) }}
               </span>
             </div>
 
             <div class="form-actions">
               <Button
                 variant="primary"
-               
+
                 :loading="adminLlmSaving"
                 :disabled="adminLlmSaving || !adminLlmDraft.name.trim()"
                 @click="saveAdminLlm"
-              >保存</Button>
+              >{{ t('settings.common.save') }}</Button>
               <Button variant="ghost" :disabled="adminLlmSaving" @click="cancelEditAdminLlm">
-                取消
+                {{ t('settings.common.cancel') }}
               </Button>
             </div>
           </div>
@@ -3508,25 +3546,24 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
            max_concurrency onBlur 保存 + granted 授权 toggle + 翻页. -->
       <section class="card section-card">
         <div class="section-head">
-          <h2 class="section-title">👥 用户授权</h2>
-          <span class="badge badge-info">管理员</span>
+          <h2 class="section-title">{{ t('settings.grants.title') }}</h2>
+          <span class="badge badge-info">{{ t('settings.common.adminBadge') }}</span>
         </div>
 
         <p class="muted small">
-          授权用户使用平台 LLM 配置, 并可设每账号并发上限 (留空 = 不限, 仍受全局总闸约束).
-          管理员默认可用, 无需授权.
+          {{ t('settings.grants.desc') }}
         </p>
 
         <div v-if="grantsMessage" class="message-box small">{{ grantsMessage }}</div>
 
-        <Loading v-if="grantsLoading && grants.length === 0" label="加载用户授权…" />
-        <Empty v-else-if="grants.length === 0" variant="doc" title="暂无其他用户" />
+        <Loading v-if="grantsLoading && grants.length === 0" :label="t('settings.grants.loading')" />
+        <Empty v-else-if="grants.length === 0" variant="doc" :title="t('settings.grants.empty')" />
 
         <div v-else class="grants-table">
           <div class="grants-head">
-            <span>用户</span>
-            <span>并发上限</span>
-            <span class="ta-right">授权</span>
+            <span>{{ t('settings.grants.thUser') }}</span>
+            <span>{{ t('settings.grants.thConcurrency') }}</span>
+            <span class="ta-right">{{ t('settings.grants.thGrant') }}</span>
           </div>
           <div
             v-for="u in pagedGrants"
@@ -3535,13 +3572,13 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
           >
             <span class="grants-user">
               <span class="mono">{{ u.email }}</span>
-              <span v-if="u.role === 'admin'" class="badge badge-info small">管理员</span>
+              <span v-if="u.role === 'admin'" class="badge badge-info small">{{ t('settings.common.adminBadge') }}</span>
             </span>
             <span class="grants-input">
               <Input
                 type="number"
                 :model-value="u.max_concurrency === null ? '' : String(u.max_concurrency ?? '')"
-                placeholder="不限"
+                :placeholder="t('settings.common.unlimited')"
                 class-name="form-input-sm mono center"
                 @blur="(e: FocusEvent) => saveConcurrency(u.id, (e.target as HTMLInputElement).value)"
               />
@@ -3550,7 +3587,7 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
               <span v-else-if="concurrencyStatus[u.id] === 'error'" class="text-warn small">✗</span>
             </span>
             <span class="ta-right">
-              <span v-if="u.role === 'admin'" class="muted small">默认</span>
+              <span v-if="u.role === 'admin'" class="muted small">{{ t('settings.grants.defaultBadge') }}</span>
               <label v-else class="grant-toggle">
                 <Checkbox
                   :model-value="u.granted"
@@ -3565,17 +3602,17 @@ async function saveConcurrency(userId: string, raw: string): Promise<void> {
           <div v-if="totalGrantPages > 1" class="grants-pager">
             <Button
               variant="ghost"
-             
+
               :disabled="safeGrantsPage === 0"
               @click="grantsPage = safeGrantsPage - 1"
-            >上一页</Button>
+            >{{ t('settings.common.prevPage') }}</Button>
             <span class="muted small">{{ safeGrantsPage + 1 }} / {{ totalGrantPages }}</span>
             <Button
               variant="ghost"
-             
+
               :disabled="safeGrantsPage >= totalGrantPages - 1"
               @click="grantsPage = safeGrantsPage + 1"
-            >下一页</Button>
+            >{{ t('settings.common.nextPage') }}</Button>
           </div>
         </div>
       </section>

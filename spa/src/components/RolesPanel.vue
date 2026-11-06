@@ -3,6 +3,7 @@
    Role = 可复用配置包 (system_prompt + model/effort/max_turns/allowed_tools
    defaults), 建任务时继承. v525 项目绑定 (null=全局) + v527 飞书回写开关. */
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Button from '@/components/Button.vue';
 import Input from '@/components/Input.vue';
 import Textarea from '@/components/Textarea.vue';
@@ -28,6 +29,7 @@ import { EFFORT_LEVELS } from '@/lib/constants';
 
 const toast = useToast();
 const { confirm } = useConfirm();
+const { t } = useI18n();
 
 const roles = ref<Role[]>([]);
 const projects = ref<Project[]>([]);
@@ -39,12 +41,12 @@ const { options: modelOptions } = useAvailableModels();
 const EFFORT_OPTIONS = EFFORT_LEVELS.map((e) => ({ value: e, label: e }));
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '全局（所有项目可用）' },
+  { value: '', label: t('settings.roles.allProjects') },
   ...projects.value.map((p) => ({ value: p.id, label: p.name })),
 ]);
 
 function projectName(id: string | null): string {
-  if (!id) return '全局';
+  if (!id) return t('settings.roles.global');
   return projects.value.find((p) => p.id === id)?.name ?? id.slice(0, 8);
 }
 
@@ -59,7 +61,7 @@ async function load(): Promise<void> {
     roles.value = rs;
     projects.value = ps;
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '加载角色失败';
+    error.value = e instanceof Error ? e.message : t('settings.roles.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -152,7 +154,7 @@ function draftToBody(): Record<string, unknown> {
 
 async function save(): Promise<void> {
   if (!draft.name.trim() || !draft.system_prompt.trim()) {
-    toast.error('名称和 system_prompt 必填');
+    toast.error(t('settings.roles.errRequired'));
     return;
   }
   saving.value = true;
@@ -160,15 +162,15 @@ async function save(): Promise<void> {
     const body = draftToBody();
     if (editing.value) {
       await updateRole(editing.value.id, body);
-      toast.success('角色已更新');
+      toast.success(t('settings.roles.updated'));
     } else {
       await createRole(body as never);
-      toast.success('角色已创建');
+      toast.success(t('settings.roles.created'));
     }
     modalOpen.value = false;
     await load();
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '保存失败');
+    toast.error(e instanceof Error ? e.message : t('settings.common.saveFailed'));
   } finally {
     saving.value = false;
   }
@@ -176,16 +178,16 @@ async function save(): Promise<void> {
 
 async function remove(role: Role): Promise<void> {
   const ok = await confirm(
-    `确定删除角色「${role.name}」？已有任务不受影响（role 随 task 定型）。`,
-    { title: '删除角色', type: 'danger', confirmText: '删除' },
+    t('settings.roles.confirmDelete', { name: role.name }),
+    { title: t('settings.roles.deleteTitle'), type: 'danger', confirmText: t('settings.common.delete') },
   );
   if (!ok) return;
   try {
     await deleteRole(role.id);
-    toast.success('已删除');
+    toast.success(t('settings.common.deleted'));
     await load();
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '删除失败');
+    toast.error(e instanceof Error ? e.message : t('settings.common.deleteFailed'));
   }
 }
 </script>
@@ -193,28 +195,28 @@ async function remove(role: Role): Promise<void> {
 <template>
   <section class="card section-card">
     <div class="section-head">
-      <h2 class="section-title">🎭 角色预设</h2>
-      <span class="badge badge-info">建任务时继承 system_prompt + 默认参数</span>
-      <Button variant="primary" class="head-action" @click="openCreate">＋ 新建角色</Button>
+      <h2 class="section-title">{{ t('settings.roles.title') }}</h2>
+      <span class="badge badge-info">{{ t('settings.roles.badge') }}</span>
+      <Button variant="primary" class="head-action" @click="openCreate">{{ t('settings.roles.create') }}</Button>
     </div>
 
     <Loading v-if="loading" />
-    <ErrorView v-else-if="error" title="加载角色失败" :description="error" @retry="load" />
+    <ErrorView v-else-if="error" :title="t('settings.roles.loadFailed')" :description="error" @retry="load" />
     <template v-else>
       <Empty
         v-if="roles.length === 0"
-        title="还没有角色"
-        description="角色 = 可复用的 system_prompt + 默认参数包，派发时选一个即可让任务带着预设人设与约束跑。点右上角「新建角色」开始。"
+        :title="t('settings.roles.emptyTitle')"
+        :description="t('settings.roles.emptyDesc')"
       />
       <table v-else class="roles-table">
         <thead>
           <tr>
-            <th>名称</th>
-            <th>项目绑定</th>
-            <th>飞书回写</th>
-            <th>模型 / 强度 / 轮次</th>
-            <th>更新时间</th>
-            <th class="col-actions">操作</th>
+            <th>{{ t('settings.roles.thName') }}</th>
+            <th>{{ t('settings.roles.thProject') }}</th>
+            <th>{{ t('settings.roles.thWriteback') }}</th>
+            <th>{{ t('settings.roles.thParams') }}</th>
+            <th>{{ t('settings.roles.thUpdated') }}</th>
+            <th class="col-actions">{{ t('settings.roles.thActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -230,36 +232,35 @@ async function remove(role: Role): Promise<void> {
             </td>
             <td>
               <span class="badge" :class="r.feishu_writeback !== 0 ? 'badge-ok' : 'badge-warn'">
-                {{ r.feishu_writeback !== 0 ? '允许' : '禁止' }}
+                {{ r.feishu_writeback !== 0 ? t('settings.roles.allow') : t('settings.roles.forbid') }}
               </span>
             </td>
             <td class="muted small">
-              {{ [r.model || '默认模型', r.effort || '默认强度', r.max_turns ? `${r.max_turns} 轮` : null].filter(Boolean).join(' · ') }}
+              {{ [r.model || t('settings.roles.defaultModel'), r.effort || t('settings.roles.defaultEffort'), r.max_turns ? t('settings.roles.turns', { n: r.max_turns }) : null].filter(Boolean).join(' · ') }}
             </td>
             <td class="muted small">{{ (r.updated_at || '').slice(0, 16).replace('T', ' ') }}</td>
             <td class="col-actions">
-              <Button variant="ghost" size="sm" @click="openEdit(r)">编辑</Button>
-              <Button variant="danger" size="sm" @click="remove(r)">删除</Button>
+              <Button variant="ghost" size="sm" @click="openEdit(r)">{{ t('settings.common.edit') }}</Button>
+              <Button variant="danger" size="sm" @click="remove(r)">{{ t('settings.common.delete') }}</Button>
             </td>
           </tr>
         </tbody>
       </table>
       <p class="muted small form-aside">
-        全局角色所有项目可选用；绑定项目的角色只在该项目派发时出现在角色下拉里。
-        「禁止回写」角色的任务完成后不自动同步飞书（行为开关，agent 直写通道不受限）。
+        {{ t('settings.roles.aside') }}
       </p>
     </template>
 
     <!-- 新建 / 编辑 -->
-    <Modal v-model="modalOpen" :title="editing ? `编辑角色：${editing.name}` : '新建角色'" size="lg">
+    <Modal v-model="modalOpen" :title="editing ? t('settings.roles.editTitle', { name: editing.name }) : t('settings.roles.createTitle')" size="lg">
       <div class="role-form">
         <div class="form-grid">
           <div>
-            <label class="lbl">名称 <span class="req">*</span></label>
-            <Input v-model="draft.name" placeholder="如 Talker / Reviewer" :disabled="saving" />
+            <label class="lbl">{{ t('settings.roles.lblName') }} <span class="req">*</span></label>
+            <Input v-model="draft.name" :placeholder="t('settings.roles.phName')" :disabled="saving" />
           </div>
           <div>
-            <label class="lbl">项目绑定</label>
+            <label class="lbl">{{ t('settings.roles.lblProject') }}</label>
             <Select
               :model-value="draft.project_id"
               :options="projectOptions"
@@ -269,61 +270,61 @@ async function remove(role: Role): Promise<void> {
           </div>
         </div>
         <div>
-          <label class="lbl">描述</label>
-          <Input v-model="draft.description" placeholder="一句话说明这个角色干什么" :disabled="saving" />
+          <label class="lbl">{{ t('settings.roles.lblDesc') }}</label>
+          <Input v-model="draft.description" :placeholder="t('settings.roles.phDesc')" :disabled="saving" />
         </div>
         <div>
-          <label class="lbl">System Prompt <span class="req">*</span></label>
+          <label class="lbl">{{ t('settings.roles.lblSystemPrompt') }} <span class="req">*</span></label>
           <Textarea
             v-model="draft.system_prompt"
             :rows="7"
-            placeholder="角色人设 / 约束 / 输出要求。建任务时拼到 prompt 头部作 [role: 名称] 前缀。"
+            :placeholder="t('settings.roles.phPrompt')"
             :disabled="saving"
           />
         </div>
         <div class="form-grid form-grid-3">
           <div>
-            <label class="lbl">模型覆盖</label>
-            <Input v-model="draft.model" list="role-model-options" placeholder="留空 = 个人/项目配置" :disabled="saving" />
+            <label class="lbl">{{ t('settings.roles.lblModel') }}</label>
+            <Input v-model="draft.model" list="role-model-options" :placeholder="t('settings.roles.phModel')" :disabled="saving" />
             <datalist id="role-model-options">
               <option v-for="o in modelOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
             </datalist>
           </div>
           <div>
-            <label class="lbl">推理强度</label>
+            <label class="lbl">{{ t('settings.roles.lblEffort') }}</label>
             <Select
               :model-value="draft.effort"
               :options="EFFORT_OPTIONS"
-              placeholder="默认"
+              :placeholder="t('settings.common.default')"
               :disabled="saving"
               @update:model-value="(v: string | null) => draft.effort = v"
             />
           </div>
           <div>
-            <label class="lbl">最大轮次</label>
-            <Input v-model="draft.max_turns" type="number" :min="1" placeholder="默认" :disabled="saving" />
+            <label class="lbl">{{ t('settings.roles.lblMaxTurns') }}</label>
+            <Input v-model="draft.max_turns" type="number" :min="1" :placeholder="t('settings.common.default')" :disabled="saving" />
           </div>
         </div>
         <div>
-          <label class="lbl">允许工具（逗号分隔，留空 = 全部）</label>
+          <label class="lbl">{{ t('settings.roles.lblTools') }}</label>
           <Input v-model="draft.allowed_tools" placeholder="Read, Glob, Grep, Bash" :disabled="saving" />
         </div>
         <div>
-          <label class="lbl">记忆文档路径（memory_doc）</label>
-          <Input v-model="draft.memory_doc" placeholder="如 docs/memory/talker.md（运行时外化状态，可留空）" :disabled="saving" />
+          <label class="lbl">{{ t('settings.roles.lblMemory') }}</label>
+          <Input v-model="draft.memory_doc" :placeholder="t('settings.roles.phMemory')" :disabled="saving" />
         </div>
         <Checkbox
           :model-value="draft.feishu_writeback"
           :disabled="saving"
-          label="允许飞书回写（任务完成后自动同步结果到绑定 sheet）"
+          :label="t('settings.roles.writebackLabel')"
           @update:model-value="(v: boolean) => draft.feishu_writeback = v"
         />
       </div>
       <template #footer>
         <div class="modal-actions">
-          <Button variant="ghost" :disabled="saving" @click="modalOpen = false">取消</Button>
+          <Button variant="ghost" :disabled="saving" @click="modalOpen = false">{{ t('settings.common.cancel') }}</Button>
           <Button variant="primary" :loading="saving" @click="save">
-            {{ editing ? '保存' : '创建' }}
+            {{ editing ? t('settings.common.save') : t('settings.common.create') }}
           </Button>
         </div>
       </template>
