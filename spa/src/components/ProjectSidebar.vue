@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useProjectsStore } from '@/stores/projects';
 import { deleteProject as apiDeleteProject, type Project } from '@/api/projects';
 import { useTagsStore } from '@/stores/tags';
@@ -22,6 +23,7 @@ const auth = useAuthStore();
 const { drawerOpen, toggleDrawer, closeDrawer } = useSidebarDrawer();
 const toast = useToast();
 const { confirm: confirmDialog } = useConfirm();
+const { t } = useI18n();
 
 /* R59+ fix: H5 (≤1023px) drawer 必须展示完整项目列表 — 之前 v-if="collapsed"
    在 H5 + collapsed=true (用户桌面端曾点过 ◀ 收起, localStorage 写
@@ -447,9 +449,9 @@ const ownedProjects = computed(() => {
 function renderCountBadge(counts: ScopeCounts | undefined): { parts: Array<{ n: number; cls: string; title: string }>; total: number } | null {
   if (!counts) return null;
   const parts: Array<{ n: number; cls: string; title: string }> = [];
-  if (counts.running > 0) parts.push({ n: counts.running, cls: 'count-running', title: '运行中' });
-  if (counts.reviewing > 0) parts.push({ n: counts.reviewing, cls: 'count-reviewing', title: '待审核' });
-  if (counts.paused > 0) parts.push({ n: counts.paused, cls: 'count-paused', title: '已暂停' });
+  if (counts.running > 0) parts.push({ n: counts.running, cls: 'count-running', title: t('nav.statusRunning') });
+  if (counts.reviewing > 0) parts.push({ n: counts.reviewing, cls: 'count-reviewing', title: t('nav.statusReviewing') });
+  if (counts.paused > 0) parts.push({ n: counts.paused, cls: 'count-paused', title: t('nav.statusPaused') });
   if (parts.length === 0 && counts.total === 0) return null;
   return { parts, total: counts.total };
 }
@@ -469,10 +471,10 @@ function renderGlobalBadge(counts: ScopeCounts) {
   if (q <= 0) return { ...badge, total: counts.total };
   const pureRunning = counts.running - q;
   const runningPart = pureRunning > 0
-    ? [{ n: pureRunning, cls: 'count-running', title: '运行中' }]
+    ? [{ n: pureRunning, cls: 'count-running', title: t('nav.statusRunning') }]
     : [];
   const parts = [
-    { n: q, cls: 'count-queued', title: '排队中' },
+    { n: q, cls: 'count-queued', title: t('nav.statusQueued') },
     ...runningPart,
     ...badge.parts.filter((p) => p.cls !== 'count-running'),
   ];
@@ -542,7 +544,7 @@ async function openVersionRequirements(pId: string, pName: string, vId: string, 
   const path = `/projects/${pId}/versions/${vId}/requirements`;
   tags.visit({
     name: tagName,
-    title: `${pName} / ${vName} · 需求点`,
+    title: t('nav.tabVersionRequirements', { project: pName, version: vName }),
     path,
   });
   await router.push(path);
@@ -557,7 +559,7 @@ async function openVersionBoard(pId: string, pName: string, vId: string, vName: 
   const path = `/${pId}/${vId}`;
   tags.visit({
     name: tagName,
-    title: `${pName} / ${vName} · 看板`,
+    title: t('nav.tabVersionBoard', { project: pName, version: vName }),
     path,
   });
   await router.push(path);
@@ -571,32 +573,32 @@ async function openDashboard() {
 }
 
 async function openSchedules() {
-  tags.visit({ name: 'schedules', title: '定时任务', path: '/schedules' });
+  tags.visit({ name: 'schedules', title: t('nav.schedules'), path: '/schedules' });
   await router.push('/schedules');
 }
 
 async function openSettings() {
-  tags.visit({ name: 'settings', title: '设置', path: '/settings' });
+  tags.visit({ name: 'settings', title: t('nav.settings'), path: '/settings' });
   await router.push('/settings');
 }
 
 async function openRequirements() {
-  tags.visit({ name: 'requirements', title: '需求点', path: '/requirements' });
+  tags.visit({ name: 'requirements', title: t('nav.requirements'), path: '/requirements' });
   await router.push('/requirements');
 }
 
 async function openAssets() {
-  tags.visit({ name: 'assets', title: '资源池', path: '/assets' });
+  tags.visit({ name: 'assets', title: t('nav.assets'), path: '/assets' });
   await router.push('/assets');
 }
 
 async function openImport() {
-  tags.visit({ name: 'import', title: '批量导入', path: '/import' });
+  tags.visit({ name: 'import', title: t('nav.import'), path: '/import' });
   await router.push('/import');
 }
 
 async function openGlobal() {
-  tags.visit({ name: 'global', title: '全局看板', path: '/global' });
+  tags.visit({ name: 'global', title: t('nav.globalBoard'), path: '/global' });
   await router.push('/global');
 }
 
@@ -605,7 +607,7 @@ async function openGlobal() {
    ProjectsClient 不同), 所以这里指 /projects = ProjectsView, 含新建 + 飞书
    配置等 master ProjectsClient 的 SPA 简化版. */
 async function openProjects() {
-  tags.visit({ name: 'projects', title: '项目列表', path: '/projects' });
+  tags.visit({ name: 'projects', title: t('nav.projects'), path: '/projects' });
   await router.push('/projects');
 }
 
@@ -617,7 +619,7 @@ async function openProjectBoard(pId: string, pName: string): Promise<void> {
   const path = `/${pId}/console`;
   tags.visit({
     name: `project-console-${pId}`,
-    title: `${pName} · 控制台`,
+    title: t('nav.tabProjectConsole', { name: pName }),
     path,
   });
   await router.push(path);
@@ -632,7 +634,7 @@ async function openProjectUnversioned(pId: string, pName: string): Promise<void>
   const path = `/${pId}/unversioned`;
   tags.visit({
     name: tagName,
-    title: `${pName} · 未挂版本`,
+    title: t('nav.tabProjectUnversioned', { name: pName }),
     path,
   });
   await router.push(path);
@@ -647,7 +649,7 @@ async function openProjectUnversionedRequirements(pId: string, pName: string): P
   const path = `/${pId}/unversioned/requirements`;
   tags.visit({
     name: tagName,
-    title: `${pName} · 未挂版本需求`,
+    title: t('nav.tabProjectUnversionedReq', { name: pName }),
     path,
   });
   await router.push(path);
@@ -669,13 +671,13 @@ async function openProjectWiki(pId: string, pName: string): Promise<void> {
 }
 
 async function openUsage() {
-  tags.visit({ name: 'usage', title: '用量统计', path: '/usage' });
+  tags.visit({ name: 'usage', title: t('nav.usage'), path: '/usage' });
   await router.push('/usage');
 }
 
 // idea-canvas P2 (docs/plans/idea-canvas.md): 构思画布入口 — 跨项目构思层.
 async function openIdeas() {
-  tags.visit({ name: 'ideas', title: '构思画布', path: '/ideas' });
+  tags.visit({ name: 'ideas', title: t('nav.ideas'), path: '/ideas' });
   await router.push('/ideas');
 }
 
@@ -856,9 +858,9 @@ async function submitRename(): Promise<void> {
   }
   try {
     await projects.renameProject(id, name);
-    toast.success(`已重命名为「${name}」`);
+    toast.success(t('nav.renamedTo', { name }));
   } catch (e) {
-    toast.error((e as Error).message || '重命名失败');
+    toast.error((e as Error).message || t('nav.renameFailed'));
   } finally {
     renamingId.value = null;
   }
@@ -873,7 +875,7 @@ function menuArchive(): void {
   closeContextMenu();
   if (!p || menuKind.value === 'archived') return;
   void projects.archiveProject(p.id).then(() => {
-    toast.success(`已归档「${p.name}」, 右键归档行可恢复`);
+    toast.success(t('nav.archivedToast', { name: p.name }));
   });
 }
 
@@ -882,7 +884,7 @@ function menuUnarchive(): void {
   closeContextMenu();
   if (!p || menuKind.value === 'live') return;
   void projects.unarchiveProject(p.id).then(() => {
-    toast.success(`已恢复「${p.name}」`);
+    toast.success(t('nav.unarchivedToast', { name: p.name }));
   });
 }
 
@@ -892,20 +894,20 @@ async function menuDelete(): Promise<void> {
   closeContextMenu();
   if (!p) return;
   const ok = await confirmDialog(
-    '将隐藏该项目及其下所有版本和任务，从列表中消失。数据保留在数据库中，可通过数据库恢复。继续？',
-    { title: `删除项目「${p.name}」`, type: 'danger', confirmText: '删除' },
+    t('nav.deleteConfirmBody'),
+    { title: t('nav.deleteConfirmTitle', { name: p.name }), type: 'danger', confirmText: t('nav.deleteConfirmBtn') },
   );
   if (!ok) return;
   try {
     await apiDeleteProject(p.id);
     projects.removeProjectLocally(p.id);
-    toast.success(`项目「${p.name}」已删除`);
+    toast.success(t('nav.deletedToast', { name: p.name }));
     // 删的是当前路由项目 → 项目页会 404, 拉回项目列表.
     if (activeProjectId.value === p.id) {
       void router.push('/projects');
     }
   } catch (e) {
-    toast.error((e as { error?: string; message?: string }).error || (e as Error).message || '删除失败');
+    toast.error((e as { error?: string; message?: string }).error || (e as Error).message || t('nav.deleteFailed'));
   }
 }
 
@@ -956,20 +958,20 @@ onBeforeUnmount(() => {
   <aside v-if="collapsed && !isMobile" class="sidebar sidebar--collapsed">
     <button
       class="sidebar-collapse-btn"
-      title="展开导航"
-      aria-label="展开导航"
+      :title="t('nav.expandNav')"
+      :aria-label="t('nav.expandNav')"
       @click="toggleCollapse"
     >▶</button>
     <div class="sidebar-divider" />
-    <button class="sidebar-icon-btn" title="所有项目" @click="openProjects">🏠</button>
-    <button class="sidebar-icon-btn" title="全局看板" @click="openGlobal">🌐</button>
-    <button class="sidebar-icon-btn" title="批量导入" @click="openImport">📥</button>
-    <button class="sidebar-icon-btn" title="需求点" @click="openRequirements">📋</button>
-    <button class="sidebar-icon-btn" title="资源池" @click="openAssets">📦</button>
-    <button class="sidebar-icon-btn" title="定时任务" @click="openSchedules">⏰</button>
-    <button class="sidebar-icon-btn" title="构思画布" @click="openIdeas">💡</button>
-    <button class="sidebar-icon-btn" title="用量统计" @click="openUsage">📊</button>
-    <button class="sidebar-icon-btn" title="设置" @click="openSettings">⚙️</button>
+    <button class="sidebar-icon-btn" :title="t('nav.allProjects')" @click="openProjects">🏠</button>
+    <button class="sidebar-icon-btn" :title="t('nav.globalBoard')" @click="openGlobal">🌐</button>
+    <button class="sidebar-icon-btn" :title="t('nav.import')" @click="openImport">📥</button>
+    <button class="sidebar-icon-btn" :title="t('nav.requirements')" @click="openRequirements">📋</button>
+    <button class="sidebar-icon-btn" :title="t('nav.assets')" @click="openAssets">📦</button>
+    <button class="sidebar-icon-btn" :title="t('nav.schedules')" @click="openSchedules">⏰</button>
+    <button class="sidebar-icon-btn" :title="t('nav.ideas')" @click="openIdeas">💡</button>
+    <button class="sidebar-icon-btn" :title="t('nav.usage')" @click="openUsage">📊</button>
+    <button class="sidebar-icon-btn" :title="t('nav.settings')" @click="openSettings">⚙️</button>
     <div class="sidebar-divider" />
     <a
       v-for="p in ownedProjects"
@@ -985,8 +987,8 @@ onBeforeUnmount(() => {
     <div
       v-if="maintenance?.active"
       class="maint-strip"
-      :title="maintenance.reason || '系统维护中'"
-      aria-label="系统维护中"
+      :title="maintenance.reason || t('nav.maintenance')"
+      :aria-label="t('nav.maintenance')"
     />
   </aside>
 
@@ -1005,8 +1007,8 @@ onBeforeUnmount(() => {
          的折叠态. -->
     <button
       class="sidebar-collapse-btn"
-      title="收起导航"
-      aria-label="收起导航"
+      :title="t('nav.collapseNav')"
+      :aria-label="t('nav.collapseNav')"
       @click="onCollapseClick"
     >◀</button>
 
@@ -1029,10 +1031,10 @@ onBeforeUnmount(() => {
       <div v-if="maintenance?.active" class="maint-banner" role="status" aria-live="polite">
         <div class="maint-banner-head">
           <span class="maint-dot" aria-hidden="true" />
-          <span>🔧 系统维护中</span>
+          <span>🔧 {{ t('nav.maintenance') }}</span>
         </div>
         <div v-if="maintenance.reason" class="maint-banner-reason">{{ maintenance.reason }}</div>
-        <div v-if="maintenance.entered_at" class="maint-banner-time">开始于 {{ formatMaintTime(maintenance.entered_at) }}</div>
+        <div v-if="maintenance.entered_at" class="maint-banner-time">{{ t('nav.maintStartedAt', { time: formatMaintTime(maintenance.entered_at) }) }}</div>
       </div>
       <!-- R56-B13: 顶部「快速入口」区. 镜像 master NavSidebar.tsx R34:
            固定态 topPinned=true 加 sticky 贴 .sidebar-middle 顶部 (项目列表
@@ -1044,30 +1046,30 @@ onBeforeUnmount(() => {
         :class="{ 'sidebar-section--top-sticky': topPinned }"
       >
         <div class="sidebar-top-header">
-          <span class="sidebar-heading">快速入口</span>
+          <span class="sidebar-heading">{{ t('nav.quickEntry') }}</span>
           <button
             class="top-pinned-toggle"
             :class="{ 'top-pinned-toggle--pinned': topPinned }"
-            :title="topPinned ? '切换为活动 (随项目列表滚动)' : '切换为固定 (始终留在顶部)'"
+            :title="topPinned ? t('nav.toAutoTitle') : t('nav.toPinnedTitle')"
             :aria-pressed="topPinned"
             @click="toggleTopPinned"
-          >{{ topPinned ? '📌 已固定' : '📍 活动' }}</button>
+          >{{ topPinned ? '📌 ' + t('nav.pinnedLabel') : '📍 ' + t('nav.autoLabel') }}</button>
         </div>
-        <button class="btn sidebar-link" @click="openSchedules">⏰ 定时任务</button>
-        <button class="btn sidebar-link" @click="openRequirements">📋 需求点</button>
-        <button class="btn sidebar-link" @click="openAssets">📦 资源池</button>
-        <button class="btn sidebar-link" @click="openIdeas">💡 构思画布</button>
-        <button class="btn sidebar-link" @click="openUsage">📊 用量统计</button>
+        <button class="btn sidebar-link" @click="openSchedules">⏰ {{ t('nav.schedules') }}</button>
+        <button class="btn sidebar-link" @click="openRequirements">📋 {{ t('nav.requirements') }}</button>
+        <button class="btn sidebar-link" @click="openAssets">📦 {{ t('nav.assets') }}</button>
+        <button class="btn sidebar-link" @click="openIdeas">💡 {{ t('nav.ideas') }}</button>
+        <button class="btn sidebar-link" @click="openUsage">📊 {{ t('nav.usage') }}</button>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-heading">
-          <span>项目导航</span>
-          <span class="sidebar-heading-count" :title="`项目数量 ${ownedProjects.length}`">{{ ownedProjects.length }}</span>
+          <span>{{ t('nav.projectNav') }}</span>
+          <span class="sidebar-heading-count" :title="t('nav.projectCountTitle', { n: ownedProjects.length })">{{ ownedProjects.length }}</span>
         </div>
-        <div v-if="projects.loading" class="muted small">加载中…</div>
+        <div v-if="projects.loading" class="muted small">{{ t('nav.loading') }}</div>
       <div v-else-if="projects.error" class="form-error small">{{ projects.error }}</div>
-      <div v-else-if="!list.length" class="muted small">暂无项目</div>
+      <div v-else-if="!list.length" class="muted small">{{ t('nav.noProjects') }}</div>
       <ul v-else class="project-tree">
         <li v-for="p in list" :key="p.id" class="project-node">
           <!-- R56-B6: 内层 div 承载 drop indicator (上下蓝线), outer div (project-row)
@@ -1132,7 +1134,7 @@ onBeforeUnmount(() => {
                     折叠态也显示. 无版本时显示 (0), 跟 master 一致. -->
                 <span
                   class="project-version-count"
-                  :title="`版本数量 ${(projects.versionsByProject[p.id] || []).length}`"
+                  :title="t('nav.versionCountTitle', { n: (projects.versionsByProject[p.id] || []).length })"
                 >
                   ({{ (projects.versionsByProject[p.id] || []).length }})
                 </span>
@@ -1146,7 +1148,7 @@ onBeforeUnmount(() => {
               <span
                 v-if="projectCounts(p.id) && renderCountBadge(projectCounts(p.id)!)"
                 class="count-badge"
-                :aria-label="projectCounts(p.id)!.running + '运行 ' + projectCounts(p.id)!.reviewing + '待审 ' + projectCounts(p.id)!.paused + '暂停'"
+                :aria-label="t('nav.ariaBadge', { running: projectCounts(p.id)!.running, review: projectCounts(p.id)!.reviewing, paused: projectCounts(p.id)!.paused })"
               >
                 <template v-for="(part, i) in renderCountBadge(projectCounts(p.id)!)!.parts" :key="part.title">
                   <span v-if="i > 0" class="count-sep">/</span>
@@ -1155,7 +1157,7 @@ onBeforeUnmount(() => {
                 <span
                   v-if="renderCountBadge(projectCounts(p.id)!)!.total > 0"
                   :class="renderCountBadge(projectCounts(p.id)!)!.parts.length > 0 ? 'count-total count-total--with-parts' : 'count-total'"
-                  title="总数"
+                  :title="t('nav.totalCount')"
                 >{{ renderCountBadge(projectCounts(p.id)!)!.total }}</span>
               </span>
               <!-- v532: 收藏 toggle — 行尾与置顶星并列. 未收藏 hover 浮出灰 ♥,
@@ -1165,14 +1167,14 @@ onBeforeUnmount(() => {
               <button
                 class="star-toggle"
                 :class="{ 'star-toggle--starred': !!p.starred }"
-                :title="p.starred ? '取消收藏' : '收藏'"
+                :title="p.starred ? t('nav.unstar') : t('nav.star')"
                 :aria-pressed="!!p.starred"
                 @click.stop="(e) => { e.preventDefault(); projects.toggleStar(p.id, p.starred ?? 0); }"
               >♥</button>
               <button
                 class="pin-toggle"
                 :class="{ 'pin-toggle--pinned': !!p.pinned }"
-                :title="p.pinned ? '取消置顶' : '置顶到顶部 (附带收藏)'"
+                :title="p.pinned ? t('nav.unpin') : t('nav.pinRowTitle')"
                 :aria-pressed="!!p.pinned"
                 @click.stop="(e) => { e.preventDefault(); projects.togglePin(p.id, p.pinned ?? 0); }"
               >{{ p.pinned ? '★' : '☆' }}</button>
@@ -1191,13 +1193,13 @@ onBeforeUnmount(() => {
                   project.current_version_id), 所以一直没渲染; 现在改用
                   v.id === p.current_version_id 跟 master 一致. ⭐ 跟名字前靠,
                   一眼可识别 "默认版本". shrink-0 保 emoji 不被 truncate 吃. -->
-              <span v-if="v.id === p.current_version_id" class="version-current-star" title="当前版本">⭐</span>
+              <span v-if="v.id === p.current_version_id" class="version-current-star" :title="t('nav.currentVersion')">⭐</span>
               <span class="version-name">{{ v.name }}</span>
               <!-- R38: 版本级徽章 (镜像 master NavigationTree.tsx:419). -->
               <span
                 v-if="renderCountBadge(scopeCounts[`${p.id}:${v.id}`])"
                 class="count-badge count-badge--version"
-                :aria-label="scopeCounts[`${p.id}:${v.id}`]?.running + '运行 ' + scopeCounts[`${p.id}:${v.id}`]?.reviewing + '待审 ' + scopeCounts[`${p.id}:${v.id}`]?.paused + '暂停'"
+                :aria-label="t('nav.ariaBadge', { running: scopeCounts[`${p.id}:${v.id}`]?.running, review: scopeCounts[`${p.id}:${v.id}`]?.reviewing, paused: scopeCounts[`${p.id}:${v.id}`]?.paused })"
               >
                 <template v-for="(part, i) in renderCountBadge(scopeCounts[`${p.id}:${v.id}`])!.parts" :key="part.title">
                   <span v-if="i > 0" class="count-sep">/</span>
@@ -1206,12 +1208,12 @@ onBeforeUnmount(() => {
                 <span
                   v-if="renderCountBadge(scopeCounts[`${p.id}:${v.id}`])!.total > 0"
                   :class="renderCountBadge(scopeCounts[`${p.id}:${v.id}`])!.parts.length > 0 ? 'count-total count-total--with-parts' : 'count-total'"
-                  title="总数"
+                  :title="t('nav.totalCount')"
                 >{{ renderCountBadge(scopeCounts[`${p.id}:${v.id}`])!.total }}</span>
               </span>
             </li>
             <li v-if="!(projects.versionsByProject[p.id] || []).length" class="muted small">
-              无版本
+              {{ t('nav.noVersions') }}
             </li>
             <!-- R38: 镜像 Next.js NavigationTree.tsx 展开后底部 4 条项目级入口
                 (其他任务/Board/需求/Wiki, master 把这 4 个挂版本列表下方作
@@ -1221,12 +1223,12 @@ onBeforeUnmount(() => {
                 与 master 一一对应 (顺序/emoji/链接目标 1:1). -->
             <li class="project-link-row">
               <button type="button" class="project-link" @click.stop="openProjectUnversioned(p.id, p.name)">
-                <span>📁</span><span>其他任务</span>
+                <span>📁</span><span>{{ t('nav.unversionedTasks') }}</span>
                 <!-- R38: 其他任务链接右侧徽章 (镜像 master NavigationTree.tsx:456). -->
                 <span
                   v-if="renderCountBadge(scopeCounts[`${p.id}:`])"
                   class="count-badge count-badge--link"
-                  :aria-label="scopeCounts[`${p.id}:`]?.running + '运行 ' + scopeCounts[`${p.id}:`]?.reviewing + '待审 ' + scopeCounts[`${p.id}:`]?.paused + '暂停'"
+                  :aria-label="t('nav.ariaBadge', { running: scopeCounts[`${p.id}:`]?.running, review: scopeCounts[`${p.id}:`]?.reviewing, paused: scopeCounts[`${p.id}:`]?.paused })"
                 >
                   <template v-for="(part, i) in renderCountBadge(scopeCounts[`${p.id}:`])!.parts" :key="part.title">
                     <span v-if="i > 0" class="count-sep">/</span>
@@ -1235,19 +1237,19 @@ onBeforeUnmount(() => {
                   <span
                     v-if="renderCountBadge(scopeCounts[`${p.id}:`])!.total > 0"
                     :class="renderCountBadge(scopeCounts[`${p.id}:`])!.parts.length > 0 ? 'count-total count-total--with-parts' : 'count-total'"
-                    title="总数"
+                    :title="t('nav.totalCount')"
                   >{{ renderCountBadge(scopeCounts[`${p.id}:`])!.total }}</span>
                 </span>
               </button>
             </li>
             <li class="project-link-row">
               <button type="button" class="project-link" @click.stop="openProjectBoard(p.id, p.name)">
-                <span>🎬</span><span>控制台</span>
+                <span>🎬</span><span>{{ t('nav.console') }}</span>
               </button>
             </li>
             <li class="project-link-row">
               <button type="button" class="project-link" @click.stop="openProjectUnversionedRequirements(p.id, p.name)">
-                <span>📋</span><span>需求</span>
+                <span>📋</span><span>{{ t('nav.projectRequirements') }}</span>
               </button>
             </li>
             <li class="project-link-row">
@@ -1272,7 +1274,7 @@ onBeforeUnmount(() => {
           :aria-expanded="archivedOpen"
           @click="toggleArchivedOpen"
         >
-          <span>{{ archivedOpen ? '▼' : '▶' }} 🗂 已归档</span>
+          <span>{{ archivedOpen ? '▼' : '▶' }} 🗂 {{ t('nav.archivedGroup') }}</span>
           <span class="archived-count">{{ projects.archivedProjects.length }}</span>
         </button>
         <ul v-if="archivedOpen" class="archived-list">
@@ -1281,7 +1283,7 @@ onBeforeUnmount(() => {
             :key="p.id"
             class="archived-row"
             :class="{ 'archived-row--active': p.id === activeProjectId }"
-            :title="`${p.name} (已归档 — 点击打开, 右键恢复)`"
+            :title="t('nav.archivedRowTitle', { name: p.name })"
             @click="openProject(p.id, p.name)"
             @contextmenu.prevent="openContextMenu($event, p, 'archived')"
           >
@@ -1302,13 +1304,13 @@ onBeforeUnmount(() => {
         R38: 全局看板右侧加数字徽章 (镜像 master NavSidebar.tsx:485-493
         renderGlobalCountsBadge), 数据 = 当前用户名下所有 scope 累加. -->
     <div class="sidebar-section sidebar-section--bottom">
-      <button class="btn sidebar-link" @click="openProjects">🏠 所有项目</button>
+      <button class="btn sidebar-link" @click="openProjects">🏠 {{ t('nav.allProjects') }}</button>
       <button class="btn sidebar-link sidebar-link--global" @click="openGlobal">
-        <span class="sidebar-link-label">🌐 全局看板</span>
+        <span class="sidebar-link-label">🌐 {{ t('nav.globalBoard') }}</span>
         <span
           v-if="renderGlobalBadge(globalCounts)"
           class="count-badge count-badge--global"
-          :aria-label="'排队 ' + (globalCounts.queued ?? 0) + ' 运行 ' + (globalCounts.running - (globalCounts.queued ?? 0)) + ' ' + globalCounts.reviewing + '待审 ' + globalCounts.paused + '暂停'"
+          :aria-label="t('nav.globalAriaBadge', { queued: globalCounts.queued ?? 0, running: globalCounts.running - (globalCounts.queued ?? 0), review: globalCounts.reviewing, paused: globalCounts.paused })"
         >
           <template v-for="(part, i) in renderGlobalBadge(globalCounts)!.parts" :key="part.title">
             <span v-if="i > 0" class="count-sep">/</span>
@@ -1317,12 +1319,12 @@ onBeforeUnmount(() => {
           <span
             v-if="renderGlobalBadge(globalCounts)!.total > 0"
             :class="renderGlobalBadge(globalCounts)!.parts.length > 0 ? 'count-total count-total--with-parts' : 'count-total'"
-            title="总数"
+            :title="t('nav.totalCount')"
           >{{ renderGlobalBadge(globalCounts)!.total }}</span>
         </span>
       </button>
-      <button class="btn sidebar-link" @click="openImport">📥 批量导入</button>
-      <button class="btn sidebar-link" @click="openSettings">⚙️ 设置</button>
+      <button class="btn sidebar-link" @click="openImport">📥 {{ t('nav.import') }}</button>
+      <button class="btn sidebar-link" @click="openSettings">⚙️ {{ t('nav.settings') }}</button>
     </div>
 
     <!-- R56-B5: 底部账号区 (镜像 master NavSidebar.tsx:511-513 AccountSwitcher
@@ -1349,8 +1351,8 @@ onBeforeUnmount(() => {
       :aria-valuenow="sidebarWidth"
       :aria-valuemin="MIN_WIDTH"
       :aria-valuemax="MAX_WIDTH"
-      aria-label="拖动调整侧栏宽度"
-      title="拖动调整宽度"
+      :aria-label="t('nav.resizerAria')"
+      :title="t('nav.resizerTitle')"
       @mousedown="startDrag"
       @touchstart="startDrag"
     />
@@ -1373,34 +1375,34 @@ onBeforeUnmount(() => {
       <template v-if="menuKind === 'live'">
         <button class="ctx-item" role="menuitem" @click="menuTogglePin">
           <span class="ctx-glyph" :class="{ 'ctx-glyph--amber': !!menuProject.pinned }">★</span>
-          <span>{{ menuProject.pinned ? '取消置顶' : '置顶（附收藏）' }}</span>
+          <span>{{ menuProject.pinned ? t('nav.unpin') : t('nav.pinMenu') }}</span>
         </button>
         <button class="ctx-item" role="menuitem" @click="menuToggleStar">
           <span class="ctx-glyph" :class="{ 'ctx-glyph--red': !!menuProject.starred }">♥</span>
-          <span>{{ menuProject.starred ? '取消收藏' : '收藏' }}</span>
+          <span>{{ menuProject.starred ? t('nav.unstar') : t('nav.star') }}</span>
         </button>
         <button class="ctx-item" role="menuitem" @click="menuStartRename">
           <span class="ctx-glyph">✎</span>
-          <span>重命名</span>
+          <span>{{ t('nav.rename') }}</span>
         </button>
         <div class="ctx-sep" aria-hidden="true" />
         <button class="ctx-item" role="menuitem" @click="menuArchive">
           <span class="ctx-glyph">🗂</span>
-          <span>归档</span>
+          <span>{{ t('nav.archive') }}</span>
         </button>
         <button class="ctx-item ctx-item--danger" role="menuitem" @click="menuDelete">
           <span class="ctx-glyph">🗑</span>
-          <span>删除…</span>
+          <span>{{ t('nav.delete') }}</span>
         </button>
       </template>
       <template v-else>
         <button class="ctx-item" role="menuitem" @click="menuUnarchive">
           <span class="ctx-glyph">📤</span>
-          <span>恢复到列表</span>
+          <span>{{ t('nav.restore') }}</span>
         </button>
         <button class="ctx-item ctx-item--danger" role="menuitem" @click="menuDelete">
           <span class="ctx-glyph">🗑</span>
-          <span>删除…</span>
+          <span>{{ t('nav.delete') }}</span>
         </button>
       </template>
     </div>

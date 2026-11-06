@@ -47,6 +47,7 @@
    - 不挂 SSE/M3 生命周期按钮 (R21 R22 范畴, 单独 task). */
 
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get } from '@/api/http';
 import { getStats, type StatsData, type SchedulerStatus } from '@/api/stats';
 import Button from '@/components/Button.vue';
@@ -94,6 +95,8 @@ const RECENT_STATUSES: TaskStatus[] = ['completed', 'failed', 'cancelled'];
 /* ------------------------------------------------------------------ */
 /*  状态机                                                              */
 /* ------------------------------------------------------------------ */
+
+const { t, locale } = useI18n();
 
 const stats = ref<StatsData | null>(null);
 const tasks = ref<ProgressTask[]>([]);
@@ -178,21 +181,27 @@ function formatDuration(startMs: number, endMs?: number): string {
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
 }
 
-/** 状态中文标签 — 与 R33 Uncategorized STATUS_LABELS 同款拍板 (11 状态;
+/** 状态 → i18n key — 与 R33 Uncategorized STATUS_LABELS 同款拍板 (11 状态;
     rejected 为历史遗留终态, 2026-11-01 起显示「已取消」). */
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '校验中',
-  await_user: '等用户',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
+const STATUS_KEYS: Record<TaskStatus, string> = {
+  pending: 'statusPending',
+  queued: 'statusQueued',
+  running: 'statusRunning',
+  paused: 'statusPaused',
+  reviewing: 'statusReviewing',
+  verifying: 'statusVerifying',
+  await_user: 'statusAwaitUser',
+  completed: 'statusCompleted',
+  failed: 'statusFailed',
+  rejected: 'statusRejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'statusCancelled',
 };
+
+/** 状态显示标签 (走 i18n) — 未知状态兜底显示原始值. */
+function statusLabel(status: TaskStatus): string {
+  const key = STATUS_KEYS[status];
+  return key ? t(`tasks.progress.${key}`) : status;
+}
 
 /** 状态颜色 (Tailwind palette). 颜色映射与 R33 STATUS_COLORS 同款。 */
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -236,11 +245,11 @@ async function fetchData(): Promise<void> {
   } catch (e: unknown) {
     const { isHttpError } = await import('@/api/http');
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('tasks.progress.errLoadHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('tasks.progress.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('tasks.progress.errLoadFailed');
     }
   } finally {
     loading.value = false;
@@ -341,20 +350,20 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
         <!-- 🆕 R19: Next page.tsx:90 "← 返回" 链接补全 (R34 漏挂, sheet R19
              "完全镜像" 要求补齐). href="/" 在 SPA hash mode = #/ → Root.vue
              → 已登录跳 /global (与 Next /projects 行为同源, R5 路由上线). -->
-        <router-link to="/" class="back-link">← 返回</router-link>
-        <h1 class="page-title">实时进度</h1>
+        <router-link to="/" class="back-link">← {{ t('tasks.progress.back') }}</router-link>
+        <h1 class="page-title">{{ t('tasks.progress.title') }}</h1>
         <p class="page-subtitle">
-          调度器状态 + 活跃任务 + 最近完成。每 3 秒自动刷新 (可暂停)。
+          {{ t('tasks.progress.subtitle') }}
         </p>
       </div>
       <div class="header-actions">
         <Checkbox
           :model-value="autoRefresh"
-          label="自动刷新"
+          :label="t('tasks.progress.autoRefresh')"
           @update:model-value="onAutoRefreshChange"
         />
         <span class="meta-stamp">
-          上次: {{ new Date(lastRefresh).toLocaleTimeString('zh-CN', { hour12: false }) }}
+          {{ t('tasks.progress.lastRefresh') }}: {{ new Date(lastRefresh).toLocaleTimeString(locale, { hour12: false }) }}
         </span>
         <Button
           variant="secondary"
@@ -363,7 +372,7 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
           :disabled="loading"
           @click="onManualRefresh"
         >
-          ↻ 刷新
+          ↻ {{ t('tasks.progress.refresh') }}
         </Button>
       </div>
     </header>
@@ -373,13 +382,13 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
       <!-- 首屏加载 (无数据时) -->
       <div v-if="loading && !stats && tasks.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('tasks.progress.loading') }}</p>
       </div>
 
       <!-- 错误态 -->
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('tasks.progress.errLoadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -390,29 +399,29 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
       <template v-else-if="stats">
         <!-- Scheduler status -->
         <section class="card">
-          <h2 class="card-title">调度器状态</h2>
+          <h2 class="card-title">{{ t('tasks.progress.schedulerStatus') }}</h2>
           <div class="stat-grid">
             <div class="stat-box">
-              <div class="stat-box-label">运行中</div>
+              <div class="stat-box-label">{{ t('tasks.progress.statRunning') }}</div>
               <div class="stat-box-value text-sky-600">{{ schedulerStatus?.running_count ?? 0 }}</div>
             </div>
             <div class="stat-box">
-              <div class="stat-box-label">排队中</div>
+              <div class="stat-box-label">{{ t('tasks.progress.statQueued') }}</div>
               <div class="stat-box-value text-blue-600">{{ schedulerStatus?.queue_size ?? 0 }}</div>
             </div>
             <div class="stat-box">
-              <div class="stat-box-label">并发上限</div>
+              <div class="stat-box-label">{{ t('tasks.progress.statMaxConcurrency') }}</div>
               <div class="stat-box-value text-gray-900">{{ schedulerStatus?.max_concurrency ?? 2 }}</div>
             </div>
             <div class="stat-box">
-              <div class="stat-box-label">实时花费</div>
+              <div class="stat-box-label">{{ t('tasks.progress.statLiveCost') }}</div>
               <div class="stat-box-value text-amber-600">${{ totalCost.toFixed(3) }}</div>
             </div>
           </div>
 
           <div class="concurrency-bar">
             <div class="concurrency-label">
-              <span>并发占用</span>
+              <span>{{ t('tasks.progress.concurrencyUsage') }}</span>
               <span>{{ schedulerStatus?.running_count ?? 0 }} / {{ schedulerStatus?.max_concurrency ?? 2 }}</span>
             </div>
             <div class="progress-bar-track">
@@ -425,7 +434,7 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
 
           <!-- Running task chips -->
           <div v-if="(schedulerStatus?.running_tasks?.length ?? 0) > 0" class="chip-section">
-            <div class="chip-label">运行中任务:</div>
+            <div class="chip-label">{{ t('tasks.progress.runningTasksLabel') }}</div>
             <div class="chip-list">
               <router-link
                 v-for="t in schedulerStatus?.running_tasks"
@@ -442,7 +451,7 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
 
           <!-- Queue task chips -->
           <div v-if="(schedulerStatus?.queue_tasks?.length ?? 0) > 0" class="chip-section">
-            <div class="chip-label">队列中:</div>
+            <div class="chip-label">{{ t('tasks.progress.queuedLabel') }}</div>
             <div class="chip-list">
               <router-link
                 v-for="t in schedulerStatus?.queue_tasks"
@@ -460,14 +469,14 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
         <!-- Active tasks -->
         <section class="card">
           <h2 class="card-title">
-            活跃任务
+            {{ t('tasks.progress.activeTasksTitle') }}
             <span class="muted-small">({{ activeTasks.length }})</span>
           </h2>
           <Empty
             v-if="activeTasks.length === 0"
             illustration="inbox"
-            title="无活跃任务"
-            description="调度器当前空闲。可在「未分类任务」或具体项目下新建任务。"
+            :title="t('tasks.progress.noActiveTitle')"
+            :description="t('tasks.progress.noActiveDesc')"
           />
           <div v-else class="task-list">
             <router-link
@@ -481,10 +490,10 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
                   <div class="task-title">{{ t.title }}</div>
                   <div class="task-meta">
                     <span :class="['status-chip', STATUS_COLORS[t.status]]">
-                      {{ STATUS_LABELS[t.status] }}
+                      {{ statusLabel(t.status) }}
                     </span>
                     <span v-if="t.model" class="task-model">{{ t.model }}</span>
-                    <span>· {{ formatDuration(parseDbTime(t.started_at || t.created_at).getTime(), now) }}前开始</span>
+                    <span>· {{ $t('tasks.progress.startedAgo', { dur: formatDuration(parseDbTime(t.started_at || t.created_at).getTime(), now) }) }}</span>
                   </div>
                 </div>
                 <div class="task-row-aside">
@@ -509,14 +518,14 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
         <!-- Recent completions -->
         <section class="card">
           <h2 class="card-title">
-            最近完成
-            <span class="muted-small">(近 2 小时)</span>
+            {{ t('tasks.progress.recentTitle') }}
+            <span class="muted-small">{{ t('tasks.progress.recentWindow') }}</span>
           </h2>
           <Empty
             v-if="recentTasks.length === 0"
             illustration="doc"
-            title="无最近任务"
-            description="近 2 小时内没有完成 / 失败 / 取消的任务。"
+            :title="t('tasks.progress.noRecentTitle')"
+            :description="t('tasks.progress.noRecentDesc')"
           />
           <div v-else class="recent-list">
             <router-link
@@ -526,7 +535,7 @@ function elapsedMs(t: ProgressTask, currentNow: number): number {
               class="recent-row"
             >
               <span :class="['status-chip', STATUS_COLORS[t.status]]">
-                {{ STATUS_LABELS[t.status] }}
+                {{ statusLabel(t.status) }}
               </span>
               <span class="recent-title">{{ t.title }}</span>
               <span class="recent-duration">

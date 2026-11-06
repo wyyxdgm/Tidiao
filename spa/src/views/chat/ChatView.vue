@@ -20,6 +20,7 @@
 
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type PropType } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, post, HttpError } from '@/api/http';
 import { createTaskStreamSubscription } from '@/composables/useTaskStream';
 import { useToast } from '@/composables/useToast';
@@ -197,6 +198,9 @@ const emit = defineEmits<{
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+// i18n (W3a): 用户可见字符串走 t('tasks.chat.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/tasks.json (chat 子域)。
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Local state                                                        */
@@ -271,7 +275,7 @@ const ctxVersionOptions = computed<{ value: string; label: string }[]>(() => {
   const pid = ctxProjectId.value;
   const pName = ctxProjects.value.find((p) => p.id === pid)?.name;
   return [
-    { value: '', label: '不挂版本' },
+    { value: '', label: t('tasks.chat.noVersion') },
     ...ctxVersions.value.map((v) => ({
       value: v.id,
       label: pName ? `${pName} / ${v.name}` : v.name,
@@ -323,7 +327,7 @@ watch(effectiveProjectId, () => {
 /** toolbar 常显当前「模型 · 强度」— R220「没法选模型、思考程度」: advanced 折在
     齿轮后不可见, 常显当前值 + 点击展开, 模型/强度从隐藏项变成一眼可见. */
 const advancedSummary = computed<string>(() => {
-  const model = advancedModel.value || '默认模型';
+  const model = advancedModel.value || t('tasks.chat.defaultModel');
   const eff = advancedEffort.value || 'high';
   return `${model} · ${eff}`;
 });
@@ -633,7 +637,7 @@ async function createTask(): Promise<void> {
   /* R220: 项目/版本走新建卡片选择器 (默认当前激活上下文), 不再硬绑 props —
      global 模式没选筛选也能选任意项目创建. */
   if (!effectiveProjectId.value) {
-    toast.error('请先选择项目');
+    toast.error(t('tasks.chat.errSelectProject'));
     return;
   }
   creating.value = true;
@@ -694,8 +698,8 @@ async function createTask(): Promise<void> {
 
     void router.replace({ query: { ...route.query, mode: 'chat', taskId: res.id } });
   } catch (e: unknown) {
-    const msg = e instanceof HttpError ? e.message : e instanceof Error ? e.message : '未知错误';
-    toast.error(`创建失败: ${msg}`);
+    const msg = e instanceof HttpError ? e.message : e instanceof Error ? e.message : t('tasks.chat.errUnknown');
+    toast.error(t('tasks.chat.errCreateFailed', { msg }));
   } finally {
     creating.value = false;
   }
@@ -768,11 +772,11 @@ async function loadTaskDetail(id: string): Promise<void> {
     chatStreamSub.attach();
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      taskDetailError.value = e.message || `请求失败 (HTTP ${e.status})`;
+      taskDetailError.value = e.message || t('tasks.chat.errRequestFailed', { status: e.status });
     } else if (e instanceof Error) {
-      taskDetailError.value = `网络异常: ${e.message}`;
+      taskDetailError.value = t('tasks.chat.errNetwork', { msg: e.message });
     } else {
-      taskDetailError.value = '加载失败';
+      taskDetailError.value = t('tasks.chat.errLoadFailed');
     }
     taskDetail.value = null;
   } finally {
@@ -880,19 +884,25 @@ onActivated(() => {
 /*  Derived                                                            */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
+/* i18n (W3a): 状态文案走 t() — 键映射 + statusLabel() 兜底, 语言切换可即时生效. */
+const STATUS_LABEL_KEYS: Record<TaskStatus, string> = {
+  pending: 'tasks.chat.statusPending',
+  queued: 'tasks.chat.statusQueued',
+  running: 'tasks.chat.statusRunning',
+  paused: 'tasks.chat.statusPaused',
+  reviewing: 'tasks.chat.statusReviewing',
+  verifying: 'tasks.chat.statusVerifying',
+  await_user: 'tasks.chat.statusAwaitUser',
+  completed: 'tasks.chat.statusCompleted',
+  failed: 'tasks.chat.statusFailed',
+  rejected: 'tasks.chat.statusRejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'tasks.chat.statusCancelled',
 };
+
+function statusLabel(status: TaskStatus): string {
+  const key = STATUS_LABEL_KEYS[status];
+  return key ? t(key) : status;
+}
 
 /* R230: 删除会话后端软删且无 SSE 广播, LifecycleActions 只 emit('changed','deleted') —
    宿主 tasks 要到下次全量拉取才不含被删项, 本地过滤层负责即时摘除. */
@@ -943,7 +953,7 @@ function scopeLabelOf(projectId: string | null | undefined, versionId: string | 
   const p = pName || (projectId ? projectId.slice(0, 8) : '');
   const v = vName || (versionId ? versionId.slice(0, 8) : '');
   if (p && v) return `${p} › ${v}`;
-  return p || v || '未归类';
+  return p || v || t('tasks.chat.uncategorized');
 }
 
 /** 当前生效状态: SSE live > 已拉详情 > 列表行 > pending 兜底. 面板 chip / ResumeModal gate 用. */
@@ -1164,10 +1174,11 @@ function onClearSearch(): void {
 type DisplayMode = 'text-only' | 'all' | 'expanded';
 const DISPLAY_MODE_KEY = 'task-display-mode-v1';
 const DISPLAY_MODES: DisplayMode[] = ['text-only', 'all', 'expanded'];
-const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
-  'text-only': '纯文本',
-  all: '标准',
-  expanded: '详情',
+/* i18n (W3a): 显示模式文案走 t() — 键映射, displayModeLabel computed 见下方. */
+const DISPLAY_MODE_LABEL_KEYS: Record<DisplayMode, string> = {
+  'text-only': 'tasks.chat.displayModeTextOnly',
+  all: 'tasks.chat.displayModeAll',
+  expanded: 'tasks.chat.displayModeExpanded',
 };
 const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
   'text-only': 'lines',
@@ -1186,6 +1197,7 @@ function loadDisplayMode(): DisplayMode {
 }
 
 const displayMode = ref<DisplayMode>(loadDisplayMode());
+const displayModeLabel = computed<string>(() => t(DISPLAY_MODE_LABEL_KEYS[displayMode.value]));
 
 watch(displayMode, (m) => {
   try {
@@ -1296,11 +1308,11 @@ export const TaskTranscriptEmbed = defineComponent({
     >
       <div class="cv-list-head">
         <button type="button" class="cv-new-btn" @click="startNewTask">
-          + 新建聊天
+          {{ t('tasks.chat.newChatBtn') }}
         </button>
       </div>
       <div class="cv-list-body">
-        <div v-if="liveTasks.length === 0" class="cv-list-empty">暂无任务</div>
+        <div v-if="liveTasks.length === 0" class="cv-list-empty">{{ t('tasks.chat.emptyList') }}</div>
         <button
           v-for="t in liveTasks"
           :key="t.id"
@@ -1312,7 +1324,7 @@ export const TaskTranscriptEmbed = defineComponent({
           <!-- R217: global chat 列表项标会话归属 (项目 › 版本), item 高一点可接受 -->
           <span v-if="showScopeLine" class="cv-task-scope">{{ scopeLabelOf(t.project_id, t.version_id) }}</span>
           <span class="cv-task-meta">
-            <span :class="['cv-task-status', `cv-task-status--${t.status}`]">{{ STATUS_LABELS[t.status] || t.status }}</span>
+            <span :class="['cv-task-status', `cv-task-status--${t.status}`]">{{ statusLabel(t.status) }}</span>
             <span class="cv-task-time">{{ formatUpdatedAt(t.updated_at) }}</span>
           </span>
         </button>
@@ -1336,7 +1348,7 @@ export const TaskTranscriptEmbed = defineComponent({
            列表, 看完整 pill 跳任务详情页. 选了 task 显示 #id, 没选 (新建
            / 空态) 也照样显示一行, 给 chat 模式一个恒定锚点. -->
       <div class="cv-breadcrumb">
-        <span class="cv-breadcrumb-label">项目上下文</span>
+        <span class="cv-breadcrumb-label">{{ t('tasks.chat.breadcrumbContext') }}</span>
         <span class="cv-breadcrumb-sep">›</span>
         <span class="cv-breadcrumb-project">{{ selectedTask ? (props.project?.name ?? '—') : effectiveProjectName }}</span>
         <span v-if="selectedTask" class="cv-breadcrumb-id">#{{ selectedTask.id.slice(0, 8) }}</span>
@@ -1348,7 +1360,7 @@ export const TaskTranscriptEmbed = defineComponent({
           v-if="selectedTask && taskDetail"
           :to="`/tasks/${taskDetail.id}`"
           class="cv-breadcrumb-title"
-          :title="`${taskDetail.title} — 打开任务详情页`"
+          :title="t('tasks.chat.openDetailTitle', { title: taskDetail.title })"
         >{{ taskDetail.title }}</router-link>
         <!-- R236 (damo): 聊天模式补任务指标 — 面包屑行尾 (标题右侧) 常驻小字
              chips: 模型 · 上下文(带阈值配色) · 成本. liveContext/liveCost 走
@@ -1392,7 +1404,7 @@ export const TaskTranscriptEmbed = defineComponent({
           :search-query="searchQuery"
           :eval-open="evalOpen"
           :display-mode-mode="displayMode"
-          :display-mode-label="DISPLAY_MODE_LABELS[displayMode]"
+          :display-mode-label="displayModeLabel"
           :display-mode-icon="DISPLAY_MODE_ICONS[displayMode]"
           @toggle-dock-collapsed="onToggleDockCollapsed"
           @toggle-search="onToggleSearch"
@@ -1435,7 +1447,7 @@ export const TaskTranscriptEmbed = defineComponent({
           <div class="cv-task-detail-error">
             <p class="cv-task-detail-error-msg">{{ taskDetailError }}</p>
             <button type="button" class="cv-task-detail-retry" @click="selectedTaskId && loadTaskDetail(selectedTaskId)">
-              重试
+              {{ t('tasks.chat.retry') }}
             </button>
           </div>
         </div>
@@ -1460,7 +1472,7 @@ export const TaskTranscriptEmbed = defineComponent({
             :task-id="taskDetail.id"
             :status="liveStatus ?? taskDetail.status"
             :disabled="!!taskDetail.deleted_at"
-            :disabled-reason="taskDetail.deleted_at ? '任务已删除' : ''"
+            :disabled-reason="taskDetail.deleted_at ? t('tasks.chat.taskDeleted') : ''"
             :initial-auto-approve="!!taskDetail.auto_approve"
             :initial-model="taskDetail.model"
             :initial-effort="taskDetail.effort"
@@ -1486,7 +1498,7 @@ export const TaskTranscriptEmbed = defineComponent({
           >
             <div
               class="cv-new-resize"
-              title="拖动调整输入框高度（向上调高，向下调低）"
+              :title="t('tasks.chat.resizeInputTitle')"
               @mousedown="startResize"
             >
               <span class="cv-new-resize-bar" />
@@ -1495,23 +1507,23 @@ export const TaskTranscriptEmbed = defineComponent({
                  filterable 模糊搜索可切换任意项目/版本. 新建不再被 props 锁死. -->
             <div class="cv-ctx-row">
               <div class="cv-ctx-field">
-                <label class="cv-ctx-label">项目</label>
+                <label class="cv-ctx-label">{{ t('tasks.chat.projectLabel') }}</label>
                 <Select
                   :model-value="ctxProjectId"
                   :options="ctxProjectOptions"
                   filterable
-                  placeholder="选择项目 (可搜索)"
+                  :placeholder="t('tasks.chat.projectPlaceholder')"
                   class-name="cv-ctx-select"
                   @update:model-value="onCtxProjectChange"
                 />
               </div>
               <div class="cv-ctx-field">
-                <label class="cv-ctx-label">版本</label>
+                <label class="cv-ctx-label">{{ t('tasks.chat.versionLabel') }}</label>
                 <Select
                   :model-value="ctxVersionId"
                   :options="ctxVersionOptions"
                   filterable
-                  placeholder="不挂版本"
+                  :placeholder="t('tasks.chat.noVersion')"
                   class-name="cv-ctx-select"
                   @update:model-value="onCtxVersionChange"
                 />
@@ -1526,7 +1538,7 @@ export const TaskTranscriptEmbed = defineComponent({
               v-model="newPrompt"
               class="cv-new-textarea"
               :style="newPromptStyle"
-              placeholder="输入指令开始新任务... (Cmd/Ctrl+V 粘贴文件或图片)"
+              :placeholder="t('tasks.chat.promptPlaceholder')"
               :disabled="creating"
               rows="6"
               @paste="onPromptPaste"
@@ -1539,7 +1551,7 @@ export const TaskTranscriptEmbed = defineComponent({
                 type="button"
                 class="cv-advanced-chip"
                 :class="{ 'cv-advanced-btn-on': showAdvanced }"
-                title="模型 / 思考强度 / 轮次 / 自动审批"
+                :title="t('tasks.chat.advancedTitle')"
                 @click="showAdvanced = !showAdvanced"
               >
                 <svg viewBox="0 0 20 20" fill="currentColor" class="cv-advanced-icon">
@@ -1556,7 +1568,7 @@ export const TaskTranscriptEmbed = defineComponent({
                 <button
                   type="button"
                   class="cv-attach-btn"
-                  title="上传附件"
+                  :title="t('tasks.chat.attachTitle')"
                   :disabled="creating"
                   @click="() => fileInputRef?.open()"
                 >
@@ -1568,7 +1580,7 @@ export const TaskTranscriptEmbed = defineComponent({
                   :disabled="!newPrompt.trim() || creating"
                   @click="createTask"
                 >
-                  {{ creating ? '创建中…' : '发送' }}
+                  {{ creating ? t('tasks.chat.creating') : t('tasks.chat.send') }}
                 </button>
               </div>
             </div>
@@ -1594,7 +1606,7 @@ export const TaskTranscriptEmbed = defineComponent({
             <div v-if="showAdvanced" class="cv-advanced">
               <div class="cv-advanced-grid">
                 <div class="cv-advanced-row">
-                  <label class="cv-advanced-label">模型</label>
+                  <label class="cv-advanced-label">{{ t('tasks.chat.modelLabel') }}</label>
                   <Select
                     :model-value="advancedModel"
                     :options="modelOptions"
@@ -1604,7 +1616,7 @@ export const TaskTranscriptEmbed = defineComponent({
                   />
                 </div>
                 <div class="cv-advanced-row">
-                  <label class="cv-advanced-label">强度</label>
+                  <label class="cv-advanced-label">{{ t('tasks.chat.effortLabel') }}</label>
                   <Select
                     :model-value="advancedEffort"
                     :options="EFFORT_OPTIONS_ADV"
@@ -1613,18 +1625,18 @@ export const TaskTranscriptEmbed = defineComponent({
                   />
                 </div>
                 <div class="cv-advanced-row">
-                  <label class="cv-advanced-label">最大轮次</label>
+                  <label class="cv-advanced-label">{{ t('tasks.chat.maxTurnsLabel') }}</label>
                   <Input
                     v-model="advancedMaxTurns"
                     type="number"
-                    placeholder="默认"
+                    :placeholder="t('tasks.chat.maxTurnsPlaceholder')"
                     class-name="cv-advanced-input"
                   />
                 </div>
                 <div class="cv-advanced-row cv-advanced-check">
                   <Checkbox
                     v-model="advancedAutoApprove"
-                    label="自动审批"
+                    :label="t('tasks.chat.autoApprove')"
                   />
                 </div>
               </div>
@@ -1639,8 +1651,8 @@ export const TaskTranscriptEmbed = defineComponent({
           <rect x="5" y="10" width="50" height="35" rx="4" />
           <path d="M18 45l6 8 6-8" />
         </svg>
-        <p class="cv-empty-text">选择左侧任务查看对话</p>
-        <p class="cv-empty-hint">或点击「新建聊天」开始</p>
+        <p class="cv-empty-text">{{ t('tasks.chat.emptyText') }}</p>
+        <p class="cv-empty-hint">{{ t('tasks.chat.emptyHint') }}</p>
       </div>
       </div>
       <!-- /cv-chat-col -->
@@ -1661,7 +1673,7 @@ export const TaskTranscriptEmbed = defineComponent({
         v-if="selectedTask && taskDetail"
         v-show="!dockCollapsed"
         class="dock-resize-handle"
-        title="拖拽调整右侧信息面板宽度"
+        :title="t('tasks.chat.dockResizeTitle')"
         @mousedown="startDockDrag"
         @touchstart="startDockDrag"
       />
@@ -1684,12 +1696,12 @@ export const TaskTranscriptEmbed = defineComponent({
         :style="dockInlineStyle"
       >
         <div class="dock-drawer-header">
-          <h2 class="dock-drawer-title">信息面板</h2>
+          <h2 class="dock-drawer-title">{{ t('tasks.chat.dockTitle') }}</h2>
           <button
             type="button"
             class="dock-drawer-close"
-            title="关闭信息面板"
-            aria-label="关闭信息面板"
+            :title="t('tasks.chat.dockCloseTitle')"
+            :aria-label="t('tasks.chat.dockCloseTitle')"
             @click="onToggleDockCollapsed"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">

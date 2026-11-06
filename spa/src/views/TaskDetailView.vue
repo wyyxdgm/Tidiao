@@ -18,6 +18,7 @@
    - 与 R19 兼容: status 11 个枚举 + 同款 STATUS_LABELS/STATUS_COLORS. */
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, patch, HttpError, isHttpError } from '@/api/http';
 import Empty from '@/components/Empty.vue';
 import ErrorView from '@/components/ErrorView.vue';
@@ -178,6 +179,9 @@ interface PendingDialog {
 
 const route = useRoute();
 const router = useRouter();
+// i18n (W3a): 用户可见字符串走 t('tasks.detail.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/tasks.json (tasks.detail 域).
+const { t } = useI18n();
 // R198 fix: keep-alive 复用本组件时切到非 task 路由, route.params.taskId 变
 // undefined — String(undefined)="undefined" 曾被拼进 /api/tasks/${taskId}
 // 造成高频 404. 缺参回空串 (falsy), watch/loadTask/startStream 各自 guard 跳过.
@@ -503,11 +507,11 @@ async function loadTask(): Promise<void> {
     startStream();
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      error.value = e.message || `请求失败 (HTTP ${e.status})`;
+      error.value = e.message || t('tasks.detail.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('tasks.detail.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('tasks.detail.errGeneric');
     }
     task.value = null;
   } finally {
@@ -689,7 +693,7 @@ async function saveTaskProgress(): Promise<void> {
   const raw = taskProgressValue.value.trim();
   const value = raw === '' ? null : Number(raw);
   if (value !== null && (!Number.isInteger(value) || value < 0 || value > 100)) {
-    toast.error('完成度需为 0-100 整数');
+    toast.error(t('tasks.detail.progressErrRange'));
     return;
   }
   taskProgressSaving.value = true;
@@ -702,9 +706,9 @@ async function saveTaskProgress(): Promise<void> {
     task.value.progress_note = taskProgressNote.value.trim() || null;
     task.value.progress_source = 'manual';
     taskProgressEditing.value = false;
-    toast.success(value === null ? '已清空完成度' : `完成度已更新为 ${value}%`);
+    toast.success(value === null ? t('tasks.detail.progressCleared') : t('tasks.detail.progressUpdated', { value }));
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '保存失败');
+    toast.error(isHttpError(e) ? e.message : t('tasks.detail.progressSaveFailed'));
   } finally {
     taskProgressSaving.value = false;
   }
@@ -883,11 +887,12 @@ onUnmounted(() => document.removeEventListener('keydown', onDockEsc));
 type DisplayMode = 'text-only' | 'all' | 'expanded';
 const DISPLAY_MODE_KEY = 'task-display-mode-v1';
 const DISPLAY_MODES: DisplayMode[] = ['text-only', 'all', 'expanded'];
-const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
-  'text-only': '纯文本',
-  all: '标准',
-  expanded: '详情',
-};
+/* 显示模式 label 走 computed —— locale 切换时 t() 结果才随之更新 (W3a i18n). */
+const DISPLAY_MODE_LABELS = computed<Record<DisplayMode, string>>(() => ({
+  'text-only': t('tasks.detail.displayModeTextOnly'),
+  all: t('tasks.detail.displayModeAll'),
+  expanded: t('tasks.detail.displayModeExpanded'),
+}));
 const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
   'text-only': 'lines',
   all: 'list',
@@ -1069,10 +1074,10 @@ async function toggleListMenu() {
 async function putIntoList(list: { id: string; title: string }) {
   try {
     await addPinListItem(list.id, { ref_type: 'task', ref_id: task.value!.id, added_by: 'damo' });
-    toast.success(`已放入「${list.title}」`);
+    toast.success(t('tasks.detail.putIntoList', { title: list.title }));
     showListMenu.value = false;
   } catch (err: any) {
-    toast.error(err?.body?.code === 'ALREADY_IN_LIST' ? '已在这个列表里' : (err?.message ?? '放入失败'));
+    toast.error(err?.body?.code === 'ALREADY_IN_LIST' ? t('tasks.detail.alreadyInList') : (err?.message ?? t('tasks.detail.putFailed')));
   }
 }
 const restoring = ref<boolean>(false);
@@ -1084,9 +1089,9 @@ async function onRestoreTask(): Promise<void> {
     await restoreTask(task.value?.id ?? '');
     // 乐观更新本地 deleted_at 为 null, 让 banner 立刻消失.
     if (task.value) task.value.deleted_at = null;
-    toast.success('已恢复任务');
+    toast.success(t('tasks.detail.restored'));
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '恢复失败';
+    const msg = e instanceof Error ? e.message : t('tasks.detail.restoreFailed');
     toast.error(msg);
   } finally {
     restoring.value = false;
@@ -1097,13 +1102,13 @@ async function onRestoreTask(): Promise<void> {
 <template>
   <div class="task-detail">
     <div v-if="loading && !task" class="state-block">
-      <Loading size="lg" label="加载任务详情" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('tasks.detail.loadingDetail')" />
+      <p class="state-text muted">{{ t('tasks.detail.loading') }}</p>
     </div>
 
     <ErrorView
       v-else-if="error"
-      title="加载任务失败"
+      :title="t('tasks.detail.loadFailedTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -1113,8 +1118,8 @@ async function onRestoreTask(): Promise<void> {
     <Empty
       v-else-if="!task"
       illustration="doc"
-      title="任务不存在"
-      description="该任务可能已被删除,或当前用户无权访问"
+      :title="t('tasks.detail.notFoundTitle')"
+      :description="t('tasks.detail.notFoundDesc')"
       size="md"
     />
 
@@ -1129,13 +1134,13 @@ async function onRestoreTask(): Promise<void> {
              一排放得下. 现在与 ChatView 同构, 状态栏横跨全宽. -->
         <!-- R56-A4.11: deleted banner — 红色顶条 + 恢复按钮 (master tdc.tsx:2330) -->
         <div v-if="isDeleted" class="td-deleted-banner">
-          <span class="td-deleted-banner-text">🗑 此任务已删除</span>
+          <span class="td-deleted-banner-text">{{ t('tasks.detail.deletedBanner') }}</span>
           <button
             type="button"
             class="td-deleted-banner-btn"
             :disabled="restoring"
             @click="onRestoreTask"
-          >{{ restoring ? '恢复中…' : '恢复任务' }}</button>
+          >{{ restoring ? t('tasks.detail.restoring') : t('tasks.detail.restoreTask') }}</button>
         </div>
 
         <!-- R59: TaskHeader 折叠 (跟 ChatView cv-task-header 一致) —
@@ -1180,8 +1185,8 @@ async function onRestoreTask(): Promise<void> {
           <button
             type="button"
             class="td-header-fold-btn"
-            :title="'折叠标题栏'"
-            aria-label="折叠标题栏"
+            :title="t('tasks.detail.collapseHeader')"
+            :aria-label="t('tasks.detail.collapseHeader')"
             @click="toggleHeader"
           >
             <svg viewBox="0 0 20 20" fill="currentColor">
@@ -1199,14 +1204,14 @@ async function onRestoreTask(): Promise<void> {
           <button
             type="button"
             class="td-fold-strip-btn"
-            :title="'展开标题栏'"
-            aria-label="展开标题栏"
+            :title="t('tasks.detail.expandHeader')"
+            :aria-label="t('tasks.detail.expandHeader')"
             @click="toggleHeader"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" class="td-fold-strip-icon">
               <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
-            <span>展开信息</span>
+            <span>{{ t('tasks.detail.expandInfo') }}</span>
           </button>
         </div>
 
@@ -1221,12 +1226,12 @@ async function onRestoreTask(): Promise<void> {
             class="td-progress-note"
             :title="`${task.progress_note} (${task.progress_source ?? ''} · ${task.progress_updated_at ?? ''})`"
           >{{ task.progress_note }}</span>
-          <span v-else class="td-progress-note td-progress-note-empty">无依据说明</span>
+          <span v-else class="td-progress-note td-progress-note-empty">{{ t('tasks.detail.noProgressNote') }}</span>
           <button
             type="button"
             class="td-progress-edit-btn"
             @click="taskProgressEditing ? taskProgressEditing = false : openTaskProgressEdit()"
-          >{{ taskProgressEditing ? '收起' : '修正' }}</button>
+          >{{ taskProgressEditing ? t('tasks.detail.progressCollapse') : t('tasks.detail.progressFix') }}</button>
           <div v-if="taskProgressEditing" class="td-progress-form">
             <input
               v-model="taskProgressValue"
@@ -1240,14 +1245,14 @@ async function onRestoreTask(): Promise<void> {
               v-model="taskProgressNote"
               type="text"
               class="td-progress-input td-progress-input-note"
-              placeholder="依据 (可选)"
+              :placeholder="t('tasks.detail.progressNotePlaceholder')"
             />
             <button
               type="button"
               class="td-progress-save-btn"
               :disabled="taskProgressSaving"
               @click="saveTaskProgress"
-            >{{ taskProgressSaving ? '保存中…' : '保存' }}</button>
+            >{{ taskProgressSaving ? t('tasks.detail.progressSaving') : t('tasks.detail.progressSave') }}</button>
           </div>
         </div>
 
@@ -1294,10 +1299,10 @@ async function onRestoreTask(): Promise<void> {
             <!-- idea-canvas P1: 🗂 分类 (原「放入列表」, damo 1012: 改名 + 挪进
                  状态栏按钮排, 不再独占一行挤压聊天区). -->
             <div class="td-list-put">
-              <button ref="tdListBtn" class="td-list-btn" @click="toggleListMenu">🗂 分类</button>
+              <button ref="tdListBtn" class="td-list-btn" @click="toggleListMenu">{{ t('tasks.detail.categorizeBtn') }}</button>
               <div v-if="showListMenu" class="td-list-menu" :style="tdListMenuStyle">
                 <div v-for="l in pinLists" :key="l.id" class="td-list-opt" @click="putIntoList(l)">{{ l.title }}</div>
-                <div v-if="pinLists.length === 0" class="td-list-empty">还没有分类 — 去全局看板「分类」视图建一个</div>
+                <div v-if="pinLists.length === 0" class="td-list-empty">{{ t('tasks.detail.noCategories') }}</div>
               </div>
             </div>
           </template>
@@ -1307,13 +1312,13 @@ async function onRestoreTask(): Promise<void> {
              采样才渲染; 进程退出后采样消失, 徽章自动隐藏). -->
         <div v-if="taskResourceSample" class="td-resource-row">
           <TaskResourceBadge :sample="taskResourceSample" :warn="taskResourceWarn" />
-          <span class="td-resource-hint">进程树实时占用 (2s 采样)</span>
+          <span class="td-resource-hint">{{ t('tasks.detail.resourceHint') }}</span>
         </div>
 
         <!-- idea-canvas P1: 构思徽章 (docs/plans/idea-canvas.md §6). 分类按钮已
              挪进 TaskStatusBar actions 槽 — 本行只在任务真挂了构思时才渲染. -->
         <div v-if="task.idea_id" class="td-idea-row">
-          <button class="td-idea-badge" title="这个任务挂在某个构思下" @click="router.push('/ideas')">💡 构思画布</button>
+          <button class="td-idea-badge" :title="t('tasks.detail.ideaHint')" @click="router.push('/ideas')">{{ t('tasks.detail.ideaCanvas') }}</button>
         </div>
 
         <!-- R56-A4.3: 评分条 amber-50 区 (evalOpen toggle 控制显隐,
@@ -1378,7 +1383,7 @@ async function onRestoreTask(): Promise<void> {
           :task-id="task.id"
           :status="status"
           :disabled="isDeleted"
-          :disabled-reason="isDeleted ? '任务已删除' : ''"
+          :disabled-reason="isDeleted ? t('tasks.detail.taskDeleted') : ''"
           :initial-auto-approve="!!task.auto_approve"
           :initial-model="task.model"
           :initial-effort="task.effort"
@@ -1430,7 +1435,7 @@ async function onRestoreTask(): Promise<void> {
            的「边」其实是 dock 自己的边框, handle 跑到 viewport 边缘去了. -->
       <div
         class="dock-resize-handle"
-        title="拖拽调整右侧 dock 宽度"
+        :title="t('tasks.detail.dragResizeHint')"
         @mousedown="startDockDrag"
         @touchstart="startDockDrag"
       />
@@ -1463,12 +1468,12 @@ async function onRestoreTask(): Promise<void> {
              「信息面板」 + × 关闭按钮 (用户反馈「顶部加一个标题行, 刚好
              把 x 的按钮放标题行右侧」). -->
         <div class="dock-drawer-header">
-          <h2 class="dock-drawer-title">信息面板</h2>
+          <h2 class="dock-drawer-title">{{ t('tasks.detail.infoPanel') }}</h2>
           <button
             type="button"
             class="dock-drawer-close"
-            title="关闭信息面板"
-            aria-label="关闭信息面板"
+            :title="t('tasks.detail.closeInfoPanel')"
+            :aria-label="t('tasks.detail.closeInfoPanel')"
             @click="onToggleDockCollapsed"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">

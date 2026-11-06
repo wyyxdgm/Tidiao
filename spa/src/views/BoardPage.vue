@@ -79,6 +79,11 @@ import KanbanBoard from '@/views/kanban/KanbanBoard.vue';
 import ChatView from '@/views/chat/ChatView.vue';
 import TaskResourceBadge from '@/components/TaskResourceBadge.vue';
 import TaskQuickCreate from '@/components/TaskQuickCreate.vue';
+// i18n (W3a): 用户可见字符串走 t('tasks.board.*'), 文案源 locales/{zh-CN,en-US}/tasks.json
+// (tasks.board 域); 通用 key 复用 common.*. 迁移模式照抄 LoginView.vue (W1 样板).
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -154,22 +159,23 @@ interface TasksPageResponse {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-/** 状态中文标签 (与 master STATUS_LABELS 对齐). R131 加入 await_user = "等用户介入". */
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
+/** 状态中文标签 (与 master STATUS_LABELS 对齐). R131 加入 await_user = "等用户介入".
+    i18n (W3a): computed 包一层让语言切换时标签即时刷新. */
+const STATUS_LABELS = computed<Record<TaskStatus, string>>(() => ({
+  pending: t('tasks.board.statusPending'),
+  queued: t('tasks.board.statusQueued'),
+  running: t('tasks.board.statusRunning'),
+  paused: t('tasks.board.statusPaused'),
+  reviewing: t('tasks.board.statusReviewing'),
+  verifying: t('tasks.board.statusVerifying'),
+  await_user: t('tasks.board.statusAwaitUser'),
+  completed: t('tasks.board.statusCompleted'),
+  failed: t('tasks.board.statusFailed'),
   // 历史 rejected 显示兼容 (2026-09-15 决策): 读路径已映射 cancelled, 标签同步
   // 显示「已取消」— 曾误标「等待中」产生幽灵计数 (damo 2026-11-01 反馈).
-  rejected: '已取消',
-  cancelled: '已取消',
-};
+  rejected: t('tasks.board.statusCancelled'),
+  cancelled: t('tasks.board.statusCancelled'),
+}));
 
 /** 状态对应 chip class — 走本文件 scoped CSS 变量, 不引 Tailwind palette
     (项目统一规范, 见 R8 Input/R9 Select 风格). */
@@ -203,12 +209,12 @@ const ALL_STATUSES: TaskStatus[] = [...ACTIVE_STATUSES, ...TERMINAL_STATUSES];
 
 /** type 标签 + chip class. 与 master TYPE_LABELS / TYPE_COLORS 对齐
     (Tailwind 字符串不在 SPA 渲染, 这里改为组件 scoped class). */
-const TYPE_LABELS: Record<string, string> = {
-  design: '设计',
-  dev: '开发',
-  test: '测试',
-  deploy: '部署',
-};
+const TYPE_LABELS = computed<Record<string, string>>(() => ({
+  design: t('tasks.board.typeDesign'),
+  dev: t('tasks.board.typeDev'),
+  test: t('tasks.board.typeTest'),
+  deploy: t('tasks.board.typeDeploy'),
+}));
 
 const TYPE_CHIP: Record<string, string> = {
   design: 'type-design',
@@ -538,11 +544,11 @@ const syncLevel = ref<SyncLevel>('scope');
 const showSyncMenu = ref<boolean>(false);
 const syncMenuRef = ref<HTMLElement | null>(null);
 
-const SYNC_META: Record<SyncLevel, { label: string; hint: string }> = {
-  scope: { label: '不同步', hint: '配置仅应用于当前 scope' },
-  project: { label: '弱同步', hint: '该项目下所有 version 共享' },
-  account: { label: '强同步', hint: '所有 project 共享' },
-};
+const SYNC_META = computed<Record<SyncLevel, { label: string; hint: string }>>(() => ({
+  scope: { label: t('tasks.board.syncScopeLabel'), hint: t('tasks.board.syncScopeHint') },
+  project: { label: t('tasks.board.syncProjectLabel'), hint: t('tasks.board.syncProjectHint') },
+  account: { label: t('tasks.board.syncAccountLabel'), hint: t('tasks.board.syncAccountHint') },
+}));
 
 const SYNC_KEY = 'ao-board-sync-level';
 
@@ -761,11 +767,11 @@ async function loadPage(reset: boolean): Promise<void> {
     }
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      error.value = e.message || `请求失败 (HTTP ${e.status})`;
+      error.value = e.message || t('tasks.board.errRequestFailed', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('tasks.board.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('tasks.board.loadFailed');
     }
     if (!reset) {
       // loadMore 失败时不追加, 但 currentPage 已 +1, 回退避免空指针
@@ -898,7 +904,7 @@ async function confirmDeleteTask(): Promise<void> {
   }
   try {
     await del<void>(`/api/tasks/${target.taskId}`);
-    toast.success(`已删除「${target.taskTitle}」`);
+    toast.success(t('tasks.board.deletedToast', { title: target.taskTitle }));
     // 乐观更新: 本地 patch deleted_at, 让卡片立刻显示「已删除」标签, 不依赖刷新.
     const now = new Date().toISOString();
     tasks.value = tasks.value.map((t) =>
@@ -907,8 +913,8 @@ async function confirmDeleteTask(): Promise<void> {
   } catch (e: unknown) {
     const msg = e instanceof HttpError
       ? (e.message || `HTTP ${e.status}`)
-      : e instanceof Error ? e.message : '未知错误';
-    toast.error(`删除失败: ${msg}`);
+      : e instanceof Error ? e.message : t('tasks.board.unknownError');
+    toast.error(t('tasks.board.deleteFailed', { msg }));
   }
 }
 
@@ -925,15 +931,15 @@ async function onRestoreClick(taskId: string, taskTitle: string, e: Event): Prom
   e.stopPropagation();
   try {
     await post<void>(`/api/tasks/${taskId}/restore`);
-    toast.success(`已恢复「${taskTitle}」`);
+    toast.success(t('tasks.board.restoredToast', { title: taskTitle }));
     tasks.value = tasks.value.map((t) =>
       t.id === taskId ? { ...t, deleted_at: null } : t,
     );
   } catch (e: unknown) {
     const msg = e instanceof HttpError
       ? (e.message || `HTTP ${e.status}`)
-      : e instanceof Error ? e.message : '未知错误';
-    toast.error(`恢复失败: ${msg}`);
+      : e instanceof Error ? e.message : t('tasks.board.unknownError');
+    toast.error(t('tasks.board.restoreFailed', { msg }));
   }
 }
 
@@ -955,31 +961,32 @@ interface ListActionBtn {
   tone: 'primary' | 'danger' | 'normal';
 }
 
-const STATUS_BUTTONS: Record<TaskStatus, ListActionBtn[]> = {
+/** i18n (W3a): computed 包一层让语言切换时按钮 label 即时刷新; 「取消」复用 common.cancel. */
+const STATUS_BUTTONS = computed<Record<TaskStatus, ListActionBtn[]>>(() => ({
   // R164 追加 (damo): pending/queued 也给「取消 + 删除」— 派发洪水时在列表上
   // 直接止血, 不用进详情页/改库. 后端 DELETE 无状态限制; queued 软删后
   // schedule() 出队 `!task -> continue` 自然跳过 (task-scheduler.ts).
-  pending:   [{ key: 'start', label: '启动', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  queued:    [{ key: 'start', label: '启动', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  running:   [{ key: 'pause', label: '暂停', tone: 'normal' }, { key: 'cancel', label: '取消', tone: 'danger' }],
-  paused:    [{ key: 'resume', label: '恢复', tone: 'primary' }, { key: 'cancel', label: '取消', tone: 'danger' }],
+  pending:   [{ key: 'start', label: t('tasks.board.btnStart'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  queued:    [{ key: 'start', label: t('tasks.board.btnStart'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  running:   [{ key: 'pause', label: t('tasks.board.btnPause'), tone: 'normal' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
+  paused:    [{ key: 'resume', label: t('tasks.board.btnResume'), tone: 'primary' }, { key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
   reviewing: [
-    { key: 'approve', label: '完成', tone: 'primary' },
-    { key: 'refine', label: '继续干', tone: 'primary' },
-    { key: 'restart', label: '🔄 清空重来', tone: 'danger' },
-    { key: 'cancel', label: '取消', tone: 'danger' },
+    { key: 'approve', label: t('tasks.board.btnApprove'), tone: 'primary' },
+    { key: 'refine', label: t('tasks.board.btnRefine'), tone: 'primary' },
+    { key: 'restart', label: t('tasks.board.btnRestart'), tone: 'danger' },
+    { key: 'cancel', label: t('common.cancel'), tone: 'danger' },
   ],
-  verifying: [{ key: 'cancel', label: '取消', tone: 'danger' }],
+  verifying: [{ key: 'cancel', label: t('common.cancel'), tone: 'danger' }],
   await_user: [
-    { key: 'approve', label: '完成', tone: 'primary' },
-    { key: 'unawait', label: '继续执行', tone: 'primary' },
-    { key: 'cancel', label: '取消', tone: 'danger' },
+    { key: 'approve', label: t('tasks.board.btnApprove'), tone: 'primary' },
+    { key: 'unawait', label: t('tasks.board.btnUnawait'), tone: 'primary' },
+    { key: 'cancel', label: t('common.cancel'), tone: 'danger' },
   ],
-  completed: [{ key: 'delete', label: '删除', tone: 'danger' }],
-  failed:    [{ key: 'start', label: '重试', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  rejected:  [{ key: 'start', label: '重做', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
-  cancelled: [{ key: 'start', label: '重启', tone: 'primary' }, { key: 'delete', label: '删除', tone: 'danger' }],
-};
+  completed: [{ key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  failed:    [{ key: 'start', label: t('tasks.board.btnRetry'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  rejected:  [{ key: 'start', label: t('tasks.board.btnRedo'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+  cancelled: [{ key: 'start', label: t('tasks.board.btnRestartTask'), tone: 'primary' }, { key: 'delete', label: t('tasks.board.btnDelete'), tone: 'danger' }],
+}));
 
 /** R58: 列表模式行内 action 通用执行 — 与 GlobalBoard runAction 形态同款.
     单一 endpoint = POST /api/tasks/[id]/<action>, body 可选 (refine 带
@@ -989,7 +996,7 @@ async function runListAction(taskId: string, action: string, body?: Record<strin
   try {
     const data = await post<{ status?: TaskStatus }>(`/api/tasks/${taskId}/${action}`, body);
     if (action === 'start' && data?.status === 'queued') {
-      toast.warn('已加入排队, 并发已满, 等槽位空闲后自动运行');
+      toast.warn(t('tasks.board.queuedToast'));
     } else if (data?.status) {
       tasks.value = tasks.value.map((t) =>
         t.id === taskId ? { ...t, status: data.status as TaskStatus, updated_at: new Date().toISOString() } : t,
@@ -997,11 +1004,11 @@ async function runListAction(taskId: string, action: string, body?: Record<strin
     }
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      toast.error(`${action} 失败: ${e.message || `HTTP ${e.status}`}`);
+      toast.error(t('tasks.board.actionFailedMsg', { action, msg: e.message || `HTTP ${e.status}` }));
     } else if (e instanceof Error) {
-      toast.error(`网络错误: ${e.message}`);
+      toast.error(t('tasks.board.errNetworkToast', { msg: e.message }));
     } else {
-      toast.error(`${action} 失败`);
+      toast.error(t('tasks.board.actionFailed', { action }));
     }
   }
 }
@@ -1149,7 +1156,7 @@ const modelOptions = computed<{ value: string; label: string }[]>(() => {
   const m = new Set<string>();
   for (const t of tasks.value) if (t.model) m.add(t.model);
   const list = Array.from(m).sort();
-  return [{ value: '', label: '全部模型' }, ...list.map((x) => ({ value: x, label: x }))];
+  return [{ value: '', label: t('tasks.board.allModels') }, ...list.map((x) => ({ value: x, label: x }))];
 });
 
 /** tag 下拉候选 — 解析 tags JSON 数组聚合. */
@@ -1165,21 +1172,21 @@ const tagOptions = computed<{ value: string; label: string }[]>(() => {
     }
   }
   const list = Array.from(tags).sort();
-  return [{ value: '', label: '全部标签' }, ...list.map((x) => ({ value: x, label: x }))];
+  return [{ value: '', label: t('tasks.board.allTags') }, ...list.map((x) => ({ value: x, label: x }))];
 });
 
 /** 页面标题. global 模式 = "全局看板"; unversioned 模式 = "未挂版本任务";
     version 模式 = "版本看板". */
 const pageTitle = computed<string>(() => {
-  if (mode.value === 'global') return '全局看板';
-  if (mode.value === 'unversioned') return '未挂版本任务';
-  return '版本看板';
+  if (mode.value === 'global') return t('tasks.board.titleGlobal');
+  if (mode.value === 'unversioned') return t('tasks.board.titleUnversioned');
+  return t('tasks.board.titleVersion');
 });
 
 /** 副标题 (空 = 不渲染). global 模式: 跨项目跨版本汇总. unversioned 模式:
     包装视图 ProjectUnversioned.vue 已渲染项目名 + 副标题, 这里保持空避免重复. */
 const pageSubtitle = computed<string>(() =>
-  mode.value === 'global' ? '跨项目跨版本汇总, 按 status 实时分类' : '',
+  mode.value === 'global' ? t('tasks.board.subtitleGlobal') : '',
 );
 
 /* ------------------------------------------------------------------ */
@@ -1233,7 +1240,7 @@ function parseAwaitingDecisions(awaitingMarkersJson: string | null): ParsedDecis
       )
       .map((m) => ({
         decisionId: m.decision_id as string,
-        question: m.question || '(无 question)',
+        question: m.question || t('tasks.board.noQuestion'),
         options: (m.options || []).filter(
           (o): o is { label: string; description?: string } =>
             !!o && typeof o.label === 'string',
@@ -1480,23 +1487,23 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
          对自包含的 CategoryBoardView 全部无效, 显示 = 「点了没反应」假死感. -->
     <div v-if="!rootProps.chromeCollapsed && viewMode !== 'category'" class="board-filter">
       <div class="filter-row">
-        <span class="filter-label">状态</span>
+        <span class="filter-label">{{ t('tasks.board.filterStatusLabel') }}</span>
         <!-- 飞书 R244 (damo) + R248: 全部/活跃/历史 = 状态分组快捷键 (chip 宏) —
              镜像 GlobalBoard R236: 点「活跃」= 全选 7 个活跃态 + 反选全部终态;
              点「全部」= 11 态全集 (双段同拉, damo: 默认全部). 位置 = 状态 chip 行
              头部 (标签前面). 亮灯判据 = 当前 chip 选择恰等于该组全集; 组内自定义
              子集时都不亮 (语义 = 一键回全集). 复用 .board-segmented/.seg-btn
              既有样式 (R58.5 保留, 模板此前无消费者, 此处回归使用). -->
-        <div class="board-segmented" role="tablist" aria-label="状态分组快捷键">
+        <div class="board-segmented" role="tablist" :aria-label="t('tasks.board.statusGroupAria')">
           <button
             type="button"
             role="tab"
             :aria-selected="allPresetOn"
             :class="['seg-btn', { 'seg-btn-active': allPresetOn }]"
-            :title="allPresetOn ? '再点一次 = 全不选，然后点单个状态可只看该状态' : '全选全部状态'"
+            :title="allPresetOn ? t('tasks.board.allMacroToggleTitle') : t('tasks.board.allMacroTitle')"
             @click="setStatusGroup('all')"
           >
-            全部
+            {{ t('tasks.board.groupAll') }}
           </button>
           <button
             type="button"
@@ -1505,7 +1512,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             :class="['seg-btn', { 'seg-btn-active': activePresetOn }]"
             @click="setStatusGroup('active')"
           >
-            活跃
+            {{ t('tasks.board.groupActive') }}
           </button>
           <button
             type="button"
@@ -1514,7 +1521,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             :class="['seg-btn', { 'seg-btn-active': terminalPresetOn }]"
             @click="setStatusGroup('terminal')"
           >
-            历史
+            {{ t('tasks.board.groupHistory') }}
           </button>
         </div>
         <!-- R51 (B093): status chip 拖拽重排 — 镜像 master board-client.tsx:1163-1207.
@@ -1550,7 +1557,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
           <button
             type="button"
             class="sync-menu-trigger"
-            title="同步配置"
+            :title="t('tasks.board.syncSettingsTitle')"
             :aria-expanded="showSyncMenu"
             @click="showSyncMenu = !showSyncMenu"
           >
@@ -1559,7 +1566,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             </svg>
           </button>
           <div v-if="showSyncMenu" class="sync-menu">
-            <div class="sync-menu-title">同步级别</div>
+            <div class="sync-menu-title">{{ t('tasks.board.syncLevelTitle') }}</div>
             <label
               v-for="(meta, lvl) in SYNC_META"
               :key="lvl"
@@ -1584,19 +1591,19 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
         <Select
           v-model="modelSelect"
           :options="modelOptions"
-          placeholder="全部模型"
+          :placeholder="t('tasks.board.allModels')"
           class-name="filter-select"
         />
         <Select
           v-model="tagSelect"
           :options="tagOptions"
-          placeholder="全部标签"
+          :placeholder="t('tasks.board.allTags')"
           class-name="filter-select"
         />
         <div class="filter-search">
           <Input
             v-model="searchText"
-            placeholder="搜索标题、指令、结果、ID..."
+            :placeholder="t('tasks.board.searchPlaceholder')"
             clearable
           />
         </div>
@@ -1605,7 +1612,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             :model-value="showDeleted"
             @update:model-value="(v: boolean) => (showDeleted = v)"
           />
-          <span>显示已删除</span>
+          <span>{{ t('tasks.board.showDeleted') }}</span>
         </label>
       </div>
     </div>
@@ -1620,13 +1627,13 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
       <!-- Initial loading -->
       <div v-else-if="loading && tasks.length === 0" class="board-loading">
         <Loading size="lg" />
-        <p class="board-loading-text">加载中…</p>
+        <p class="board-loading-text">{{ t('tasks.board.loading') }}</p>
       </div>
 
       <!-- Error (with retry) -->
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('tasks.board.loadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -1647,13 +1654,13 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
       <div v-else-if="filteredTasks.length === 0" class="board-empty-wrap">
         <Empty
           :title="tasks.length === 0
-            ? (viewMode === 'chat' ? '暂无会话'
-              : statusGroup === 'active' ? '暂无活跃任务'
-              : statusGroup === 'terminal' ? '暂无历史任务' : '暂无任务')
-            : '没有匹配筛选条件的任务'"
+            ? (viewMode === 'chat' ? t('tasks.board.emptyChat')
+              : statusGroup === 'active' ? t('tasks.board.emptyActive')
+              : statusGroup === 'terminal' ? t('tasks.board.emptyHistory') : t('tasks.board.emptyAll'))
+            : t('tasks.board.emptyFiltered')"
           :description="tasks.length === 0
-            ? '新建任务后会出现在这里'
-            : '试试调整筛选条件或清除搜索'"
+            ? t('tasks.board.emptyCreateHint')
+            : t('tasks.board.emptyFilterHint')"
           illustration="inbox"
         >
           <button
@@ -1662,7 +1669,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             class="btn btn-primary empty-cta"
             @click="quickCreateOpen = true"
           >
-            + 新建任务
+            + {{ t('tasks.board.newTask') }}
           </button>
         </Empty>
       </div>
@@ -1670,19 +1677,19 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
       <!-- Cards grid (R14 原始) -->
       <div v-else-if="viewMode === 'cards'" class="board-grid">
         <article
-          v-for="t in filteredTasks"
-          :key="t.id"
-          :class="['task-card', { 'task-card-deleted': !!t.deleted_at }]"
+          v-for="task in filteredTasks"
+          :key="task.id"
+          :class="['task-card', { 'task-card-deleted': !!task.deleted_at }]"
         >
           <!-- R51 (B105): 右上角删除按钮 — 镜像 master board-client.tsx:903-910.
                仅未删除任务显示; 已删除任务位 R55.4 (B100) 替为 ↩ 恢复按钮.
                prevent+stop 防止冒泡到 router-link. -->
           <button
-            v-if="!t.deleted_at"
+            v-if="!task.deleted_at"
             type="button"
             class="task-card-delete"
-            title="删除任务"
-            @click="(e: Event) => onDeleteClick(t.id, t.title, e, t.status)"
+            :title="t('tasks.board.deleteTaskTitle')"
+            @click="(e: Event) => onDeleteClick(task.id, task.title, e, task.status)"
           >
             🗑
           </button>
@@ -1690,29 +1697,29 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
             v-else
             type="button"
             class="task-card-restore"
-            title="恢复已删除任务"
-            @click="(e: Event) => onRestoreClick(t.id, t.title, e)"
+            :title="t('tasks.board.restoreDeletedTitle')"
+            @click="(e: Event) => onRestoreClick(task.id, task.title, e)"
           >
             ↩
           </button>
           <div class="task-card-top">
-            <span :class="['status-badge', STATUS_COLORS[t.status] || 'status-default']">
-              {{ STATUS_LABELS[t.status] || t.status }}
+            <span :class="['status-badge', STATUS_COLORS[task.status] || 'status-default']">
+              {{ STATUS_LABELS[task.status] || task.status }}
             </span>
-            <QueuedReasonHint :status="t.status" :reason="t.queued_reason" />
-            <span v-if="t.priority > 0" class="task-priority">P{{ t.priority }}</span>
-            <span v-if="t.schedule_id" class="task-schedule" title="由定时任务派发">
-              定时
+            <QueuedReasonHint :status="task.status" :reason="task.queued_reason" />
+            <span v-if="task.priority > 0" class="task-priority">P{{ task.priority }}</span>
+            <span v-if="task.schedule_id" class="task-schedule" :title="t('tasks.board.scheduledTitle')">
+              {{ t('tasks.board.scheduledBadge') }}
             </span>
-            <span v-if="t.type" :class="['task-type', TYPE_CHIP[t.type] || 'type-default']">
-              {{ TYPE_LABELS[t.type] || t.type }}
+            <span v-if="task.type" :class="['task-type', TYPE_CHIP[task.type] || 'type-default']">
+              {{ TYPE_LABELS[task.type] || task.type }}
             </span>
-            <span v-if="t.deleted_at" class="task-deleted-badge">已删除</span>
+            <span v-if="task.deleted_at" class="task-deleted-badge">{{ t('tasks.board.deletedBadge') }}</span>
           </div>
 
-          <h3 :class="['task-title', { 'task-title-strike': !!t.deleted_at }]">
-            <router-link :to="taskDetailHref(t.id)" class="task-title-link">
-              {{ t.title }}
+          <h3 :class="['task-title', { 'task-title-strike': !!task.deleted_at }]">
+            <router-link :to="taskDetailHref(task.id)" class="task-title-link">
+              {{ task.title }}
             </router-link>
           </h3>
 
@@ -1720,17 +1727,17 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
                镜像 master board-client.tsx:985-1031. onResolved 后本地 patch
                awaiting_markers 标 resolved, banner 自然消失. -->
           <DecisionBanner
-            v-if="!t.deleted_at"
-            :task-id="t.id"
-            :decisions="parseAwaitingDecisions(t.awaiting_markers)"
-            :on-resolved="(decisionId, label) => onDecisionResolved(t.id, decisionId, label)"
+            v-if="!task.deleted_at"
+            :task-id="task.id"
+            :decisions="parseAwaitingDecisions(task.awaiting_markers)"
+            :on-resolved="(decisionId, label) => onDecisionResolved(task.id, decisionId, label)"
           />
 
-          <p class="task-prompt">{{ t.prompt_preview.slice(0, 120) }}</p>
+          <p class="task-prompt">{{ task.prompt_preview.slice(0, 120) }}</p>
 
-          <div v-if="parseTags(t.tags).length > 0" class="task-tags">
+          <div v-if="parseTags(task.tags).length > 0" class="task-tags">
             <span
-              v-for="tag in parseTags(t.tags)"
+              v-for="tag in parseTags(task.tags)"
               :key="tag"
               class="task-tag"
             >
@@ -1739,16 +1746,16 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
           </div>
 
           <div class="task-meta">
-            <span class="task-model">{{ t.resolved_model || t.model || '(default)' }}</span>
-            <span v-if="t.cost_usd != null" class="task-cost">
-              ${{ t.cost_usd.toFixed(4) }}
+            <span class="task-model">{{ task.resolved_model || task.model || '(default)' }}</span>
+            <span v-if="task.cost_usd != null" class="task-cost">
+              ${{ task.cost_usd.toFixed(4) }}
             </span>
-            <span class="task-time">{{ formatUpdatedAt(t.updated_at, tick) }}</span>
+            <span class="task-time">{{ formatUpdatedAt(task.updated_at, tick) }}</span>
             <!-- R232: 运行中任务的实时 CPU/内存徽章 (有 /proc 采样数据才渲染). -->
             <TaskResourceBadge
-              v-if="taskResources[t.id]"
-              :sample="taskResources[t.id]"
-              :warn="(taskResources[t.id]?.cpuPercent ?? 0) > 80 || (taskResources[t.id]?.memPercent ?? 0) > 50"
+              v-if="taskResources[task.id]"
+              :sample="taskResources[task.id]"
+              :warn="(taskResources[task.id]?.cpuPercent ?? 0) > 80 || (taskResources[task.id]?.memPercent ?? 0) > 50"
               class="task-resource-badge"
             />
           </div>
@@ -1775,70 +1782,70 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
           <table class="board-list-table">
             <thead>
               <tr>
-                <th class="board-list-th-title">标题</th>
-                <th class="board-list-th-status">状态</th>
-                <th class="board-list-th-type">类型</th>
-                <th class="board-list-th-tags">标签</th>
-                <th class="board-list-th-time">更新时间</th>
-                <th class="board-list-th-actions">操作</th>
+                <th class="board-list-th-title">{{ t('tasks.board.thTitle') }}</th>
+                <th class="board-list-th-status">{{ t('tasks.board.thStatus') }}</th>
+                <th class="board-list-th-type">{{ t('tasks.board.thType') }}</th>
+                <th class="board-list-th-tags">{{ t('tasks.board.thTags') }}</th>
+                <th class="board-list-th-time">{{ t('tasks.board.thUpdatedAt') }}</th>
+                <th class="board-list-th-actions">{{ t('tasks.board.thActions') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr
-                v-for="t in filteredTasks"
-                :key="t.id"
-                :class="{ 'board-list-row-deleted': !!t.deleted_at }"
+                v-for="task in filteredTasks"
+                :key="task.id"
+                :class="{ 'board-list-row-deleted': !!task.deleted_at }"
                 class="board-list-row"
               >
                 <td class="board-list-td-title">
                   <router-link
-                    :to="taskDetailHref(t.id)"
+                    :to="taskDetailHref(task.id)"
                     class="board-list-title-link"
-                    :title="t.title"
-                  >{{ t.title }}</router-link>
-                  <span v-if="t.priority > 0" class="board-list-priority">P{{ t.priority }}</span>
+                    :title="task.title"
+                  >{{ task.title }}</router-link>
+                  <span v-if="task.priority > 0" class="board-list-priority">P{{ task.priority }}</span>
                 </td>
                 <td class="board-list-td-status">
-                  <span :class="['status-chip', STATUS_COLORS[t.status] || 'status-default']">
-                    {{ STATUS_LABELS[t.status] || t.status }}
+                  <span :class="['status-chip', STATUS_COLORS[task.status] || 'status-default']">
+                    {{ STATUS_LABELS[task.status] || task.status }}
                   </span>
-                  <QueuedReasonHint :status="t.status" :reason="t.queued_reason" />
+                  <QueuedReasonHint :status="task.status" :reason="task.queued_reason" />
                   <!-- R232: 运行中任务资源徽章 -->
                   <TaskResourceBadge
-                    v-if="taskResources[t.id]"
-                    :sample="taskResources[t.id]"
-                    :warn="(taskResources[t.id]?.cpuPercent ?? 0) > 80 || (taskResources[t.id]?.memPercent ?? 0) > 50"
+                    v-if="taskResources[task.id]"
+                    :sample="taskResources[task.id]"
+                    :warn="(taskResources[task.id]?.cpuPercent ?? 0) > 80 || (taskResources[task.id]?.memPercent ?? 0) > 50"
                     class="board-list-resource-badge"
                   />
                 </td>
                 <td class="board-list-td-type">
                   <span
-                    v-if="t.type"
-                    :class="['task-type', TYPE_CHIP[t.type] || 'type-default']"
-                  >{{ TYPE_LABELS[t.type] || t.type }}</span>
+                    v-if="task.type"
+                    :class="['task-type', TYPE_CHIP[task.type] || 'type-default']"
+                  >{{ TYPE_LABELS[task.type] || task.type }}</span>
                 </td>
                 <td class="board-list-td-tags">
                   <span
-                    v-for="tag in parseTags(t.tags).slice(0, 3)"
+                    v-for="tag in parseTags(task.tags).slice(0, 3)"
                     :key="tag"
                     class="task-tag"
-                    :title="parseTags(t.tags).join(', ')"
+                    :title="parseTags(task.tags).join(', ')"
                   >{{ tag }}</span>
                 </td>
-                <td class="board-list-td-time">{{ formatUpdatedAt(t.updated_at, tick) }}</td>
+                <td class="board-list-td-time">{{ formatUpdatedAt(task.updated_at, tick) }}</td>
                 <td class="board-list-td-actions">
                   <div class="board-list-action-row">
-                    <template v-if="t.deleted_at">
+                    <template v-if="task.deleted_at">
                       <button
                         type="button"
                         class="board-list-action-btn board-list-action-primary"
-                        title="恢复已删除任务"
-                        @click="(e: Event) => onRestoreClick(t.id, t.title, e)"
-                      >恢复</button>
+                        :title="t('tasks.board.restoreDeletedTitle')"
+                        @click="(e: Event) => onRestoreClick(task.id, task.title, e)"
+                      >{{ t('tasks.board.btnRestore') }}</button>
                     </template>
                     <template v-else>
                       <button
-                        v-for="btn in (STATUS_BUTTONS[t.status] || [])"
+                        v-for="btn in (STATUS_BUTTONS[task.status] || [])"
                         :key="btn.key"
                         type="button"
                         :class="[
@@ -1848,7 +1855,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
                             : 'board-list-action-normal',
                         ]"
                         :title="btn.label"
-                        @click.stop="handleListAction(t, btn.key)"
+                        @click.stop="handleListAction(task, btn.key)"
                       >{{ btn.label }}</button>
                     </template>
                   </div>
@@ -1910,7 +1917,7 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? '加载中…' : `加载更多 (${tasks.length} / ${total})` }}
+          {{ loadingMore ? t('tasks.board.loading') : t('tasks.board.loadMore', { loaded: tasks.length, total }) }}
         </button>
       </div>
     </div>
@@ -1920,10 +1927,10 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
          取消或 ESC/backdrop → cancelDeleteTask. -->
     <ConfirmDialog
       :open="!!deleteConfirm"
-      title="删除任务"
-      :message="deleteConfirm ? `确定删除「${deleteConfirm.taskTitle}」？删除后可通过「显示已删除」恢复。` : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :title="t('tasks.board.deleteTaskTitle')"
+      :message="deleteConfirm ? t('tasks.board.deleteConfirmMsg', { title: deleteConfirm.taskTitle }) : ''"
+      :confirm-text="t('tasks.board.btnDelete')"
+      :cancel-text="t('common.cancel')"
       type="danger"
       @confirm="confirmDeleteTask"
       @cancel="cancelDeleteTask"
@@ -1933,24 +1940,26 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
          ConfirmDialog 不支持 default slot, 这里用 Modal + Textarea 自建. -->
     <Modal
       :model-value="!!refineDialog"
-      title="让 agent 接着干"
+      :title="t('tasks.board.refineTitle')"
       size="sm"
       @update:model-value="(v: boolean) => { if (!v) cancelRefine(); }"
     >
       <div class="board-refine-body">
-        <p class="board-refine-hint">
-          任务 <strong>{{ refineDialog?.taskTitle }}</strong> 从 reviewing 切回 running, agent 会按新指示继续. 消息可选.
-        </p>
+        <i18n-t keypath="tasks.board.refineHint" tag="p" class="board-refine-hint" scope="global">
+          <template #title>
+            <strong>{{ refineDialog?.taskTitle }}</strong>
+          </template>
+        </i18n-t>
         <Textarea
           v-model="refineMessage"
           :rows="4"
-          placeholder="(可选) 给 agent 的继续消息"
+          :placeholder="t('tasks.board.refinePlaceholder')"
           class-name="board-refine-textarea"
         />
       </div>
       <template #footer>
-        <Button variant="secondary" @click="cancelRefine">取消</Button>
-        <Button variant="primary" @click="submitRefine">↻ 继续干</Button>
+        <Button variant="secondary" @click="cancelRefine">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" @click="submitRefine">{{ t('tasks.board.refineSubmit') }}</Button>
       </template>
     </Modal>
 
@@ -1969,8 +1978,8 @@ function onChatTaskCreated(task: ChatTaskPayload): void {
     <button
       type="button"
       class="board-fab-new"
-      title="新建任务"
-      aria-label="新建任务"
+      :title="t('tasks.board.newTask')"
+      :aria-label="t('tasks.board.newTask')"
       @click="quickCreateOpen = true"
     >
       <!-- R233 Round7: 文本「+」字形受字体基线影响视觉偏下, 换 SVG 十字几何居中. -->

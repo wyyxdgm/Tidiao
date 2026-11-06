@@ -16,6 +16,7 @@
    - dequeue/await/unawait 需要 body (reason), 其它走空 body. */
 import { computed, ref } from 'vue';
 import { post, HttpError } from '@/api/http';
+import { useI18n } from 'vue-i18n';
 import { formatShortDateTime } from '@/lib/datetime';
 import { sortTasksForKanban } from './sort-tasks';
 import { useToast } from '@/composables/useToast';
@@ -79,6 +80,17 @@ const emit = defineEmits<{
   (e: 'updated', taskId: string, newStatus: TaskStatus): void;
 }>();
 
+/* i18n (W3a): 用户可见字符串走 t('tasks.kanban.*'); 文案源在
+   spa/src/i18n/locales/{zh-CN,en-US}/ 下 tasks 域文件 (W3 整合时落盘).
+   te() 兜底: locale 域文件未就绪 / 未知 status 时回落旧 STATUS_LABELS 或原始值. */
+const { t, te } = useI18n();
+
+/** status 列名: 优先走 locale, miss 时回落 STATUS_LABELS (中文) / 原始 key. */
+function statusLabel(s: TaskStatus): string {
+  const k = `tasks.kanban.status.${s}`;
+  return te(k) ? t(k) : (STATUS_LABELS[s] || s);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
@@ -97,22 +109,27 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
   cancelled: 'kb-status-cancelled',
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  design: '设计', dev: '开发', test: '测试', deploy: '部署',
-};
+/* type 标签走 locale (computed 跟随语言切换); 未知 type 回落原始值 (模板 || t.type). */
+const TYPE_LABELS = computed<Record<string, string>>(() => ({
+  design: t('tasks.kanban.type.design'),
+  dev: t('tasks.kanban.type.dev'),
+  test: t('tasks.kanban.type.test'),
+  deploy: t('tasks.kanban.type.deploy'),
+}));
 
 const TYPE_COLORS: Record<string, string> = {
   design: 'kb-type-design', dev: 'kb-type-dev',
   test: 'kb-type-test', deploy: 'kb-type-deploy',
 };
 
-const AWAITING_TYPE_META: Record<string, { color: string; cn: string }> = {
-  review: { color: 'kb-marker-review', cn: '需拍板' },
-  choice: { color: 'kb-marker-choice', cn: '等选' },
-  info: { color: 'kb-marker-info', cn: '提示' },
-  waiting_reply: { color: 'kb-marker-waiting', cn: '等回复' },
-  suggestion: { color: 'kb-marker-suggestion', cn: '有建议' },
-  stuck: { color: 'kb-marker-stuck', cn: '卡住' },
+/* cn → labelKey: 标签文案进 locale, color 样式类仍走静态表. */
+const AWAITING_TYPE_META: Record<string, { color: string; labelKey: string }> = {
+  review: { color: 'kb-marker-review', labelKey: 'tasks.kanban.marker.review' },
+  choice: { color: 'kb-marker-choice', labelKey: 'tasks.kanban.marker.choice' },
+  info: { color: 'kb-marker-info', labelKey: 'tasks.kanban.marker.info' },
+  waiting_reply: { color: 'kb-marker-waiting', labelKey: 'tasks.kanban.marker.waitingReply' },
+  suggestion: { color: 'kb-marker-suggestion', labelKey: 'tasks.kanban.marker.suggestion' },
+  stuck: { color: 'kb-marker-stuck', labelKey: 'tasks.kanban.marker.stuck' },
 };
 
 /** 跨列拖拽 → action 名. 复刻 master constants.ts getStatusDragAction. null = 非法. */
@@ -185,7 +202,7 @@ const columns = computed(() => {
     .filter((s) => sel === undefined || sel.has(s))
     .map((s) => ({
       key: s,
-      label: STATUS_LABELS[s] || s,
+      label: statusLabel(s),
       tasks: sortTasksForKanban<TaskTrimmed>(bucket.get(s) ?? [], s),
     }));
 });
@@ -200,14 +217,16 @@ function parseAwaitingMarkers(json: string | null, awaitingOwnerReview: number):
       const parsed = JSON.parse(json) as Array<{ type?: string; desc?: string | null }>;
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((m) => {
-          const t = (m.type || 'review').toLowerCase();
-          const meta = AWAITING_TYPE_META[t] || { color: 'kb-marker-default', cn: t || '需拍板' };
+          // 局部变量名避开外层 i18n 的 t (同名会 shadow 掉翻译函数).
+          const mtype = (m.type || 'review').toLowerCase();
+          const meta = AWAITING_TYPE_META[mtype] || { color: 'kb-marker-default', labelKey: '' };
+          const labelText = meta.labelKey ? t(meta.labelKey) : (mtype || t('tasks.kanban.marker.review'));
           const descSnippet = m.desc
             ? ` · ${m.desc.slice(0, 20)}${m.desc.length > 20 ? '…' : ''}`
             : '';
           return {
-            label: `${meta.cn}${descSnippet}`,
-            title: m.desc ? `${t}: ${m.desc}` : `awaiting marker (type=${t})`,
+            label: `${labelText}${descSnippet}`,
+            title: m.desc ? `${mtype}: ${m.desc}` : `awaiting marker (type=${mtype})`,
             color: meta.color,
           };
         });
@@ -215,7 +234,7 @@ function parseAwaitingMarkers(json: string | null, awaitingOwnerReview: number):
     } catch { /* fallthrough */ }
   }
   if (awaitingOwnerReview === 1) {
-    return [{ label: '需拍板', title: 'awaiting owner review', color: 'kb-marker-review' }];
+    return [{ label: t('tasks.kanban.marker.review'), title: 'awaiting owner review', color: 'kb-marker-review' }];
   }
   return [];
 }
@@ -294,8 +313,8 @@ async function onColDrop(e: DragEvent, targetCol: TaskStatus): Promise<void> {
     if (raw) fromStatus = (JSON.parse(raw) as { fromStatus: TaskStatus }).fromStatus;
   } catch { /* fallthrough */ }
   if (!fromStatus) {
-    const t = props.tasks.find((x) => x.id === draggedId);
-    if (t) fromStatus = t.status;
+    const task = props.tasks.find((x) => x.id === draggedId);
+    if (task) fromStatus = task.status;
   }
   if (!fromStatus) return;
 
@@ -307,7 +326,10 @@ async function onColDrop(e: DragEvent, targetCol: TaskStatus): Promise<void> {
 
   const action = DRAG_ACTION[fromStatus]?.[targetCol] ?? null;
   if (!action) {
-    toast.error(`不支持从 ${STATUS_LABELS[fromStatus]} 拖到 ${STATUS_LABELS[targetCol]}`);
+    toast.error(t('tasks.kanban.errIllegalTransition', {
+      from: statusLabel(fromStatus),
+      to: statusLabel(targetCol),
+    }));
     return;
   }
 
@@ -321,12 +343,16 @@ async function onColDrop(e: DragEvent, targetCol: TaskStatus): Promise<void> {
       body,
     );
     const newStatus = res?.status ?? targetCol;
-    toast.success(`已切到 ${STATUS_LABELS[newStatus] || newStatus}`);
+    toast.success(t('tasks.kanban.movedTo', { status: statusLabel(newStatus) }));
     emit('updated', draggedId, newStatus);
   } catch (err: unknown) {
-    if (err instanceof HttpError) toast.error(`改 status 失败: ${err.message || `HTTP ${err.status}`}`);
-    else if (err instanceof Error) toast.error(`网络异常: ${err.message}`);
-    else toast.error('改 status 失败');
+    if (err instanceof HttpError) {
+      toast.error(t('tasks.kanban.errChangeStatus', { msg: err.message || `HTTP ${err.status}` }));
+    } else if (err instanceof Error) {
+      toast.error(t('tasks.kanban.errNetwork', { msg: err.message }));
+    } else {
+      toast.error(t('tasks.kanban.errChangeStatusFallback'));
+    }
   } finally {
     inFlightAction.value = null;
   }
@@ -351,7 +377,7 @@ async function handleSameColReorder(
   insertAt: number,
 ): Promise<void> {
   if (!REORDERABLE_STATUSES.has(colKey)) {
-    toast.error(`${STATUS_LABELS[colKey] || colKey} 列不参与排序, 仅 running / queued 可手动调序`);
+    toast.error(t('tasks.kanban.errNotReorderable', { col: statusLabel(colKey) }));
     return;
   }
   const beforeOrder = props.tasks.filter((t) => t.status === colKey);
@@ -377,16 +403,16 @@ async function handleSameColReorder(
       orders: orderPayload,
     });
     if (!res || !res.ok) {
-      toast.error('排序失败: 服务端拒绝');
+      toast.error(t('tasks.kanban.errReorderRejected'));
       return;
     }
-    toast.success(`已排序 ${reordered.length} 条`);
+    toast.success(t('tasks.kanban.reordered', { n: reordered.length }));
     emit('updated', draggedId, colKey);
   } catch (err: unknown) {
     const msg = err instanceof HttpError
       ? (err.message || `HTTP ${err.status}`)
-      : err instanceof Error ? err.message : '未知错误';
-    toast.error(`排序失败: ${msg}`);
+      : err instanceof Error ? err.message : t('tasks.kanban.errUnknown');
+    toast.error(t('tasks.kanban.errReorder', { msg }));
     emit('updated', draggedId, colKey);
   } finally {
     inFlightAction.value = null;
@@ -398,8 +424,8 @@ async function handleSameColReorder(
   <div class="kb-root">
     <Empty
       v-if="columns.every((c) => c.tasks.length === 0)"
-      title="暂无任务"
-      description="新建任务后会按 status 自动归列"
+      :title="t('tasks.kanban.emptyTitle')"
+      :description="t('tasks.kanban.emptyDesc')"
       illustration="inbox"
     />
     <div v-else class="kb-row">
@@ -418,68 +444,68 @@ async function handleSameColReorder(
 
         <div class="kb-col-body">
           <article
-            v-for="(t, idx) in col.tasks"
-            :key="t.id"
+            v-for="(task, idx) in col.tasks"
+            :key="task.id"
             :class="[
               'kb-card',
-              { 'kb-card-dragging': draggingId === t.id, 'kb-card-deleted': !!t.deleted_at },
+              { 'kb-card-dragging': draggingId === task.id, 'kb-card-deleted': !!task.deleted_at },
               { 'kb-card-drop-before': dragOverCol === col.key && dragOverIdx === idx && draggingId !== null },
               { 'kb-card-drop-after': dragOverCol === col.key && dragOverIdx === idx + 1 && draggingId !== null && idx === col.tasks.length - 1 },
             ]"
             draggable="true"
-            @dragstart="(e: DragEvent) => onDragStart(e, t.id, t.status)"
+            @dragstart="(e: DragEvent) => onDragStart(e, task.id, task.status)"
             @dragover="(e: DragEvent) => onCardDragOver(e, idx)"
             @dragend="onDragEnd"
           >
             <div class="kb-card-top">
-              <span v-if="t.priority > 0" class="kb-priority" :title="`优先级 ${t.priority}`">
-                P{{ t.priority }}
+              <span v-if="task.priority > 0" class="kb-priority" :title="t('tasks.kanban.priorityTitle', { n: task.priority })">
+                P{{ task.priority }}
               </span>
-              <span v-if="t.type" :class="['kb-type', TYPE_COLORS[t.type] || 'kb-type-default']">
-                {{ TYPE_LABELS[t.type] || t.type }}
+              <span v-if="task.type" :class="['kb-type', TYPE_COLORS[task.type] || 'kb-type-default']">
+                {{ TYPE_LABELS[task.type] || task.type }}
               </span>
               <span
-                v-if="t.dispatched_by_task_id"
+                v-if="task.dispatched_by_task_id"
                 class="kb-by-chip"
-                :title="`由 ${t.dispatched_by_task_id.slice(0, 8)} 派发`"
-              >[by]{{ t.dispatched_by_task_id.slice(0, 8) }}</span>
+                :title="t('tasks.kanban.byTitle', { id: task.dispatched_by_task_id.slice(0, 8) })"
+              >[by]{{ task.dispatched_by_task_id.slice(0, 8) }}</span>
               <template
-                v-for="m in parseAwaitingMarkers(t.awaiting_markers, t.awaiting_owner_review)"
+                v-for="m in parseAwaitingMarkers(task.awaiting_markers, task.awaiting_owner_review)"
                 :key="m.label"
               >
                 <span :class="['kb-marker', m.color]" :title="m.title">{{ m.label }}</span>
               </template>
-              <span v-if="t.deleted_at" class="kb-deleted-badge">已删除</span>
+              <span v-if="task.deleted_at" class="kb-deleted-badge">{{ t('tasks.kanban.deleted') }}</span>
             </div>
 
-            <div v-if="scopeLabels && t.project_id" class="kb-card-scope">
-              <span>{{ scopeLabels.projectNames[t.project_id] || '?' }}</span>
-              <template v-if="t.version_id">
+            <div v-if="scopeLabels && task.project_id" class="kb-card-scope">
+              <span>{{ scopeLabels.projectNames[task.project_id] || '?' }}</span>
+              <template v-if="task.version_id">
                 <span class="kb-scope-sep">›</span>
-                <span>{{ scopeLabels.versionNames[t.version_id] || '?' }}</span>
+                <span>{{ scopeLabels.versionNames[task.version_id] || '?' }}</span>
               </template>
             </div>
 
-            <router-link :to="`/tasks/${t.id}`" class="kb-card-title" :title="t.title" draggable="false">
-              {{ t.title }}
+            <router-link :to="`/tasks/${task.id}`" class="kb-card-title" :title="task.title" draggable="false">
+              {{ task.title }}
             </router-link>
 
             <div class="kb-card-meta">
-              <span class="kb-card-model" :title="t.resolved_model || t.model || '(default)'">
-                {{ t.resolved_model || t.model || '(default)' }}
+              <span class="kb-card-model" :title="task.resolved_model || task.model || '(default)'">
+                {{ task.resolved_model || task.model || '(default)' }}
               </span>
-              <span class="kb-card-time">{{ formatTime(t.updated_at) }}</span>
+              <span class="kb-card-time">{{ formatTime(task.updated_at) }}</span>
               <!-- R232: 运行中任务资源徽章 (父组件传 resources 才有数据) -->
               <TaskResourceBadge
-                v-if="props.resources?.[t.id]"
-                :sample="props.resources[t.id]"
-                :warn="(props.resources[t.id]?.cpuPercent ?? 0) > 80 || (props.resources[t.id]?.memPercent ?? 0) > 50"
+                v-if="props.resources?.[task.id]"
+                :sample="props.resources[task.id]"
+                :warn="(props.resources[task.id]?.cpuPercent ?? 0) > 80 || (props.resources[task.id]?.memPercent ?? 0) > 50"
                 class="kb-card-resource-badge"
               />
             </div>
           </article>
 
-          <div v-if="col.tasks.length === 0" class="kb-col-empty-hint">暂无</div>
+          <div v-if="col.tasks.length === 0" class="kb-col-empty-hint">{{ t('tasks.kanban.emptyCol') }}</div>
         </div>
       </section>
     </div>

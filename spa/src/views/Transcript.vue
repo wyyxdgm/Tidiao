@@ -35,6 +35,7 @@
      与 wiki-detail / webhook-detail 同款不进主导航. */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import MarkdownIt from 'markdown-it';
 import { get, HttpError } from '@/api/http';
 import { parseDbTime } from '@/lib/datetime';
@@ -87,19 +88,19 @@ interface TaskDetail {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-/** 状态中文标签 — 与 TaskDetailView / BoardPage 同源 (sheet 红线 "完整功能对等"). */
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待执行',
-  queued: '排队中',
-  running: '运行中',
-  paused: '已暂停',
-  reviewing: '待审核',
-  verifying: '验收中',
-  await_user: '等用户介入',
-  completed: '已完成',
-  failed: '失败',
-  rejected: '已取消', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
-  cancelled: '已取消',
+/** 状态 → i18n key — 与 TaskDetailView / BoardPage 同源 (sheet 红线 "完整功能对等"). */
+const STATUS_KEYS: Record<TaskStatus, string> = {
+  pending: 'statusPending',
+  queued: 'statusQueued',
+  running: 'statusRunning',
+  paused: 'statusPaused',
+  reviewing: 'statusReviewing',
+  verifying: 'statusVerifying',
+  await_user: 'statusAwaitUser',
+  completed: 'statusCompleted',
+  failed: 'statusFailed',
+  rejected: 'statusRejected', // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策, 曾误标等待中)
+  cancelled: 'statusCancelled',
 };
 
 /** 状态圆点 class — 与 master STATUS_DOT 同款 (Tailwind bg-* 简化为 css class, 与
@@ -133,6 +134,7 @@ const md = new MarkdownIt({
 /* ------------------------------------------------------------------ */
 
 const route = useRoute();
+const { t } = useI18n();
 
 /** vue-router 4 params 类型 = string | string[], 单段路由强转 string. */
 const taskId = computed<string>(() => String(route.params.id));
@@ -163,10 +165,12 @@ const statusClass = computed<string>(() =>
   task.value ? STATUS_DOT[task.value.status] || 'status-default' : 'status-default',
 );
 
-/** 状态中文标签 — 含 unknown 兜底. */
-const statusLabel = computed<string>(() =>
-  task.value ? STATUS_LABELS[task.value.status] || task.value.status : '',
-);
+/** 状态显示标签 (走 i18n) — 含 unknown 兜底. */
+const statusLabel = computed<string>(() => {
+  if (!task.value) return '';
+  const key = STATUS_KEYS[task.value.status];
+  return key ? t(`tasks.transcript.${key}`) : task.value.status;
+});
 
 /** 时长 ms. started_at + completed_at 都有才计算, 否则 null. */
 const durationMs = computed<number | null>(() => {
@@ -205,14 +209,14 @@ const modelLabel = computed<string>(() => {
 function formatDuration(ms: number): string {
   if (ms < 0) return '';
   const totalSeconds = Math.floor(ms / 1000);
-  if (totalSeconds < 1) return '<1秒';
-  if (totalSeconds < 60) return `${totalSeconds}秒`;
+  if (totalSeconds < 1) return t('tasks.transcript.durUnder1s');
+  if (totalSeconds < 60) return t('tasks.transcript.durSeconds', { n: totalSeconds });
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  if (minutes < 60) return `${minutes}分${seconds}秒`;
+  if (minutes < 60) return t('tasks.transcript.durMinSec', { m: minutes, s: seconds });
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}时${mins}分`;
+  return t('tasks.transcript.durHourMin', { h: hours, m: mins });
 }
 
 /** ISO 时间 → "YYYY-MM-DD HH:mm:ss". null/无效 → "-".
@@ -281,7 +285,11 @@ async function handleDownloadJsonl(): Promise<void> {
     const blob = await res.blob();
     triggerDownload(blob, `${fileSlug.value}.jsonl`);
   } catch (e: unknown) {
-    toast.error(`导出 .jsonl 失败: ${e instanceof Error ? e.message : String(e)}`);
+    toast.error(
+      t('tasks.transcript.errExportJsonl', {
+        msg: e instanceof Error ? e.message : String(e),
+      }),
+    );
   } finally {
     downloadingJsonl.value = false;
   }
@@ -314,9 +322,9 @@ async function loadTranscript(): Promise<void> {
     if (e instanceof HttpError && e.status === 404) {
       notFound.value = true;
     } else if (e instanceof Error) {
-      error.value = e.message || '加载失败';
+      error.value = e.message || t('tasks.transcript.errLoadFailed');
     } else {
-      error.value = '加载失败';
+      error.value = t('tasks.transcript.errLoadFailed');
     }
     task.value = null;
     markdown.value = '';
@@ -371,23 +379,23 @@ watch(
   <div class="transcript-page">
     <!-- 加载态 -->
     <div v-if="loading && !task && !notFound && !error" class="state-block">
-      <Loading size="lg" label="加载转录" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('tasks.transcript.loadingLabel')" />
+      <p class="state-text muted">{{ t('tasks.transcript.loading') }}</p>
     </div>
 
     <!-- 404 -->
     <Empty
       v-else-if="notFound"
       illustration="doc"
-      title="任务不存在"
-      description="该任务可能已被删除,或当前用户无权访问"
+      :title="t('tasks.transcript.notFoundTitle')"
+      :description="t('tasks.transcript.notFoundDesc')"
       size="md"
     />
 
     <!-- 错误 -->
     <ErrorView
       v-else-if="error"
-      title="加载转录失败"
+      :title="t('tasks.transcript.errLoadTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -400,7 +408,7 @@ watch(
       <header class="transcript-header">
         <div class="header-row">
           <router-link :to="`/tasks/${task.id}`" class="back-link">
-            ← 返回任务
+            ← {{ t('tasks.transcript.backToTask') }}
           </router-link>
           <h1 class="task-title" :title="task.title">{{ task.title }}</h1>
           <span class="status-chip">
@@ -411,19 +419,19 @@ watch(
             <Button
               variant="primary"
               size="sm"
-              title="下载完整 Markdown 转录"
+              :title="t('tasks.transcript.downloadMdTitle')"
               @click="handleDownloadMd"
             >
-              ⬇ 下载 .md
+              ⬇ {{ t('tasks.transcript.downloadMd') }}
             </Button>
             <Button
               variant="secondary"
               size="sm"
               :disabled="downloadingJsonl"
-              title="下载机器可读的完整会话 (每行一条消息, 含 thinking / tool_use / tool_result)"
+              :title="t('tasks.transcript.downloadJsonlTitle')"
               @click="handleDownloadJsonl"
             >
-              {{ downloadingJsonl ? '导出中…' : '⬇ 下载 .jsonl' }}
+              {{ downloadingJsonl ? t('tasks.transcript.exporting') : `⬇ ${t('tasks.transcript.downloadJsonl')}` }}
             </Button>
           </div>
         </div>
@@ -431,39 +439,39 @@ watch(
         <!-- Metadata grid -->
         <dl class="meta-grid">
           <div class="meta-row">
-            <dt class="muted">模型</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelModel') }}</dt>
             <dd class="meta-value mono">{{ modelLabel }}</dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">强度</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelEffort') }}</dt>
             <dd class="meta-value mono">{{ task.effort || '-' }}</dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">花费</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelCost') }}</dt>
             <dd class="meta-value mono">
               {{ task.cost_usd != null ? `$${task.cost_usd.toFixed(4)}` : '-' }}
             </dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">时长</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelDuration') }}</dt>
             <dd class="meta-value mono">
               {{ durationMs != null ? formatDuration(durationMs) : '-' }}
             </dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">创建</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelCreated') }}</dt>
             <dd class="meta-value mono">{{ formatDateTime(task.created_at) }}</dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">开始</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelStarted') }}</dt>
             <dd class="meta-value mono">{{ formatDateTime(task.started_at) }}</dd>
           </div>
           <div class="meta-row">
-            <dt class="muted">完成</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelCompleted') }}</dt>
             <dd class="meta-value mono">{{ formatDateTime(task.completed_at) }}</dd>
           </div>
           <div v-if="showSessionRow" class="meta-row session-row">
-            <dt class="muted">Session</dt>
+            <dt class="muted">{{ t('tasks.transcript.labelSession') }}</dt>
             <dd class="meta-value mono">{{ formatSessionId(task.session_id) }}</dd>
           </div>
         </dl>
