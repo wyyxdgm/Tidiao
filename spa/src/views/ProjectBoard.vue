@@ -28,6 +28,7 @@
      inline 入口, 每个项目行加按钮). */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, post } from '@/api/http';
 import { buildBoardSrcDoc } from '@/lib/board-srcdoc';
 import Empty from '@/components/Empty.vue';
@@ -131,6 +132,7 @@ const MIN_REFRESH_SECONDS = 10;
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 
 const projectId = computed<string>(() => String(route.params.projectId || ''));
 
@@ -214,7 +216,7 @@ async function fetchBoardFile(): Promise<void> {
     viewState.value = 'content';
   } catch (e: unknown) {
     // 401 走 http.ts 自动 refresh+retry; 这里 catch 的是非 401 + refresh 后仍 401.
-    const msg = e instanceof Error ? e.message : '加载失败';
+    const msg = e instanceof Error ? e.message : t('projects.board.loadFailedTitle');
     errorMessage.value = msg;
     viewState.value = 'error';
   }
@@ -382,15 +384,15 @@ const projectHomeUrl = computed<string>(() => `/projects/${projectId.value}`);
         <span class="board-title">{{ config.title }}</span>
         <span class="board-path">{{ boardPath }}</span>
         <template v-if="config.refresh.kind === 'interval'">
-          <span class="board-meta">每 {{ Math.max(MIN_REFRESH_SECONDS, config.refresh.seconds) }}s 刷新</span>
+          <span class="board-meta">{{ t('projects.board.refreshEvery', { n: Math.max(MIN_REFRESH_SECONDS, config.refresh.seconds) }) }}</span>
         </template>
         <template v-else-if="config.refresh.kind === 'sse'">
-          <span class="board-meta">SSE 实时</span>
+          <span class="board-meta">{{ t('projects.board.refreshSse') }}</span>
         </template>
         <template v-else>
-          <span class="board-meta">手动刷新</span>
+          <span class="board-meta">{{ t('projects.board.refreshManual') }}</span>
         </template>
-        <span v-if="lastFetched" class="board-meta">最后更新: {{ formatTime(lastFetched) }}</span>
+        <span v-if="lastFetched" class="board-meta">{{ t('projects.board.lastUpdate', { time: formatTime(lastFetched) }) }}</span>
       </div>
       <div class="toolbar-right">
         <span
@@ -398,18 +400,18 @@ const projectHomeUrl = computed<string>(() => `/projects/${projectId.value}`);
           class="board-warn"
           :title="sourceErrorTooltip()"
         >
-          ⚠ {{ Object.keys(sourceErrors).length }} source 失败
+          {{ t('projects.board.sourcesFailed', { n: Object.keys(sourceErrors).length }) }}
         </span>
         <button type="button" class="toolbar-link" @click="toggleHistory">
-          时间线 ({{ commits.length }})
+          {{ t('projects.board.timeline', { n: commits.length }) }}
         </button>
       </div>
     </div>
 
     <!-- P5 时间线胶囊 (折叠面板) -->
     <div v-if="viewState === 'content' && historyOpen" class="board-history">
-      <h3 class="history-title">最近 20 次改动</h3>
-      <p v-if="commits.length === 0" class="history-empty">无 git 历史</p>
+      <h3 class="history-title">{{ t('projects.board.historyTitle') }}</h3>
+      <p v-if="commits.length === 0" class="history-empty">{{ t('projects.board.noHistory') }}</p>
       <ul v-else class="history-list">
         <li v-for="c in commits" :key="c.sha" class="history-item">
           <span
@@ -430,13 +432,13 @@ const projectHomeUrl = computed<string>(() => `/projects/${projectId.value}`);
       <!-- Initial loading -->
       <div v-if="viewState === 'loading'" class="board-loading">
         <Loading size="lg" />
-        <p class="board-loading-text">加载中…</p>
+        <p class="board-loading-text">{{ t('projects.board.loading') }}</p>
       </div>
 
       <!-- 401/网络错 -->
       <ErrorView
         v-else-if="viewState === 'error'"
-        title="加载失败"
+        :title="t('projects.board.loadFailedTitle')"
         :description="errorMessage"
         variant="error"
         :retrying="retrying"
@@ -445,25 +447,25 @@ const projectHomeUrl = computed<string>(() => `/projects/${projectId.value}`);
 
       <!-- no-cwd: 跳项目详情配置 cwd -->
       <div v-else-if="viewState === 'no-cwd'" class="board-message">
-        <p>本项目未配置 cwd, 无法加载 board.</p>
-        <p>请在项目设置里配置 cwd.</p>
-        <router-link :to="projectHomeUrl" class="board-link">← 返回项目</router-link>
+        <p>{{ t('projects.board.noCwd1') }}</p>
+        <p>{{ t('projects.board.noCwd2') }}</p>
+        <router-link :to="projectHomeUrl" class="board-link">{{ t('projects.board.backToProject') }}</router-link>
       </div>
 
       <!-- not-found: 提示 frontmatter 示例 -->
       <div v-else-if="viewState === 'not-found'" class="board-message board-message-wide">
-        <h1 class="board-message-title">找不到 board 文件</h1>
+        <h1 class="board-message-title">{{ t('projects.board.notFoundTitle') }}</h1>
         <p class="board-message-text">
-          路径: <code>{{ boardPath }}</code>
+          {{ t('projects.board.pathLabel') }} <code>{{ boardPath }}</code>
           <span v-if="boardOrigin === 'platform'" class="board-meta">
-            （平台内置 board, 来自平台仓库 boards/）
+            {{ t('projects.board.platformBoard') }}
           </span>
         </p>
         <p class="board-message-text board-message-faded">
-          解析顺序: 先找项目 cwd, 再回落平台内置 boards/, 两边都没有.
+          {{ t('projects.board.resolveOrder') }}
         </p>
         <div class="board-message-tip">
-          <p class="board-message-text">在该项目 <code>cwd</code> 下创建文件, frontmatter 形如:</p>
+          <p class="board-message-text">{{ t('projects.board.createTip1') }} <code>cwd</code> {{ t('projects.board.createTip2') }}</p>
           <!-- v-pre: 让 Vue 模板编译器跳过该块, 防止 &lt;script&gt; / &lt;/script&gt;
               实体编码被错误解析成模板开始/结束标记. -->
           <pre class="board-message-pre" v-pre>---

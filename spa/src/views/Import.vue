@@ -35,6 +35,7 @@
      状态机.
    - 预览卡片含 `prompt` (完整字段) + tags (行首和 Next 同款 chip). */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   parseJsonImport,
   parseCsvImport,
@@ -56,12 +57,12 @@ import Textarea from '@/components/Textarea.vue';
 /*  常量                                                                */
 /* ------------------------------------------------------------------ */
 
-/** 与 Next page.tsx FORMAT_HELP 1:1. */
-const FORMAT_HELP: Record<ImportFormat, string> = {
-  json: '[{"title": "任务标题", "prompt": "详细指令", "description": "可选描述", "tags": ["tag1"]}]',
-  csv: 'title,prompt,description,tags\n任务标题,详细指令,可选描述,tag1;tag2',
-  markdown: '- [ ] 任务标题\n  : 详细指令（可选）\n- [ ] 另一个任务',
-};
+/** 与 Next page.tsx FORMAT_HELP 1:1 — i18n: 示例文案走 t() → computed. */
+const formatHelp = computed<Record<ImportFormat, string>>(() => ({
+  json: t('projects.import.helpJson'),
+  csv: t('projects.import.helpCsv'),
+  markdown: t('projects.import.helpMarkdown'),
+}));
 
 const FORMAT_OPTIONS: { value: ImportFormat; label: string }[] = [
   { value: 'json', label: 'JSON' },
@@ -74,6 +75,7 @@ const FORMAT_OPTIONS: { value: ImportFormat; label: string }[] = [
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
 
 const projects = ref<Project[]>([]);
 const versions = ref<Version[]>([]);
@@ -96,12 +98,12 @@ const result = ref<{ imported: number; errors?: string[] } | null>(null);
 /* ------------------------------------------------------------------ */
 
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '请选择项目' },
+  { value: '', label: t('projects.import.phProject') },
   ...projects.value.map((p) => ({ value: p.id, label: p.name })),
 ]);
 
 const versionOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '其他任务（无版本）' },
+  { value: '', label: t('projects.import.phVersion') },
   ...versions.value.map((v) => ({ value: v.id, label: v.name })),
 ]);
 
@@ -126,11 +128,11 @@ async function loadProjects(): Promise<void> {
     projects.value = Array.isArray(resp.projects) ? resp.projects : [];
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      projectsError.value = e.message || `加载项目失败 (HTTP ${e.status})`;
+      projectsError.value = e.message || t('projects.import.projectsLoadFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      projectsError.value = `网络异常: ${e.message}`;
+      projectsError.value = t('projects.import.errNetwork', { msg: e.message });
     } else {
-      projectsError.value = '加载项目失败';
+      projectsError.value = t('projects.import.projectsLoadFailed');
     }
     projects.value = [];
   } finally {
@@ -171,31 +173,41 @@ const cliState = ref<CliImportState | null>(null);
 const cliStarting = ref<boolean>(false);
 let cliPollTimer: ReturnType<typeof setInterval> | null = null;
 
-const CLI_PHASE_LABEL: Record<string, string> = {
-  scan: '扫描本机会话',
-  summarize: 'LLM 摘要中',
-  ingest: '入库中',
-  done: '空闲',
-  error: '上次出错',
+/** i18n: phase → locale key 映射 (label 走 t()). */
+const CLI_PHASE_KEY: Record<string, string> = {
+  scan: 'projects.import.phaseScan',
+  summarize: 'projects.import.phaseSummarize',
+  ingest: 'projects.import.phaseIngest',
+  done: 'projects.import.phaseDone',
+  error: 'projects.import.phaseError',
 };
 
 const cliStatusText = computed<string>(() => {
   const s = cliState.value;
-  if (!s) return '读取状态中…';
-  if (!s.phase && !s.running) return '从未运行';
-  if (s.running) return CLI_PHASE_LABEL[s.phase || ''] || s.phase || '';
-  if (s.phase === 'error') return `上次出错: ${s.message || '未知'}`;
-  if (s.phase === 'done' && s.stats) {
-    return `上次: 新建 ${s.stats.imported} / 跳过 ${s.stats.skipped} / 自动建项目 ${s.stats.projects_created}`;
+  if (!s) return t('projects.import.cliReading');
+  if (!s.phase && !s.running) return t('projects.import.cliNever');
+  if (s.running) {
+    const key = CLI_PHASE_KEY[s.phase || ''];
+    return key ? t(key) : s.phase || '';
   }
-  return s.message || '空闲';
+  if (s.phase === 'error') {
+    return t('projects.import.cliLastError', { msg: s.message || t('projects.import.cliUnknown') });
+  }
+  if (s.phase === 'done' && s.stats) {
+    return t('projects.import.cliLastStats', {
+      imported: s.stats.imported,
+      skipped: s.stats.skipped,
+      projects: s.stats.projects_created,
+    });
+  }
+  return s.message || t('projects.import.cliIdle');
 });
 
 async function refreshCliState(): Promise<void> {
   try {
     cliState.value = await getCliImportState();
   } catch {
-    cliState.value = { running: false, phase: null, message: '状态读取失败' };
+    cliState.value = { running: false, phase: null, message: t('projects.import.cliReadFailed') };
   }
   // 跑完自动停轮询
   if (cliState.value && !cliState.value.running && cliPollTimer) {
@@ -210,13 +222,13 @@ async function handleCliSync(): Promise<void> {
     await startCliImport();
     await refreshCliState();
     if (!cliPollTimer) cliPollTimer = setInterval(() => void refreshCliState(), 3000);
-    toast.success('CLI 会话同步已启动 — 完成后任务按项目归档');
+    toast.success(t('projects.import.cliStarted'));
   } catch (e) {
     if (isHttpError(e) && e.status === 409) {
       await refreshCliState();
       if (!cliPollTimer) cliPollTimer = setInterval(() => void refreshCliState(), 3000);
     } else {
-      toast.error(isHttpError(e) ? `启动失败: ${e.message}` : '启动失败');
+      toast.error(isHttpError(e) ? t('projects.import.cliStartFailedWith', { msg: e.message }) : t('projects.import.cliStartFailed'));
     }
   } finally {
     cliStarting.value = false;
@@ -270,7 +282,7 @@ function handlePreview(): void {
   preview.value = parsed.tasks;
   parseErrors.value = parsed.errors;
   if (parsed.tasks.length === 0 && parsed.errors.length === 0) {
-    parseErrors.value = ['未识别到任何任务，请检查内容格式'];
+    parseErrors.value = [t('projects.import.errNoTasks')];
   }
 }
 
@@ -278,7 +290,7 @@ async function handleImport(): Promise<void> {
   const list = preview.value;
   if (!list || list.length === 0) return;
   if (!projectId.value) {
-    toast.error('请先选择目标项目');
+    toast.error(t('projects.import.errPickProject'));
     return;
   }
   importing.value = true;
@@ -294,9 +306,9 @@ async function handleImport(): Promise<void> {
       errors: resp.errors,
     };
     if (resp.errors && resp.errors.length > 0) {
-      toast.warn(`导入 ${resp.imported} 个任务（${resp.errors.length} 项有警告）`);
+      toast.warn(t('projects.import.warnToast', { n: resp.imported, m: resp.errors.length }));
     } else {
-      toast.success(`已成功导入 ${resp.imported} 个任务`);
+      toast.success(t('projects.import.successToast', { n: resp.imported }));
     }
     preview.value = null;
     content.value = '';
@@ -304,14 +316,14 @@ async function handleImport(): Promise<void> {
     const errs: string[] = [];
     if (isHttpError(e)) {
       if (e.status === 404) {
-        errs.push('项目不存在或无权限 (HTTP 404)');
+        errs.push(t('projects.import.errProject404'));
       } else {
-        errs.push(e.message || `导入失败 (HTTP ${e.status})`);
+        errs.push(e.message || t('projects.import.errHttp', { status: e.status }));
       }
     } else if (e instanceof Error) {
-      errs.push(`网络异常: ${e.message}`);
+      errs.push(t('projects.import.errNetwork', { msg: e.message }));
     } else {
-      errs.push('导入失败');
+      errs.push(t('projects.import.errGeneric'));
     }
     parseErrors.value = errs;
     toast.error(errs[0]);
@@ -326,9 +338,9 @@ async function handleImport(): Promise<void> {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">批量导入任务</h1>
+        <h1 class="page-title">{{ t('projects.import.title') }}</h1>
         <p class="page-subtitle">
-          支持 JSON / CSV / Markdown 三种格式 — 选项目 → 粘贴内容 → 预览 → 确认导入.
+          {{ t('projects.import.subtitle') }}
         </p>
       </div>
     </header>
@@ -337,11 +349,9 @@ async function handleImport(): Promise<void> {
       <!-- 原生 CLI 会话导入 — 一键把本机 Claude Code CLI 历史同步为平台任务 -->
       <div class="cli-import-card">
         <div class="cli-import-text">
-          <h2 class="cli-import-title">从原生 CLI 会话导入</h2>
+          <h2 class="cli-import-title">{{ t('projects.import.cliTitle') }}</h2>
           <p class="cli-import-desc">
-            把本机 Claude Code CLI 的历史会话（~/.claude/projects/）导入为平台任务：
-            一个会话 = 一个已完成任务，带自动摘要，对话记录可在任务详情直接查看。
-            增量幂等，重复点只补新会话。
+            {{ t('projects.import.cliDesc') }}
           </p>
           <p class="cli-import-status" :class="{ 'cli-import-status-running': cliState?.running }">
             {{ cliState?.running ? '● ' : '' }}{{ cliStatusText }}
@@ -353,27 +363,27 @@ async function handleImport(): Promise<void> {
           :loading="cliStarting"
           :disabled="cliState?.running"
           @click="handleCliSync"
-        >{{ cliState?.running ? '同步中…' : '开始同步' }}</Button>
+        >{{ cliState?.running ? t('projects.import.cliSyncing') : t('projects.import.cliSync') }}</Button>
       </div>
 
       <!-- 项目 / 版本 — 与 Next 端 grid 2 列对齐 -->
       <div class="target-row">
         <div class="target-field">
-          <label class="field-label">项目 <span class="required">*</span></label>
+          <label class="field-label">{{ t('projects.import.labelProject') }} <span class="required">*</span></label>
           <Select
             :model-value="projectId"
             :options="projectOptions"
-            placeholder="请选择项目"
+            :placeholder="t('projects.import.phProject')"
             :disabled="projectsLoading || !!projectsError"
             @update:model-value="onProjectChange"
           />
         </div>
         <div class="target-field">
-          <label class="field-label">版本</label>
+          <label class="field-label">{{ t('projects.import.labelVersion') }}</label>
           <Select
             :model-value="versionId"
             :options="versionOptions"
-            placeholder="其他任务（无版本）"
+            :placeholder="t('projects.import.phVersion')"
             :disabled="!projectId"
             @update:model-value="onVersionChange"
           />
@@ -394,12 +404,12 @@ async function handleImport(): Promise<void> {
       </div>
 
       <!-- 格式说明 — 与 Next bg-gray-50 rounded-lg p-3 等价. -->
-      <div class="format-help">{{ FORMAT_HELP[format] }}</div>
+      <div class="format-help">{{ formatHelp[format] }}</div>
 
       <!-- Content textarea — 与 Next <textarea w-full h-64 font-mono> 1:1. -->
       <Textarea
         v-model="content"
-        :placeholder="`粘贴 ${format.toUpperCase()} 内容...`"
+        :placeholder="t('projects.import.pastePh', { fmt: format.toUpperCase() })"
         :rows="14"
         class-name="content-input"
       />
@@ -411,7 +421,7 @@ async function handleImport(): Promise<void> {
           size="md"
           :disabled="!canPreview"
           @click="handlePreview"
-        >预览解析</Button>
+        >{{ t('projects.import.previewParse') }}</Button>
 
         <Button
           v-if="preview && preview.length > 0"
@@ -420,7 +430,7 @@ async function handleImport(): Promise<void> {
           :loading="importing"
           :disabled="!canImport"
           @click="handleImport"
-        >{{ importing ? '导入中…' : `确认导入 (${preview.length} 个任务)` }}</Button>
+        >{{ importing ? t('projects.import.importing') : t('projects.import.confirmImport', { n: preview.length }) }}</Button>
       </div>
 
       <!-- 解析错误 — 与 Next bg-red-50 border-red-200 等价. -->
@@ -432,7 +442,7 @@ async function handleImport(): Promise<void> {
 
       <!-- 导入结果 — 与 Next bg-green-50 border-green-200 等价 (含 errors 时叠加黄字). -->
       <div v-if="result" class="result-block">
-        <div class="result-line">✅ 成功导入 {{ result.imported }} 个任务</div>
+        <div class="result-line">{{ t('projects.import.resultLine', { n: result.imported }) }}</div>
         <div
           v-for="(err, i) in result.errors || []"
           :key="`r-${i}`"
@@ -442,7 +452,7 @@ async function handleImport(): Promise<void> {
 
       <!-- 预览列表 — 与 Next bg-white border rounded-lg p-3 等价. -->
       <div v-if="preview && preview.length > 0" class="preview-section">
-        <h2 class="section-title">预览 ({{ preview.length }} 个任务)</h2>
+        <h2 class="section-title">{{ t('projects.import.previewTitle', { n: preview.length }) }}</h2>
         <div class="preview-list">
           <div
             v-for="(task, i) in preview"
@@ -464,7 +474,7 @@ async function handleImport(): Promise<void> {
 
       <!-- 项目列表加载失败 — 操作面板也需要兜底 -->
       <div v-if="projectsError" class="page-error">
-        ⚠️ 项目列表加载失败: {{ projectsError }} — 重新刷新页面可重试.
+        {{ t('projects.import.pageError', { msg: projectsError }) }}
       </div>
     </div>
   </div>

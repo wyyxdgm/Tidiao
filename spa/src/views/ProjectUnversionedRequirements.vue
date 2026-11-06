@@ -29,6 +29,7 @@
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   listRequirements,
   createRequirement,
@@ -68,40 +69,48 @@ import AggregatesChips from '@/components/RequirementAggregates.vue';
 
 /* ------------------------------------------------------------------ */
 /*  常量 — 1:1 对齐 master RequirementsListView                       */
+/*  i18n (W3b): 用户可见 label 走 t(), 原常量表改为函数/computed.      */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABEL: Record<RequirementStatus, string> = {
-  pending: '未开始',
-  done: '已完成',
-  awaiting_reply: '等回复',
-  has_suggestion: '有建议',
-  blocked: '需拍板',
-  closed: '已关闭',
-};
+/** 状态中文/英文标签 — 走 t(), 语言切换跟新. */
+function statusLabel(s: RequirementStatus): string {
+  const map: Record<RequirementStatus, string> = {
+    pending: t('projects.unreq.statusPending'),
+    done: t('projects.unreq.statusDone'),
+    awaiting_reply: t('projects.unreq.statusAwaiting'),
+    has_suggestion: t('projects.unreq.statusSuggestion'),
+    blocked: t('projects.unreq.statusBlocked'),
+    closed: t('projects.unreq.statusClosed'),
+  };
+  return map[s];
+}
 
-const STATUS_FILTER_OPTIONS: { value: '' | RequirementStatus; label: string }[] = [
-  { value: '', label: '全部' },
-  ...REQUIREMENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] })),
-];
+const statusFilterOptions = computed<{ value: '' | RequirementStatus; label: string }[]>(() => [
+  { value: '', label: t('projects.unreq.all') },
+  ...REQUIREMENT_STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
+]);
 
 const ACTOR_COLOR: Record<ActorType, { bg: string; color: string; border: string }> = {
   agent: { bg: 'var(--tw-purple-50)', color: 'var(--tw-purple-700)', border: 'var(--tw-purple-200)' },
   user: { bg: 'var(--tw-blue-50)', color: 'var(--tw-blue-700)', border: 'var(--tw-blue-200)' },
   system: { bg: 'var(--tw-gray-50)', color: 'var(--tw-gray-600)', border: 'var(--tw-gray-200)' },
 };
-const ACTOR_LABEL: Record<ActorType, string> = {
-  agent: 'AI',
-  user: '人',
-  system: '系统',
-};
-const FIELD_LABEL: Record<string, string> = {
-  title: '标题',
-  description: '描述',
-  status: '状态',
-  priority: '优先级',
-  tags: '标签',
-  version_id: '版本',
-};
+function actorLabel(a: ActorType): string {
+  if (a === 'agent') return t('projects.unreq.actorAi');
+  if (a === 'user') return t('projects.unreq.actorUser');
+  return t('projects.unreq.actorSystem');
+}
+function fieldLabel(field: string): string {
+  const map: Record<string, string> = {
+    title: t('projects.unreq.fieldTitle'),
+    description: t('projects.unreq.fieldDesc'),
+    status: t('projects.unreq.fieldStatus'),
+    priority: t('projects.unreq.fieldPriority'),
+    tags: t('projects.unreq.fieldTags'),
+    version_id: t('projects.unreq.fieldVersion'),
+  };
+  return map[field] ?? field;
+}
 
 /* ------------------------------------------------------------------ */
 /*  类型                                                                */
@@ -142,6 +151,7 @@ function emptyForm(): FormState {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 
 /** URL 上的 :projectId — hash 路由下是 params, 不是 query. */
 const projectId = computed<string>(() => String(route.params.projectId ?? ''));
@@ -177,7 +187,7 @@ watch(
     if (!name) return;
     tags.applyTitle(
       route.path,
-      formatProjectWithLabel(name, '未挂版本需求'),
+      formatProjectWithLabel(name, t('projects.unreq.tabLabel')),
     );
   },
 );
@@ -243,14 +253,14 @@ const projectOptions = computed<{ value: string; label: string }[]>(() =>
   projects.projects.map((p) => ({ value: p.id, label: p.name })),
 );
 
-const priorityOptions: { value: string; label: string }[] = [
-  { value: '', label: '无' },
+const priorityOptions = computed<{ value: string; label: string }[]>(() => [
+  { value: '', label: t('projects.unreq.priorityNone') },
   { value: '1', label: 'P1' },
   { value: '2', label: 'P2' },
   { value: '3', label: 'P3' },
   { value: '4', label: 'P4' },
   { value: '5', label: 'P5' },
-];
+]);
 
 /* ------------------------------------------------------------------ */
 /*  数据加载                                                            */
@@ -274,11 +284,11 @@ async function refresh(): Promise<void> {
     void refreshAggregatesFor(out.items);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('projects.unreq.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('projects.unreq.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('projects.unreq.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -418,7 +428,7 @@ function parsePriorityInput(raw: string): number | null {
 async function submitModal(): Promise<void> {
   const title = modal.form.title.trim();
   if (!title) {
-    toast.error('请填写标题');
+    toast.error(t('projects.unreq.errTitleRequired'));
     return;
   }
   const priorityNum = parsePriorityInput(modal.form.priority);
@@ -426,7 +436,7 @@ async function submitModal(): Promise<void> {
     modal.form.priority.trim() &&
     (priorityNum === null || priorityNum < 1 || priorityNum > 5)
   ) {
-    toast.error('优先级必须是 1-5 的整数');
+    toast.error(t('projects.unreq.errPriority'));
     return;
   }
 
@@ -446,7 +456,7 @@ async function submitModal(): Promise<void> {
       if (idx >= 0) items.value[idx] = updated;
       delete latestRevisionById[updated.id];
       void refreshRevisionsFor([updated]);
-      toast.success('已保存');
+      toast.success(t('projects.unreq.saved'));
       closeModal();
     } else {
       const tagsArray = parseTagsInput(modal.form.tags);
@@ -465,16 +475,16 @@ async function submitModal(): Promise<void> {
         items.value = [created, ...items.value];
         total.value += 1;
       }
-      toast.success('已创建');
+      toast.success(t('projects.unreq.created'));
       closeModal();
     }
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `保存失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('projects.unreq.saveFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('projects.unreq.errNetwork', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('projects.unreq.saveFailed'));
     }
   } finally {
     modal.submitting = false;
@@ -496,14 +506,14 @@ async function confirmDelete(): Promise<void> {
   try {
     await deleteRequirement(target.id);
     await refresh();
-    toast.success('已关闭');
+    toast.success(t('projects.unreq.closedToast'));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('projects.unreq.deleteFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('projects.unreq.errNetwork', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('projects.unreq.deleteFailed'));
     }
   }
 }
@@ -522,10 +532,6 @@ function fmt(iso: string | null | undefined): string {
   }
 }
 
-function statusLabel(s: RequirementStatus): string {
-  return STATUS_LABEL[s];
-}
-
 function projectDisplay(r: Requirement): string {
   return projectName.value || `#${r.project_id.slice(-8)}`;
 }
@@ -533,10 +539,10 @@ function projectDisplay(r: Requirement): string {
 /** 行内 version chip — 本视图强制 version_id=null, 全部走「未挂版本」黄色 chip
     (与 VersionRequirements.vue 同款 badge-version-none 样式). */
 function versionDisplay(r: Requirement): { text: string; cls: string } {
-  if (!r.version_id) return { text: '未挂版本', cls: 'badge-version-none' };
+  if (!r.version_id) return { text: t('projects.unreq.noVersion'), cls: 'badge-version-none' };
   // 异常: 后端返了 version_id 但本视图强制 null → 兜底走未挂版本 chip.
   const name = versionNameById.value[r.version_id];
-  return { text: name ? `v·${name}` : '未挂版本', cls: 'badge-version-none' };
+  return { text: name ? `v·${name}` : t('projects.unreq.noVersion'), cls: 'badge-version-none' };
 }
 
 function rowLatestRevision(r: Requirement): RequirementRevision | null {
@@ -577,23 +583,23 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
           {{ projectName }}
         </a>
         <span class="sep">/</span>
-        <span class="view-name">未发布版本</span>
-        <span class="view-mode">· 当前视图 = 未挂版本</span>
+        <span class="view-name">{{ t('projects.unreq.viewName') }}</span>
+        <span class="view-mode">· {{ t('projects.unreq.viewMode') }}</span>
       </div>
       <div class="actions">
         <a
           :href="resetHref"
           class="action-btn action-btn-action"
-          title="重置 = 清掉所有 query, 回到默认未挂版本过滤"
+          :title="t('projects.unreq.resetTitle')"
         >
-          重置
+          {{ t('projects.unreq.reset') }}
         </a>
         <a
           :href="totalEntryHref"
           class="action-btn action-btn-action"
-          title="总入口: 全局需求列表"
+          :title="t('projects.unreq.totalEntryTitle')"
         >
-          总入口
+          {{ t('projects.unreq.totalEntry') }}
         </a>
       </div>
     </div>
@@ -601,18 +607,18 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">需求点</h1>
+        <h1 class="page-title">{{ t('projects.unreq.title') }}</h1>
         <p class="page-subtitle">
-          {{ projectName }} 项目下未挂版本的需求 (跨版本演进 / 历史遗留).
+          {{ t('projects.unreq.subtitle', { project: projectName }) }}
         </p>
       </div>
       <div class="header-actions">
         <!-- R177: 画布视图入口 — 列表 ↔ 总控制台画布互跳. -->
-        <router-link :to="`/${projectId}/console`" class="action-btn" title="任务画布总控制台">
-          🎬 画布视图
+        <router-link :to="`/${projectId}/console`" class="action-btn" :title="t('projects.unreq.canvasTitle')">
+          {{ t('projects.unreq.canvasText') }}
         </router-link>
         <Button variant="primary" size="sm" @click="openCreate">
-          + 新建需求
+          {{ t('projects.unreq.createNew') }}
         </Button>
       </div>
     </header>
@@ -620,7 +626,7 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Status filter chips (与 master buildFilterHref 行为对齐) -->
     <div class="filter-bar">
       <button
-        v-for="opt in STATUS_FILTER_OPTIONS"
+        v-for="opt in statusFilterOptions"
         :key="opt.value"
         type="button"
         :class="['chip', isStatusActive(opt.value) ? 'chip-active' : 'chip-default']"
@@ -634,12 +640,12 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <div class="page-body">
       <div v-if="loading && items.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('projects.unreq.loading') }}</p>
       </div>
 
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('projects.unreq.loadFailedTitle')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -648,10 +654,10 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
 
       <Empty
         v-else-if="items.length === 0"
-        :title="statusFilter ? '该状态下暂无需求点' : '该项目下暂无未挂版本需求'"
+        :title="statusFilter ? t('projects.unreq.emptyFilteredTitle') : t('projects.unreq.emptyTitle')"
         :description="statusFilter
-          ? '切换到「全部」或新建需求试试'
-          : '点击右上角「+ 新建需求」添加'"
+          ? t('projects.unreq.emptyFilteredDesc')
+          : t('projects.unreq.emptyDesc')"
         illustration="inbox"
       />
 
@@ -695,11 +701,15 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
                     color: ACTOR_COLOR[rowLatestRevision(r)!.actor_type].color,
                     borderColor: ACTOR_COLOR[rowLatestRevision(r)!.actor_type].border,
                   }"
-                  :title="`${ACTOR_LABEL[rowLatestRevision(r)!.actor_type]}改 ${FIELD_LABEL[rowLatestRevision(r)!.field] ?? rowLatestRevision(r)!.field} · ${fmt(rowLatestRevision(r)!.created_at)}`"
+                  :title="t('projects.unreq.revTitle', {
+                    actor: actorLabel(rowLatestRevision(r)!.actor_type),
+                    field: fieldLabel(rowLatestRevision(r)!.field),
+                    time: fmt(rowLatestRevision(r)!.created_at),
+                  })"
                 >
-                  <span>{{ ACTOR_LABEL[rowLatestRevision(r)!.actor_type] }}</span>
+                  <span>{{ actorLabel(rowLatestRevision(r)!.actor_type) }}</span>
                   <span class="rev-dot">·</span>
-                  <span>{{ FIELD_LABEL[rowLatestRevision(r)!.field] ?? rowLatestRevision(r)!.field }}</span>
+                  <span>{{ fieldLabel(rowLatestRevision(r)!.field) }}</span>
                 </span>
                 <!-- R74 W3: aggregates 3 chip (📋N / 📈X% / 💬feedback). -->
                 <AggregatesChips
@@ -714,8 +724,8 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
             <button
               type="button"
               class="row-delete"
-              title="删除 (软删 → closed)"
-              aria-label="删除需求"
+              :title="t('projects.unreq.deleteRowTitle')"
+              :aria-label="t('projects.unreq.deleteRowAria')"
               @click.stop="askDelete(r)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
@@ -737,57 +747,57 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Create / Edit Modal -->
     <Modal
       :model-value="modal.open"
-      :title="modal.isEditing ? '编辑需求点' : '新建需求点'"
+      :title="modal.isEditing ? t('projects.unreq.modalEditTitle') : t('projects.unreq.modalCreateTitle')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeModal(); }"
     >
       <div class="form">
         <div v-if="!modal.isEditing" class="form-row">
-          <label class="form-label">归属</label>
+          <label class="form-label">{{ t('projects.unreq.belongsTo') }}</label>
           <div class="locked-context">
             <span class="badge badge-project">{{ projectName }}</span>
-            <span class="badge badge-version-none">未挂版本</span>
+            <span class="badge badge-version-none">{{ t('projects.unreq.noVersion') }}</span>
           </div>
           <p class="form-hint">
-            该需求点将挂在「{{ projectName }}」下但不挂任何版本 (路径上下文).
+            {{ t('projects.unreq.lockedHint', { project: projectName }) }}
           </p>
         </div>
 
         <div class="form-row">
           <label class="form-label">
-            标题 <span class="required">*</span>
+            {{ t('projects.unreq.labelTitle') }} <span class="required">*</span>
           </label>
           <Input
             v-model="modal.form.title"
-            placeholder="例如: 接入 LLM 配置下拉"
+            :placeholder="t('projects.unreq.phTitle')"
             :disabled="modal.submitting"
           />
         </div>
 
         <div class="form-row">
-          <label class="form-label">描述</label>
+          <label class="form-label">{{ t('projects.unreq.labelDesc') }}</label>
           <Textarea
             v-model="modal.form.description"
             :rows="3"
-            placeholder="需求说明 (可选)"
+            :placeholder="t('projects.unreq.phDesc')"
             :disabled="modal.submitting"
           />
         </div>
 
         <div class="form-grid">
           <div class="form-row">
-            <label class="form-label">状态</label>
+            <label class="form-label">{{ t('projects.unreq.labelStatus') }}</label>
             <Select
               v-model="modal.form.status"
-              :options="REQUIREMENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))"
+              :options="REQUIREMENT_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))"
               :disabled="modal.submitting"
             />
             <p class="form-hint">
-              改为「已完成」需要至少一个 dev/test/deploy 任务 completed (后端校验).
+              {{ t('projects.unreq.statusHint') }}
             </p>
           </div>
           <div class="form-row">
-            <label class="form-label">优先级</label>
+            <label class="form-label">{{ t('projects.unreq.labelPriority') }}</label>
             <Select
               v-model="modal.form.priority"
               :options="priorityOptions"
@@ -797,10 +807,10 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
         </div>
 
         <div class="form-row">
-          <label class="form-label">标签</label>
+          <label class="form-label">{{ t('projects.unreq.labelTags') }}</label>
           <Input
             v-model="modal.form.tags"
-            placeholder="review, urgent (逗号分隔)"
+            :placeholder="t('projects.unreq.phTags')"
             :disabled="modal.submitting"
           />
         </div>
@@ -808,10 +818,10 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
 
       <template #footer>
         <Button variant="secondary" :disabled="modal.submitting" @click="closeModal">
-          取消
+          {{ t('common.cancel') }}
         </Button>
         <Button :loading="modal.submitting" :disabled="modal.submitting" @click="submitModal">
-          {{ modal.isEditing ? '保存修改' : '创建需求' }}
+          {{ modal.isEditing ? t('projects.unreq.saveEdit') : t('projects.unreq.createBtn') }}
         </Button>
       </template>
     </Modal>
@@ -819,12 +829,12 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Delete confirm -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="关闭需求点?"
+      :title="t('projects.unreq.confirmTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.title}」将被软删除 (status → 已关闭), 可在「全部 / 已关闭」状态下恢复编辑.`
+        ? t('projects.unreq.confirmMsg', { title: pendingDelete.title })
         : ''"
-      confirm-text="关闭"
-      cancel-text="取消"
+      :confirm-text="t('projects.unreq.confirmBtn')"
+      :cancel-text="t('common.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"

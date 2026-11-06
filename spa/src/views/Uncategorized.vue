@@ -18,10 +18,10 @@
    - TaskCard 复用 R15 组件 (status chip + priority + owner + 时间); 卡片点
      击跳 /tasks/[id], R19 TaskDetailView 已就位. */
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   listUnassignedTasks,
   DISPLAY_TASK_STATUSES,
-  STATUS_LABELS,
   type UnassignedTask,
   type TaskStatus,
 } from '@/api/tasks';
@@ -36,6 +36,8 @@ import TaskCard from '@/components/TaskCard.vue';
 /*  状态                                                                */
 /* ------------------------------------------------------------------ */
 
+const { t } = useI18n();
+
 const tasks = ref<UnassignedTask[]>([]);
 const loading = ref<boolean>(false);
 const error = ref<string | null>(null);
@@ -44,16 +46,33 @@ const retrying = ref<boolean>(false);
 /** 状态过滤 — '' = 全部. 客户端切 chip 即时过滤, 不回服务端. */
 const statusFilter = ref<'' | TaskStatus>('');
 
+/** i18n: 状态 → locale key 映射 (label 走 t(); 原 STATUS_LABELS 来自共享
+    api/tasks.ts, zh 硬编码不迁 — 这里本地映射同款 zh 值, en 走本域 key). */
+const STATUS_KEY: Record<TaskStatus, string> = {
+  pending: 'projects.uncategorized.statusPending',
+  queued: 'projects.uncategorized.statusQueued',
+  running: 'projects.uncategorized.statusRunning',
+  paused: 'projects.uncategorized.statusPaused',
+  reviewing: 'projects.uncategorized.statusReviewing',
+  verifying: 'projects.uncategorized.statusVerifying',
+  await_user: 'projects.uncategorized.statusAwaitUser',
+  completed: 'projects.uncategorized.statusCompleted',
+  failed: 'projects.uncategorized.statusFailed',
+  rejected: 'projects.uncategorized.statusCancelled',
+  cancelled: 'projects.uncategorized.statusCancelled',
+};
+
 /* ------------------------------------------------------------------ */
 /*  派生                                                                */
 /* ------------------------------------------------------------------ */
 
 /** 状态过滤选项 — chip 渲染列表, 顺序与 DISPLAY_TASK_STATUSES 一致
-    (10 态; 历史 rejected 已并入 cancelled, 2026-09-15 决策). */
-const STATUS_FILTER_OPTIONS: { value: '' | TaskStatus; label: string }[] = [
-  { value: '', label: '全部' },
-  ...DISPLAY_TASK_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] })),
-];
+    (10 态; 历史 rejected 已并入 cancelled, 2026-09-15 决策).
+    i18n: 改 computed 走 t(), 语言切换跟新. */
+const statusFilterOptions = computed<{ value: '' | TaskStatus; label: string }[]>(() => [
+  { value: '', label: t('projects.uncategorized.all') },
+  ...DISPLAY_TASK_STATUSES.map((s) => ({ value: s, label: t(STATUS_KEY[s]) })),
+]);
 
 /** 过滤后任务列表. 客户端 O(n) — 11 状态集小, 全量数据集典型几十条. */
 const filteredTasks = computed<UnassignedTask[]>(() => {
@@ -84,11 +103,11 @@ async function refresh(): Promise<void> {
     tasks.value = Array.isArray(list) ? list : [];
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('projects.uncategorized.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('projects.uncategorized.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('projects.uncategorized.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -116,19 +135,18 @@ onMounted(() => {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">未分类任务</h1>
+        <h1 class="page-title">{{ t('projects.uncategorized.title') }}</h1>
         <p class="page-subtitle">
-          project_id 为空的 task (legacy 「未挂项目」). 多为定时任务脚本派发 /
-          调度器漏派 / 用户手动创建后未挂项目等场景. 点击卡片跳详情.
+          {{ t('projects.uncategorized.subtitle') }}
         </p>
       </div>
       <div class="header-actions">
         <span class="meta-count">
           <template v-if="statusFilter">
-            {{ filteredCount }} / {{ totalCount }} 条
+            {{ t('projects.uncategorized.countFiltered', { filtered: filteredCount, total: totalCount }) }}
           </template>
           <template v-else>
-            共 {{ totalCount }} 条
+            {{ t('projects.uncategorized.countTotal', { n: totalCount }) }}
           </template>
         </span>
         <Button
@@ -138,7 +156,7 @@ onMounted(() => {
           :disabled="loading"
           @click="onManualRefresh"
         >
-          ↻ 刷新
+          {{ t('projects.uncategorized.refresh') }}
         </Button>
       </div>
     </header>
@@ -146,7 +164,7 @@ onMounted(() => {
     <!-- Status filter chips -->
     <div class="filter-bar">
       <button
-        v-for="opt in STATUS_FILTER_OPTIONS"
+        v-for="opt in statusFilterOptions"
         :key="opt.value || 'all'"
         type="button"
         :class="['chip', isStatusActive(opt.value) ? 'chip-active' : 'chip-default']"
@@ -160,12 +178,12 @@ onMounted(() => {
     <div class="page-body">
       <div v-if="loading && tasks.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('projects.uncategorized.loading') }}</p>
       </div>
 
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('projects.uncategorized.loadFailedTitle')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -174,10 +192,10 @@ onMounted(() => {
 
       <Empty
         v-else-if="filteredTasks.length === 0"
-        :title="statusFilter ? '该状态下没有未挂项目任务' : '没有未挂项目任务'"
+        :title="statusFilter ? t('projects.uncategorized.emptyFilteredTitle') : t('projects.uncategorized.emptyTitle')"
         :description="statusFilter
-          ? '切换到「全部」或选择其他状态试试'
-          : '所有任务都归属到了项目, 状态良好. 如需把任务挂到项目, 跳详情页编辑.'"
+          ? t('projects.uncategorized.emptyFilteredDesc')
+          : t('projects.uncategorized.emptyDesc')"
         illustration="inbox"
       />
 

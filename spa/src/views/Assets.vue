@@ -36,6 +36,7 @@
      池变动 = 用户自己上传/删除, 无后台推送必要). */
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   listAssets,
   listAssetFilters,
@@ -67,38 +68,38 @@ import Pagination from '@/components/Pagination.vue';
 /*  常量                                                                */
 /* ------------------------------------------------------------------ */
 
-/** 与 Next TYPE_OPTIONS 1:1. */
-const TYPE_OPTIONS: { value: AssetTypeFilter; label: string }[] = [
-  { value: '', label: '全部类型' },
-  { value: 'image', label: '图片' },
-  { value: 'video', label: '视频' },
-  { value: 'audio', label: '音频' },
-  { value: 'file', label: '其他文件' },
-];
+/** 与 Next TYPE_OPTIONS 1:1 — i18n: label 走 t() → computed. */
+const typeOptions = computed<{ value: AssetTypeFilter; label: string }[]>(() => [
+  { value: '', label: t('projects.assets.typeAll') },
+  { value: 'image', label: t('projects.assets.typeImage') },
+  { value: 'video', label: t('projects.assets.typeVideo') },
+  { value: 'audio', label: t('projects.assets.typeAudio') },
+  { value: 'file', label: t('projects.assets.typeFile') },
+]);
 
-/** 与 Next SOURCE_OPTIONS 1:1. */
-const SOURCE_OPTIONS: { value: AssetSourceFilter; label: string }[] = [
-  { value: '', label: '全部来源' },
-  { value: 'agent_generated', label: 'AI 生成' },
-  { value: 'upload', label: '人工上传' },
-  { value: 'fork', label: 'Fork 继承' },
-];
+/** 与 Next SOURCE_OPTIONS 1:1 — i18n: computed. */
+const sourceOptions = computed<{ value: AssetSourceFilter; label: string }[]>(() => [
+  { value: '', label: t('projects.assets.sourceAll') },
+  { value: 'agent_generated', label: t('projects.assets.sourceAgent') },
+  { value: 'upload', label: t('projects.assets.sourceUpload') },
+  { value: 'fork', label: t('projects.assets.sourceFork') },
+]);
 
-/** 与 Next SORT_OPTIONS 1:1. */
-const SORT_OPTIONS = [
-  { value: 'created_at:desc', label: '最新优先' },
-  { value: 'created_at:asc', label: '最旧优先' },
-  { value: 'size_bytes:desc', label: '大小 ↓' },
-  { value: 'size_bytes:asc', label: '大小 ↑' },
-  { value: 'filename:asc', label: '文件名 A→Z' },
-  { value: 'filename:desc', label: '文件名 Z→A' },
-];
+/** 与 Next SORT_OPTIONS 1:1 — i18n: computed. */
+const sortOptions = computed(() => [
+  { value: 'created_at:desc', label: t('projects.assets.sortNewest') },
+  { value: 'created_at:asc', label: t('projects.assets.sortOldest') },
+  { value: 'size_bytes:desc', label: t('projects.assets.sortSizeDesc') },
+  { value: 'size_bytes:asc', label: t('projects.assets.sortSizeAsc') },
+  { value: 'filename:asc', label: t('projects.assets.sortNameAsc') },
+  { value: 'filename:desc', label: t('projects.assets.sortNameDesc') },
+]);
 
-/** 来源徽章配色 — 与 Next SOURCE_BADGE 1:1 (标签 + Tailwind class 翻译到 scoped CSS). */
-const SOURCE_BADGE: Record<string, { label: string; variant: 'purple' | 'blue' | 'amber' | 'gray' }> = {
-  agent_generated: { label: 'AI 生成', variant: 'purple' },
-  upload: { label: '人工上传', variant: 'blue' },
-  fork: { label: 'Fork 继承', variant: 'amber' },
+/** 来源徽章配色 — 与 Next SOURCE_BADGE 1:1 (label 走 t(); Tailwind class 翻译到 scoped CSS). */
+const SOURCE_BADGE: Record<string, { key: string; variant: 'purple' | 'blue' | 'amber' | 'gray' }> = {
+  agent_generated: { key: 'projects.assets.sourceAgent', variant: 'purple' },
+  upload: { key: 'projects.assets.sourceUpload', variant: 'blue' },
+  fork: { key: 'projects.assets.sourceFork', variant: 'amber' },
 };
 
 /** 默认每页条数 — 与 Next PAGE_LIMIT 1:1 = 50. */
@@ -116,6 +117,7 @@ const UPLOAD_MAX_SIZE = 10 * 1024 * 1024;
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
 
 const assets = ref<AssetItem[]>([]);
 const total = ref<number>(0);
@@ -190,7 +192,7 @@ const fileInputEl = ref<InstanceType<typeof FileInput> | null>(null);
 
 /** 项目下拉 — 与 Next projectOptions 1:1: "全部项目" + "项目名 (count)". */
 const projectOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '全部项目' },
+  { value: '', label: t('projects.assets.projectAll') },
   ...filtersData.value.projects.map((p: FilterProject) => ({
     value: p.id,
     label: `${p.name} (${p.count})`,
@@ -200,25 +202,26 @@ const projectOptions = computed<{ value: string; label: string }[]>(() => [
 /** 版本下拉 — 仅在选了 project 时填充, 与 Next versionOptions 1:1.
     飞书 AO-DEV R218: 追加「其他版本」桶 (value='null' 字面量) = 未挂版本的条目. */
 const versionOptions = computed<{ value: string; label: string }[]>(() => {
-  const opts: { value: string; label: string }[] = [{ value: '', label: '全部版本' }];
+  const opts: { value: string; label: string }[] = [{ value: '', label: t('projects.assets.versionAll') }];
   if (projectId.value) {
     const p = filtersData.value.projects.find((x) => x.id === projectId.value);
     for (const v of p?.versions ?? []) {
       opts.push({ value: v.id, label: `${v.name} (${v.count})` });
     }
-    opts.push({ value: 'null', label: '其他版本（未挂版本）' });
+    opts.push({ value: 'null', label: t('projects.assets.versionOther') });
   }
   return opts;
 });
 
-/** task picker — "最近 task 列表" → Select options. */
+/** task picker — "最近 task 列表" → Select options.
+    i18n: 回调参数 t 会遮蔽 i18n 的 t, 起别名叫 it 避开. */
 const taskOptions = computed<{ value: string; label: string }[]>(() => {
-  if (upload.loadingTasks) return [{ value: '', label: '加载中…' }];
-  if (upload.recentTasksError) return [{ value: '', label: '加载失败' }];
-  if (upload.recentTasks.length === 0) return [{ value: '', label: '暂无任务' }];
-  return upload.recentTasks.map((t) => ({
-    value: t.id,
-    label: t.title || t.id.slice(0, 8),
+  if (upload.loadingTasks) return [{ value: '', label: t('projects.assets.tasksLoading') }];
+  if (upload.recentTasksError) return [{ value: '', label: t('projects.assets.tasksLoadFailed') }];
+  if (upload.recentTasks.length === 0) return [{ value: '', label: t('projects.assets.tasksEmpty') }];
+  return upload.recentTasks.map((it) => ({
+    value: it.id,
+    label: it.title || it.id.slice(0, 8),
   }));
 });
 
@@ -267,11 +270,11 @@ async function refresh(): Promise<void> {
     selected.value = new Set();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('projects.assets.loadFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('projects.assets.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('projects.assets.deleteFailed');
     }
   } finally {
     loading.value = false;
@@ -381,7 +384,8 @@ async function doDelete(ids: string[]): Promise<void> {
     const resp = await deleteAssetsBatch(ids);
     const failedCount = Array.isArray(resp.failed) ? resp.failed.length : 0;
     toast.success(
-      `已删除 ${resp.deleted} 项${failedCount > 0 ? `, ${failedCount} 项失败` : ''}`,
+      t('projects.assets.deletedToast', { n: resp.deleted })
+        + (failedCount > 0 ? t('projects.assets.deletedFailedPart', { n: failedCount }) : ''),
     );
     /* 删完可能不够一页 → 退回上一页 (与 Next doDelete 同款 offset 修正).
        改用 page/pageSize 表述: 若删完本页恰好空, 跳回上一页 (min 1). */
@@ -394,11 +398,11 @@ async function doDelete(ids: string[]): Promise<void> {
     await refresh();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('projects.assets.deleteFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('projects.assets.errNetwork', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('projects.assets.deleteFailed'));
     }
   } finally {
     deletingId.value = null;
@@ -447,11 +451,11 @@ async function loadRecentTasks(): Promise<void> {
     upload.recentTasks = await listRecentTasks(20);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      upload.recentTasksError = e.message || `加载任务列表失败 (HTTP ${e.status})`;
+      upload.recentTasksError = e.message || t('projects.assets.loadFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      upload.recentTasksError = `网络异常: ${e.message}`;
+      upload.recentTasksError = t('projects.assets.errNetwork', { msg: e.message });
     } else {
-      upload.recentTasksError = '加载任务列表失败';
+      upload.recentTasksError = t('projects.assets.tasksLoadFailed');
     }
     upload.recentTasks = [];
   } finally {
@@ -493,32 +497,32 @@ function clearFile(): void {
 
 async function submitUpload(): Promise<void> {
   if (!upload.taskId) {
-    toast.error('请选择目标 task');
+    toast.error(t('projects.assets.errPickTask'));
     return;
   }
   if (!upload.file) {
-    toast.error('请选择文件');
+    toast.error(t('projects.assets.errPickFile'));
     return;
   }
   if (upload.file.size > UPLOAD_MAX_SIZE) {
-    toast.error(`文件过大 (上限 10MB): ${upload.file.name}`);
+    toast.error(t('projects.assets.errTooLarge', { name: upload.file.name }));
     return;
   }
   upload.submitting = true;
   try {
     const resp = await uploadAttachmentToTask(upload.taskId, upload.file);
-    toast.success(`已上传: ${resp.attachment.filename}`);
+    toast.success(t('projects.assets.uploadedToast', { name: resp.attachment.filename }));
     upload.open = false;
     // 上传成功后回到首页, 让用户看到新行. currentPage 保持 1 (排序 = desc → 最新在前).
     currentPage.value = 1;
     await refresh();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `上传失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('projects.assets.uploadFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('projects.assets.errNetwork', { msg: e.message }));
     } else {
-      toast.error('上传失败');
+      toast.error(t('projects.assets.uploadFailed'));
     }
   } finally {
     upload.submitting = false;
@@ -544,10 +548,10 @@ function fmtDate(iso: string): string {
 }
 
 function typeLabel(mt: string): string {
-  if (mt.startsWith('image/')) return '图片';
-  if (mt.startsWith('video/')) return '视频';
-  if (mt.startsWith('audio/')) return '音频';
-  return '文件';
+  if (mt.startsWith('image/')) return t('projects.assets.typeImage');
+  if (mt.startsWith('video/')) return t('projects.assets.typeVideo');
+  if (mt.startsWith('audio/')) return t('projects.assets.typeAudio');
+  return t('projects.assets.labelFileKind');
 }
 
 function fileIcon(mt: string): string {
@@ -565,11 +569,11 @@ function isImage(mt: string): boolean {
 }
 
 function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | 'amber' | 'gray' } {
+  const hit = SOURCE_BADGE[s];
   return (
-    SOURCE_BADGE[s] ?? {
-      label: s || '未知',
-      variant: 'gray',
-    }
+    hit
+      ? { label: t(hit.key), variant: hit.variant }
+      : { label: s || t('projects.assets.badgeUnknown'), variant: 'gray' }
   );
 }
 
@@ -585,23 +589,23 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">资源池</h1>
+        <h1 class="page-title">{{ t('projects.assets.title') }}</h1>
         <p class="page-subtitle">
-          平台所有任务的附件统一管理 — 支持筛选 / 排序 / 单删 / 批量删 / 上传.
+          {{ t('projects.assets.subtitle') }}
         </p>
       </div>
       <div class="header-actions">
         <span class="meta-count">
-          {{ loading ? '加载中…' : `共 ${total} 项` }}
+          {{ loading ? t('projects.assets.loading') : t('projects.assets.countTotal', { n: total }) }}
         </span>
-        <Button variant="primary" size="md" @click="openUpload">+ 上传文件</Button>
+        <Button variant="primary" size="md" @click="openUpload">{{ t('projects.assets.uploadBtn') }}</Button>
       </div>
     </header>
 
     <!-- 类型 tab — 直接点击切换, 比下拉快 -->
     <div class="type-tabs">
       <button
-        v-for="opt in TYPE_OPTIONS"
+        v-for="opt in typeOptions"
         :key="opt.value"
         type="button"
         :class="['type-tab', { 'type-tab-active': type === opt.value }]"
@@ -618,19 +622,19 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
         <div class="toolbar-search">
           <Input
             v-model="searchInput"
-            placeholder="搜索文件名..."
+            :placeholder="t('projects.assets.searchPh')"
             :clearable="true"
             @keyup.enter="commitSearch"
           />
           <!-- R51: size=md 与 Input(~34px) 等高, 修「搜索按钮比输入框矮一截」错位 -->
-          <Button size="md" @click="commitSearch">搜索</Button>
+          <Button size="md" @click="commitSearch">{{ t('projects.assets.search') }}</Button>
         </div>
 
         <div class="toolbar-field">
           <Select
             :model-value="source"
-            :options="SOURCE_OPTIONS"
-            placeholder="全部来源"
+            :options="sourceOptions"
+            :placeholder="t('projects.assets.phSource')"
             @update:model-value="onSourceChange"
           />
         </div>
@@ -639,7 +643,7 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
           <Select
             :model-value="projectId"
             :options="projectOptions"
-            placeholder="全部项目"
+            :placeholder="t('projects.assets.phProject')"
             @update:model-value="onProjectChange"
           />
         </div>
@@ -648,7 +652,7 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
           <Select
             :model-value="versionId"
             :options="versionOptions"
-            placeholder="全部版本"
+            :placeholder="t('projects.assets.phVersion')"
             :disabled="!projectId"
             @update:model-value="onVersionChange"
           />
@@ -657,8 +661,8 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
         <div class="toolbar-field">
           <Select
             :model-value="sort"
-            :options="SORT_OPTIONS"
-            placeholder="排序"
+            :options="sortOptions"
+            :placeholder="t('projects.assets.phSort')"
             @update:model-value="onSortChange"
           />
         </div>
@@ -672,7 +676,7 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
             :disabled="selected.size === 0"
             @click="batchDeleteOpen = true"
           >
-            批量删除{{ selected.size > 0 ? ` (${selected.size})` : '' }}
+            {{ selected.size > 0 ? t('projects.assets.batchDeleteN', { n: selected.size }) : t('projects.assets.batchDelete') }}
           </Button>
         </div>
       </div>
@@ -681,12 +685,12 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
       <div class="table-card">
         <div v-if="loading && assets.length === 0" class="loading-block">
           <Loading size="lg" />
-          <p class="loading-text">加载中…</p>
+          <p class="loading-text">{{ t('projects.assets.loading') }}</p>
         </div>
 
         <ErrorView
           v-else-if="error"
-          title="加载失败"
+          :title="t('projects.assets.loadFailedTitle')"
           :description="error"
           variant="error"
           :retrying="retrying"
@@ -695,12 +699,12 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
 
         <Empty
           v-else-if="assets.length === 0"
-          title="还没有资源"
-          description="上传文件或等待 agent 生成; 资源会按创建时间倒序展示在这里."
+          :title="t('projects.assets.emptyTitle')"
+          :description="t('projects.assets.emptyDesc')"
           illustration="folder"
         >
           <template #cta>
-            <Button variant="primary" size="sm" @click="openUpload">+ 上传第一个文件</Button>
+            <Button variant="primary" size="sm" @click="openUpload">{{ t('projects.assets.emptyCta') }}</Button>
           </template>
         </Empty>
 
@@ -713,14 +717,14 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
                   @update:model-value="toggleAll"
                 />
               </th>
-              <th class="col-preview">预览</th>
-              <th class="col-filename">文件名</th>
-              <th class="col-type">类型</th>
-              <th class="col-source">来源</th>
-              <th class="col-size">大小</th>
-              <th class="col-task">所属 Task</th>
-              <th class="col-time">创建时间</th>
-              <th class="col-action">操作</th>
+              <th class="col-preview">{{ t('projects.assets.thPreview') }}</th>
+              <th class="col-filename">{{ t('projects.assets.thFilename') }}</th>
+              <th class="col-type">{{ t('projects.assets.thType') }}</th>
+              <th class="col-source">{{ t('projects.assets.thSource') }}</th>
+              <th class="col-size">{{ t('projects.assets.thSize') }}</th>
+              <th class="col-task">{{ t('projects.assets.thTask') }}</th>
+              <th class="col-time">{{ t('projects.assets.thTime') }}</th>
+              <th class="col-action">{{ t('projects.assets.thAction') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -776,7 +780,7 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
                   class="link-danger"
                   :disabled="deletingId === a.id"
                   @click="pendingDelete = a"
-                >{{ deletingId === a.id ? '删除中…' : '删除' }}</button>
+                >{{ deletingId === a.id ? t('projects.assets.deleting') : t('projects.assets.delete') }}</button>
               </td>
             </tr>
           </tbody>
@@ -805,12 +809,12 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
     <!-- 单删确认 (R6) -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="删除附件?"
+      :title="t('projects.assets.confirmSingleTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.filename}」将被物理删除, 不可恢复.`
+        ? t('projects.assets.confirmSingleMsg', { name: pendingDelete.filename })
         : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :confirm-text="t('projects.assets.confirmDelete')"
+      :cancel-text="t('common.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmSingleDelete"
@@ -819,10 +823,10 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
     <!-- 批量删确认 (R6) -->
     <ConfirmDialog
       :open="batchDeleteOpen"
-      :title="`批量删除 ${selected.size} 个附件?`"
-      message="选中的附件将被物理删除, 不可恢复."
-      confirm-text="全部删除"
-      cancel-text="取消"
+      :title="t('projects.assets.confirmBatchTitle', { n: selected.size })"
+      :message="t('projects.assets.confirmBatchMsg')"
+      :confirm-text="t('projects.assets.confirmAll')"
+      :cancel-text="t('common.cancel')"
       type="danger"
       @cancel="batchDeleteOpen = false"
       @confirm="confirmBatchDelete"
@@ -831,29 +835,29 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
     <!-- 上传 modal (R5) -->
     <Modal
       :model-value="upload.open"
-      title="上传资源"
+      :title="t('projects.assets.uploadTitle')"
       size="md"
       @update:model-value="(v: boolean) => { if (!v) closeUpload(); }"
     >
       <div class="upload-form">
         <div class="form-row">
-          <label class="form-label">目标 Task <span class="required">*</span></label>
+          <label class="form-label">{{ t('projects.assets.labelTask') }} <span class="required">*</span></label>
           <Select
             :model-value="upload.taskId"
             :options="taskOptions"
-            placeholder="选择上传到的 task"
+            :placeholder="t('projects.assets.phTask')"
             :filterable="true"
             :disabled="upload.loadingTasks || upload.submitting"
             @update:model-value="(v: string | null) => (upload.taskId = v)"
           />
           <p class="form-hint">
-            资源池当前没有通用上传端点, 后端走
-            <code class="inline-code">/api/tasks/[id]/attachments</code> (10MB 上限).
+            {{ t('projects.assets.uploadHint1') }}
+            <code class="inline-code">/api/tasks/[id]/attachments</code> {{ t('projects.assets.uploadHint2') }}
           </p>
         </div>
 
         <div class="form-row">
-          <label class="form-label">文件 <span class="required">*</span></label>
+          <label class="form-label">{{ t('projects.assets.labelFile') }} <span class="required">*</span></label>
           <div
             :class="['drop-zone', { 'drop-zone-active': upload.dragging, 'drop-zone-has-file': !!upload.file }]"
             @click="pickFile"
@@ -878,22 +882,22 @@ function sourceBadge(s: string): { label: string; variant: 'purple' | 'blue' | '
             </div>
             <div v-else class="drop-hint">
               <div class="drop-icon">📤</div>
-              <div class="drop-text">点击或拖拽文件到这里</div>
-              <div class="drop-sub">单个文件, 最大 10MB</div>
+              <div class="drop-text">{{ t('projects.assets.dropText') }}</div>
+              <div class="drop-sub">{{ t('projects.assets.dropSub') }}</div>
             </div>
           </div>
         </div>
       </div>
       <template #footer>
         <Button variant="secondary" :disabled="upload.submitting" @click="closeUpload">
-          取消
+          {{ t('common.cancel') }}
         </Button>
         <Button
           variant="primary"
           :loading="upload.submitting"
           :disabled="upload.submitting || !upload.taskId || !upload.file"
           @click="submitUpload"
-        >上传</Button>
+        >{{ t('projects.assets.uploadBtnSubmit') }}</Button>
       </template>
     </Modal>
   </div>

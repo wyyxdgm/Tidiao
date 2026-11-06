@@ -42,6 +42,7 @@
 */
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   getUsageStats,
   getBacklog,
@@ -62,18 +63,25 @@ import ScopeBadge from './usage/ScopeBadge.vue';
 /*  Granularity + owner options                                         */
 /* ------------------------------------------------------------------ */
 
-const GRANULARITY_OPTIONS: SelectOption[] = [
-  { value: 'hour', label: '按小时' },
-  { value: 'day', label: '按天' },
-  { value: 'week', label: '按周' },
-  { value: 'month', label: '按月' },
-  { value: 'year', label: '按年' },
-];
+/* ------------------------------------------------------------------ */
+/*  i18n                                                               */
+/* ------------------------------------------------------------------ */
 
-const STATIC_OWNER_OPTIONS: SelectOption[] = [
-  { value: 'all', label: '全部用户' },
-  { value: 'self', label: '仅我的' },
-];
+const { t } = useI18n();
+
+/** i18n (W3b): 选项 label 走 t() → computed. */
+const granularityOptions = computed<SelectOption[]>(() => [
+  { value: 'hour', label: t('projects.usage.granHour') },
+  { value: 'day', label: t('projects.usage.granDay') },
+  { value: 'week', label: t('projects.usage.granWeek') },
+  { value: 'month', label: t('projects.usage.granMonth') },
+  { value: 'year', label: t('projects.usage.granYear') },
+]);
+
+const staticOwnerOptions = computed<SelectOption[]>(() => [
+  { value: 'all', label: t('projects.usage.ownerAll') },
+  { value: 'self', label: t('projects.usage.ownerSelf') },
+]);
 
 /* ------------------------------------------------------------------ */
 /*  状态                                                                */
@@ -106,7 +114,7 @@ onMounted(async () => {
   try {
     backlog.value = await getBacklog();
   } catch (e) {
-    backlogError.value = e instanceof Error ? e.message : '加载失败';
+    backlogError.value = e instanceof Error ? e.message : t('projects.usage.errLoadTitle');
   }
 });
 
@@ -144,7 +152,7 @@ async function fetchUsage() {
       knownOwners.value = j.total.by_owner;
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '加载失败';
+    const msg = e instanceof Error ? e.message : t('projects.usage.errLoadTitle');
     if (msg === 'admin required') {
       error.value = 'admin_required';
     } else {
@@ -198,10 +206,10 @@ const maxCost = computed(() => {
 const ownerOptions = computed<SelectOption[]>(() => {
   if (me.value?.role !== 'admin') return [];
   return [
-    ...STATIC_OWNER_OPTIONS,
+    ...staticOwnerOptions.value,
     ...knownOwners.value.map((o) => ({
       value: o.owner_id ?? '',
-      label: o.email ?? `(已删除用户 ${o.owner_id ?? 'unknown'})`,
+      label: o.email ?? t('projects.usage.deletedUser', { id: o.owner_id ?? 'unknown' }),
     })),
   ];
 });
@@ -240,11 +248,11 @@ interface StatCard {
 
 const totalCards = computed<StatCard[]>(() => {
   if (!data.value) return [];
-  const t = data.value.total;
+  const total = data.value.total;
   return [
-    { label: '总花费（全部任务）', value: formatCost(t.cost_usd) },
-    { label: '总任务数', value: String(t.task_count) },
-    { label: '上下文 token 合计', value: formatTokens(t.context_tokens) },
+    { label: t('projects.usage.cardCost'), value: formatCost(total.cost_usd) },
+    { label: t('projects.usage.cardTasks'), value: String(total.task_count) },
+    { label: t('projects.usage.cardTokens'), value: formatTokens(total.context_tokens) },
   ];
 });
 
@@ -263,17 +271,31 @@ interface StatusMeta {
   cls: string;
 }
 
-/** 状态中文名 + 配色. key 与后端 BACKLOG_STATUSES 一一对应. */
+/** 状态配色 (i18n 后 label 走 t(), 本表只留 class). key 与后端 BACKLOG_STATUSES 一一对应. */
 const STATUS_META: Record<BacklogStatus, StatusMeta> = {
-  pending: { label: '待启动', cls: 'pending' },
-  queued: { label: '排队中', cls: 'queued' },
-  running: { label: '运行中', cls: 'running' },
-  paused: { label: '已暂停', cls: 'paused' },
-  reviewing: { label: '待验收', cls: 'reviewing' },
+  pending: { label: '', cls: 'pending' },
+  queued: { label: '', cls: 'queued' },
+  running: { label: '', cls: 'running' },
+  paused: { label: '', cls: 'paused' },
+  reviewing: { label: '', cls: 'reviewing' },
   // 历史 rejected 显示兼容 → 已取消 (2026-09-15 决策; 曾误标「等待中」).
-  rejected: { label: '已取消', cls: 'rejected' },
-  failed: { label: '失败', cls: 'failed' },
+  rejected: { label: '', cls: 'rejected' },
+  failed: { label: '', cls: 'failed' },
 };
+
+/** 状态中文名/英文名 — 走 t() (i18n W3b). */
+function statusMetaLabel(s: BacklogStatus): string {
+  const key: Record<BacklogStatus, string> = {
+    pending: 'projects.usage.statusPending',
+    queued: 'projects.usage.statusQueued',
+    running: 'projects.usage.statusRunning',
+    paused: 'projects.usage.statusPaused',
+    reviewing: 'projects.usage.statusReviewing',
+    rejected: 'projects.usage.statusRejected',
+    failed: 'projects.usage.statusFailed',
+  };
+  return t(key[s] ?? 'projects.usage.statusPending');
+}
 
 /* ------------------------------------------------------------------ */
 /*  Backlog panel                                                       */
@@ -286,39 +308,39 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
   <div class="usage-page">
     <header class="page-header">
       <div class="header-nav">
-        <a href="#/global" class="header-link">← 返回</a>
-        <a href="#/stats" class="header-link">花费统计</a>
+        <a href="#/global" class="header-link">{{ t('projects.usage.backLink') }}</a>
+        <a href="#/stats" class="header-link">{{ t('projects.usage.statsLink') }}</a>
       </div>
-      <h1 class="page-title">用量统计</h1>
+      <h1 class="page-title">{{ t('projects.usage.title') }}</h1>
     </header>
 
     <main class="page-body">
       <!-- 积压概览 (与粒度无关, 单独拉) -->
       <div v-if="backlogError" class="error-strip">
-        积压概览加载失败：{{ backlogError }}
+        {{ t('projects.usage.backlogLoadFailed', { msg: backlogError }) }}
       </div>
-      <div v-else-if="!backlog" class="muted-line">积压概览加载中...</div>
+      <div v-else-if="!backlog" class="muted-line">{{ t('projects.usage.backlogLoading') }}</div>
       <section v-else class="card backlog-card">
         <div class="backlog-header">
           <div class="backlog-header-text">
             <h2 class="card-title">
-              积压概览
+              {{ t('projects.usage.backlogTitle') }}
               <span
                 class="scope-badge"
                 :class="isAllBacklog ? 'scope-all' : 'scope-mine'"
               >
-                {{ isAllBacklog ? '全部用户' : '仅我的' }}
+                {{ isAllBacklog ? t('projects.usage.scopeAll') : t('projects.usage.scopeMine') }}
               </span>
             </h2>
             <p class="card-subtitle">
-              未走到终态的任务条数（终态 = 完成 / 已取消，不计入）
-              <span v-if="!isAllBacklog"> · 你不是管理员，看不到其他用户的任务</span>
+              {{ t('projects.usage.backlogSubtitle') }}
+              <span v-if="!isAllBacklog">{{ t('projects.usage.notAdminSuffix') }}</span>
             </p>
           </div>
           <div class="backlog-total">
             <div class="backlog-total-num">{{ backlog.backlog_total }}</div>
             <div class="backlog-total-meta">
-              {{ backlog.oldest_age_days === null ? '无积压' : `最老 ${backlog.oldest_age_days} 天` }}
+              {{ backlog.oldest_age_days === null ? t('projects.usage.noBacklog') : t('projects.usage.oldestDays', { n: backlog.oldest_age_days }) }}
             </div>
           </div>
         </div>
@@ -326,7 +348,7 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
         <div class="backlog-grid">
           <div v-for="b in backlog.backlog" :key="b.status" class="backlog-cell">
             <div class="backlog-cell-label">
-              {{ STATUS_META[b.status as BacklogStatus]?.label ?? b.status }}
+              {{ statusMetaLabel(b.status as BacklogStatus) }}
             </div>
             <div
               class="backlog-cell-value"
@@ -335,14 +357,14 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
               {{ b.count }}
             </div>
             <div class="backlog-cell-meta">
-              {{ b.oldest_age_days === null ? '' : `最老 ${b.oldest_age_days}d` }}
+              {{ b.oldest_age_days === null ? '' : t('projects.usage.oldestDaysShort', { n: b.oldest_age_days }) }}
             </div>
           </div>
         </div>
 
         <div v-if="backlog.reviewing_by_owner.top.length > 0" class="backlog-reviewing">
           <div class="backlog-reviewing-title">
-            待验收 按用户（谁该去验收）· 共 {{ backlog.reviewing_by_owner.distinct_owners }} 个用户
+            {{ t('projects.usage.reviewingByTitle', { n: backlog.reviewing_by_owner.distinct_owners }) }}
           </div>
           <div class="backlog-reviewing-list">
             <div
@@ -351,35 +373,34 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
               class="backlog-reviewing-row"
             >
               <span class="backlog-reviewing-email">
-                {{ o.email ?? `(已删除用户 ${o.owner_id ?? 'unknown'})` }}
+                {{ o.email ?? t('projects.usage.deletedUser', { id: o.owner_id ?? 'unknown' }) }}
               </span>
               <span class="backlog-reviewing-count">{{ o.count }}</span>
             </div>
             <div v-if="backlog.reviewing_by_owner.other_count > 0" class="backlog-reviewing-other">
-              其余用户合计 {{ backlog.reviewing_by_owner.other_count }}
+              {{ t('projects.usage.othersCount', { n: backlog.reviewing_by_owner.other_count }) }}
             </div>
           </div>
         </div>
 
         <div class="backlog-footer">
-          仅本实例本库的数字<span v-if="backlog.instance">（{{ backlog.instance }}）</span>；
-          其他实例（如 pulu）是独立数据库，此处读不到。
+          {{ backlog.instance ? t('projects.usage.backlogFooterInstance', { instance: backlog.instance }) : t('projects.usage.backlogFooter') }}
         </div>
       </section>
 
       <!-- 粒度 + (admin 限定) owner 切换器 -->
       <div class="controls-row">
-        <span class="control-label">时间粒度</span>
+        <span class="control-label">{{ t('projects.usage.labelGranularity') }}</span>
         <div class="control-select">
           <Select
             :model-value="granularity"
-            :options="GRANULARITY_OPTIONS"
+            :options="granularityOptions"
             class-name="w-32"
             @update:model-value="(v: string | null) => v && (granularity = v as UsageGranularity)"
           />
         </div>
         <template v-if="me?.role === 'admin' && ownerOptions.length > 0">
-          <span class="control-label">口径</span>
+          <span class="control-label">{{ t('projects.usage.labelOwner') }}</span>
           <div class="control-select-wide">
             <Select
               :model-value="ownerPick"
@@ -390,24 +411,24 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
           </div>
         </template>
         <span v-if="data" class="control-meta">
-          分桶时区 {{ data.timezone }} · 最近 {{ data.limit }} 个区间
+          {{ t('projects.usage.metaTimezone', { tz: data.timezone, n: data.limit }) }}
         </span>
       </div>
 
       <!-- Error / loading / content -->
       <ErrorView
         v-if="error && !data"
-        :title="error === 'admin_required' ? '权限不足' : '加载失败'"
+        :title="error === 'admin_required' ? t('projects.usage.errPermTitle') : t('projects.usage.errLoadTitle')"
         :description="
           error === 'admin_required'
-            ? '用量统计仅管理员可见。请联系管理员或返回首页。'
+            ? t('projects.usage.errPermDesc')
             : error
         "
         :show-retry="error !== 'admin_required'"
         :retrying="loading"
         @retry="fetchUsage"
       />
-      <Loading v-else-if="loading && !data" text="加载中..." />
+      <Loading v-else-if="loading && !data" :text="t('projects.usage.loading')" />
 
       <template v-if="data">
         <!-- 总量卡 -->
@@ -422,22 +443,22 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
         <section class="card">
           <div class="card-header">
             <h2 class="card-title">
-              分区间用量
+              {{ t('projects.usage.bucketsTitle') }}
               <ScopeBadge :scope="data.scope" :owner-email="pickOwnerEmail()" />
             </h2>
-            <p class="card-subtitle">点某一行展开该区间的各模型明细</p>
+            <p class="card-subtitle">{{ t('projects.usage.bucketsSubtitle') }}</p>
           </div>
           <div v-if="data.buckets.length === 0" class="empty-line">
-            这个粒度下还没有任务数据
+            {{ t('projects.usage.bucketsEmpty') }}
           </div>
           <table v-else class="usage-table">
             <thead>
               <tr>
-                <th class="th-left">区间</th>
-                <th class="th-right">任务数</th>
-                <th class="th-right">花费</th>
-                <th class="th-right">上下文 token</th>
-                <th class="th-left th-bar">占比</th>
+                <th class="th-left">{{ t('projects.usage.thBucket') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTasks') }}</th>
+                <th class="th-right">{{ t('projects.usage.thCost') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTokens') }}</th>
+                <th class="th-left th-bar">{{ t('projects.usage.thRatio') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -478,22 +499,21 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
         <section class="card">
           <div class="card-header">
             <h2 class="card-title">
-              各模型总量（全部任务）
+              {{ t('projects.usage.modelsTitle') }}
               <ScopeBadge :scope="data.scope" :owner-email="pickOwnerEmail()" />
             </h2>
             <p class="card-subtitle">
-              模型口径 = resolved_model（实际跑的）回落 model。
-              ⚠️ 平台目前只记录 cost 与上下文规模，没有 input/output token 分列。
+              {{ t('projects.usage.modelsSubtitle') }}
             </p>
           </div>
-          <div v-if="data.total.by_model.length === 0" class="empty-line">暂无数据</div>
+          <div v-if="data.total.by_model.length === 0" class="empty-line">{{ t('projects.usage.noData') }}</div>
           <table v-else class="usage-table">
             <thead>
               <tr>
-                <th class="th-left">模型</th>
-                <th class="th-right">任务数</th>
-                <th class="th-right">花费</th>
-                <th class="th-right">上下文 token</th>
+                <th class="th-left">{{ t('projects.usage.thModel') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTasks') }}</th>
+                <th class="th-right">{{ t('projects.usage.thCost') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTokens') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -514,32 +534,32 @@ const isAllBacklog = computed(() => backlog.value?.scope === 'all');
         >
           <div class="card-header">
             <h2 class="card-title">
-              按用户汇总
+              {{ t('projects.usage.ownersTitle') }}
               <ScopeBadge :scope="data.scope" :owner-email="null" />
             </h2>
             <p class="card-subtitle">
-              全平台所有用户的累计花费；点击「仅该用户」可在上方切换器收窄到单个账号。
+              {{ t('projects.usage.ownersSubtitle') }}
             </p>
           </div>
           <div
             v-if="!data.total.by_owner || data.total.by_owner.length === 0"
             class="empty-line"
           >
-            暂无数据
+            {{ t('projects.usage.noData') }}
           </div>
           <table v-else class="usage-table">
             <thead>
               <tr>
-                <th class="th-left">用户</th>
-                <th class="th-right">任务数</th>
-                <th class="th-right">花费</th>
-                <th class="th-right">上下文 token</th>
+                <th class="th-left">{{ t('projects.usage.thUser') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTasks') }}</th>
+                <th class="th-right">{{ t('projects.usage.thCost') }}</th>
+                <th class="th-right">{{ t('projects.usage.thTokens') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="o in data.total.by_owner" :key="o.owner_id ?? 'unknown'">
                 <td class="td-left">
-                  {{ o.email ?? `(已删除用户 ${o.owner_id ?? 'unknown'})` }}
+                  {{ o.email ?? t('projects.usage.deletedUser', { id: o.owner_id ?? 'unknown' }) }}
                 </td>
                 <td class="td-right">{{ o.task_count }}</td>
                 <td class="td-right td-strong">{{ formatCost(o.cost_usd) }}</td>

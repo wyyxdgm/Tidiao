@@ -25,6 +25,7 @@
      —— 这正是想要的 (概览是门面). */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, HttpError, isHttpError } from '@/api/http';
 import { listVersions, updateProject, updateVersion, type Version } from '@/api/projects';
 import { getScopeCounts, type ScopeCounts } from '@/api/stats';
@@ -123,18 +124,19 @@ const showNewVersion = ref(false);
 type ProjectTab = 'overview' | 'meta' | 'versions';
 const activeTab = ref<ProjectTab>('overview');
 
-/** tab 列表 — 标签与顺序在这里定, 模板 v-for 渲染. */
-const TABS: Array<{ key: ProjectTab; label: string }> = [
-  { key: 'overview', label: '概览' },
-  { key: 'meta', label: '元数据' },
-  { key: 'versions', label: '版本' },
-];
+/** tab 列表 — key 与顺序在这里定, 标签走 t() (computed, 语言切换跟新). */
+const TABS = computed<Array<{ key: ProjectTab; label: string }>>(() => [
+  { key: 'overview', label: t('projects.detail.tabOverview') },
+  { key: 'meta', label: t('projects.detail.tabMeta') },
+  { key: 'versions', label: t('projects.detail.tabVersions') },
+]);
 
 /* ------------------------------------------------------------------ */
 /*  R176 (飞书): 版本行内联编辑 — 版本名/描述/飞书 URL/Sheet 名/自动派发   */
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
 const editingVersionId = ref<string | null>(null);
 const editName = ref('');
 const editDescription = ref('');
@@ -174,7 +176,7 @@ function cancelEditVersion(): void {
 async function saveEditVersion(v: Version): Promise<void> {
   const name = editName.value.trim();
   if (!name) {
-    toast.error('版本名不能为空');
+    toast.error(t('projects.detail.errNameRequired'));
     return;
   }
   savingVersion.value = true;
@@ -186,14 +188,14 @@ async function saveEditVersion(v: Version): Promise<void> {
       feishu_sheet: editFeishuSheet.value.trim() || null,
       enable: editEnable.value,
     });
-    toast.success(`版本「${name}」已更新`);
+    toast.success(t('projects.detail.updated', { name }));
     cancelEditVersion();
     await loadVersions();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`保存失败: ${e.message}`);
+      toast.error(t('projects.list.saveFailedWith', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('projects.list.saveFailed'));
     }
   } finally {
     savingVersion.value = false;
@@ -316,11 +318,11 @@ async function loadProject(): Promise<void> {
     project.value = data.project;
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      error.value = e.message || `请求失败 (HTTP ${e.status})`;
+      error.value = e.message || t('projects.detail.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('projects.detail.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('projects.detail.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -413,7 +415,7 @@ watch(
     <!-- Header: 项目名 + 右上 "+版本" -->
     <header class="page-header">
       <div class="header-left">
-        <h2 class="page-title">{{ project?.name ?? '项目详情' }}</h2>
+        <h2 class="page-title">{{ project?.name ?? t('projects.detail.fallbackTitle') }}</h2>
         <span v-if="project" class="page-id">{{ project.id }}</span>
       </div>
       <div class="header-right">
@@ -422,9 +424,9 @@ watch(
           v-if="project"
           :to="`/${project.id}/console`"
           class="pdv-console-link"
-          title="任务画布总控制台"
+          :title="t('projects.detail.consoleTitle')"
         >
-          🎬 控制台
+          {{ t('projects.detail.consoleText') }}
         </router-link>
         <!-- R171: 项目详情页创建任务入口, 默认预填 current_version_id. -->
         <Button
@@ -433,7 +435,7 @@ watch(
           :disabled="!project"
           @click="goNewTask()"
         >
-          新建任务
+          {{ t('projects.detail.newTask') }}
         </Button>
         <Button
           variant="secondary"
@@ -441,7 +443,7 @@ watch(
           :disabled="!project"
           @click="toggleCreateVersion"
         >
-          + 版本
+          {{ t('projects.detail.addVersion') }}
         </Button>
       </div>
     </header>
@@ -456,13 +458,13 @@ watch(
 
     <!-- Body: loading / error / content -->
     <div v-if="loading && !project" class="state-block">
-      <Loading size="lg" label="加载项目元数据" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('projects.detail.loadingLabel')" />
+      <p class="state-text muted">{{ t('projects.detail.loading') }}</p>
     </div>
 
     <ErrorView
       v-else-if="error"
-      title="加载项目失败"
+      :title="t('projects.detail.loadFailedTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -471,17 +473,17 @@ watch(
 
     <div v-else-if="project" class="content">
       <!-- Tab 切换: 概览 (默认) / 元数据 / 版本. 2026-11-01 加概览 tab. -->
-      <nav class="pdv-tabs" role="tablist" aria-label="项目详情分区">
+      <nav class="pdv-tabs" role="tablist" :aria-label="t('projects.detail.tabsAria')">
         <button
-          v-for="t in TABS"
-          :key="t.key"
+          v-for="tab in TABS"
+          :key="tab.key"
           type="button"
           role="tab"
-          :aria-selected="activeTab === t.key"
-          :class="['pdv-tab', { 'pdv-tab-active': activeTab === t.key }]"
-          @click="activeTab = t.key"
+          :aria-selected="activeTab === tab.key"
+          :class="['pdv-tab', { 'pdv-tab-active': activeTab === tab.key }]"
+          @click="activeTab = tab.key"
         >
-          {{ t.label }}
+          {{ tab.label }}
         </button>
       </nav>
 
@@ -492,12 +494,12 @@ watch(
       <template v-else-if="activeTab === 'meta'">
       <!-- 元数据卡片 -->
       <section class="meta-card card">
-        <h3 class="section-title">项目元数据</h3>
+        <h3 class="section-title">{{ t('projects.detail.metaTitle') }}</h3>
         <dl class="meta-grid">
-          <dt class="muted">名称</dt>
+          <dt class="muted">{{ t('projects.detail.fName') }}</dt>
           <dd class="meta-value">{{ project.name }}</dd>
 
-          <dt class="muted">描述</dt>
+          <dt class="muted">{{ t('projects.detail.fDesc') }}</dt>
           <dd class="meta-value">
             <span v-if="project.description">{{ project.description }}</span>
             <span v-else class="muted">—</span>
@@ -512,27 +514,27 @@ watch(
           <dt class="muted">ports</dt>
           <dd class="meta-value mono">{{ formatPorts(project.ports) }}</dd>
 
-          <dt class="muted">当前版本</dt>
+          <dt class="muted">{{ t('projects.detail.fCurrentVersion') }}</dt>
           <dd class="meta-value">
             <span v-if="project.current_version_name">{{ project.current_version_name }}</span>
-            <span v-else class="muted">未设置</span>
+            <span v-else class="muted">{{ t('projects.detail.notSet') }}</span>
           </dd>
 
           <!-- R70: advanced-options 字段在元数据卡露出 (同 master 详情页). -->
-          <dt class="muted">同目录并发</dt>
+          <dt class="muted">{{ t('projects.detail.fParallel') }}</dt>
           <dd class="meta-value">
             <span v-if="(project.parallel_limit ?? 1) > 1" class="meta-badge-warn">
               ⚡ {{ project.parallel_limit }}
             </span>
-            <span v-else class="muted">1 (串行)</span>
+            <span v-else class="muted">{{ t('projects.detail.serial') }}</span>
           </dd>
 
-          <dt class="muted">任务超时</dt>
+          <dt class="muted">{{ t('projects.detail.fTimeout') }}</dt>
           <dd class="meta-value">
             <span v-if="project.timeout_minutes != null" class="meta-badge-warn">
-              ⏱ {{ project.timeout_minutes }} 分钟
+              ⏱ {{ t('projects.detail.minutes', { n: project.timeout_minutes }) }}
             </span>
-            <span v-else class="muted">跟随全局默认</span>
+            <span v-else class="muted">{{ t('projects.detail.followGlobal') }}</span>
           </dd>
 
           <dt class="muted">runners</dt>
@@ -540,11 +542,11 @@ watch(
             <span
               v-if="(Array.isArray(project.runners) ? project.runners.length : (typeof project.runners === 'string' && project.runners ? 1 : 0)) > 0"
               class="meta-badge-warn"
-            >🛰️ 已配</span>
-            <span v-else class="muted">未配</span>
+            >🛰️ {{ t('projects.detail.configured') }}</span>
+            <span v-else class="muted">{{ t('projects.detail.notConfigured') }}</span>
           </dd>
 
-          <dt class="muted">创建于</dt>
+          <dt class="muted">{{ t('projects.detail.fCreatedAt') }}</dt>
           <dd class="meta-value muted">{{ formatDate(project.created_at) }}</dd>
         </dl>
 
@@ -557,7 +559,7 @@ watch(
             :disabled="!project"
             @click="toggleAdvancedPanel"
           >
-            ⚙️ {{ editingAdvanced ? '收起高级选项' : '高级选项' }}
+            {{ editingAdvanced ? t('projects.detail.advBtnOn') : t('projects.detail.advBtnOff') }}
           </Button>
           <Button
             :variant="editingLlm ? 'primary' : 'secondary'"
@@ -565,7 +567,7 @@ watch(
             :disabled="!project"
             @click="toggleLlmPanel"
           >
-            📡 {{ editingLlm ? '收起 LLM 配置' : 'LLM 配置' }}
+            {{ editingLlm ? t('projects.detail.llmBtnOn') : t('projects.detail.llmBtnOff') }}
           </Button>
         </div>
 
@@ -581,7 +583,7 @@ watch(
       <!-- R70: LLM 配置独立 section, 高级选项内嵌在 meta-card 内.
            两面板互斥 (toggle 时另一关). -->
       <section v-if="editingLlm && project" class="llm-card card">
-        <h3 class="section-title">📡 LLM 配置</h3>
+        <h3 class="section-title">{{ t('projects.detail.llmSectionTitle') }}</h3>
         <ProjectLlmConfigPanel
           :project-id="project.id"
           :open="editingLlm"
@@ -596,20 +598,20 @@ watch(
       <!-- 版本列表 -->
       <section class="versions-card card">
         <h3 class="section-title">
-          版本列表
+          {{ t('projects.detail.versionsTitle') }}
           <span class="section-count muted">({{ versions.length }})</span>
         </h3>
 
         <div v-if="loadingVersions && versions.length === 0" class="state-block">
-          <Loading size="md" label="加载版本" />
-          <p class="state-text muted">加载版本中…</p>
+          <Loading size="md" :label="t('projects.detail.loadingVersionsLabel')" />
+          <p class="state-text muted">{{ t('projects.detail.loadingVersions') }}</p>
         </div>
 
         <Empty
           v-else-if="!hasVersions"
           illustration="folder"
-          title="该项目还没有版本"
-          description="点击右上角 “+ 版本” 创建第一个版本（UI 待 R18 接入）"
+          :title="t('projects.detail.emptyTitle')"
+          :description="t('projects.detail.emptyDesc')"
           size="md"
         />
 
@@ -626,7 +628,7 @@ watch(
           >
             <div class="version-main">
               <span class="version-name">{{ v.name }}</span>
-              <span v-if="v.is_current" class="badge badge-current" title="current 版本">current</span>
+              <span v-if="v.is_current" class="badge badge-current" :title="t('projects.detail.currentBadgeTitle')">current</span>
               <!-- R171 + R176 迭代: 版本行操作按钮组 — 包 wrapper 推到行尾 + 内部
                    适当隔开. 之前两个按钮各自 margin-left:auto, flex 会把 free space
                    平分给两个 auto margin → 「+ 任务」落在行正中间、「编辑」贴尾
@@ -636,10 +638,10 @@ watch(
                   class="version-newtask"
                   variant="ghost"
                   size="mini"
-                  title="在该版本下新建任务"
+                  :title="t('projects.detail.newTaskTitle')"
                   @click.stop="goNewTask(v.id)"
                 >
-                  + 任务
+                  {{ t('projects.detail.newTaskBtn') }}
                 </Button>
                 <!-- R176 (飞书): 版本行编辑入口 — 展开内联面板改
                      名称/描述/飞书链接/Sheet 名/自动派发. -->
@@ -648,10 +650,10 @@ watch(
                   class="version-newtask"
                   variant="ghost"
                   size="mini"
-                  title="编辑版本信息（飞书链接 / Sheet 信息 / 自动派发）"
+                  :title="t('projects.detail.editTitle')"
                   @click.stop="startEditVersion(v)"
                 >
-                  编辑
+                  {{ t('projects.list.edit') }}
                 </Button>
               </div>
             </div>
@@ -663,18 +665,18 @@ watch(
                 v-if="v.feishu_url"
                 :class="['version-feishu', { 'version-feishu-off': v.enable === 0 }]"
                 :title="v.enable === 0
-                  ? `飞书已绑定但自动派发已关闭 — sheetwatch 不会扫这张表. ${v.feishu_url}`
-                  : `飞书监听中 — sheetwatch 自动派发已开启. ${v.feishu_url}`"
-              >飞书 · {{ v.enable === 0 ? '已关' : '监听中' }}</span>
+                  ? t('projects.detail.feishuOffTitle', { url: v.feishu_url })
+                  : t('projects.detail.feishuOnTitle', { url: v.feishu_url })"
+              >{{ v.enable === 0 ? t('projects.detail.feishuClosed') : t('projects.detail.feishuListening') }}</span>
               <!-- R70: per-version 任务计数徽章. -->
               <span v-if="versionTaskCounts(v.id).running > 0" class="version-count version-count-running">
-                {{ versionTaskCounts(v.id).running }} 运行
+                {{ t('projects.detail.nRunning', { n: versionTaskCounts(v.id).running }) }}
               </span>
               <span v-if="versionTaskCounts(v.id).reviewing > 0" class="version-count version-count-reviewing">
-                {{ versionTaskCounts(v.id).reviewing }} 审核
+                {{ t('projects.detail.nReviewing', { n: versionTaskCounts(v.id).reviewing }) }}
               </span>
               <span v-if="versionTaskCounts(v.id).total > 0" class="version-count version-count-total">
-                {{ versionTaskCounts(v.id).total }} 个任务
+                {{ t('projects.detail.nTasks', { n: versionTaskCounts(v.id).total }) }}
               </span>
               <span class="version-time">{{ formatDate(v.created_at) }}</span>
             </div>
@@ -687,25 +689,25 @@ watch(
               @keydown.stop
             >
               <div class="version-edit-row">
-                <Input v-model="editName" placeholder="版本名（必填）" class-name="version-edit-input" />
-                <Input v-model="editFeishuUrl" placeholder="飞书 sheet URL（留空保存即清除绑定）" class-name="version-edit-input" />
+                <Input v-model="editName" :placeholder="t('projects.detail.phName')" class-name="version-edit-input" />
+                <Input v-model="editFeishuUrl" :placeholder="t('projects.detail.phFeishuUrl')" class-name="version-edit-input" />
               </div>
               <div class="version-edit-row">
-                <Input v-model="editFeishuSheet" placeholder="Sheet 名或 id（如 Sheet2）" class-name="version-edit-input" />
-                <Input v-model="editDescription" placeholder="版本干啥的（可选）" class-name="version-edit-input" />
+                <Input v-model="editFeishuSheet" :placeholder="t('projects.detail.phSheet')" class-name="version-edit-input" />
+                <Input v-model="editDescription" :placeholder="t('projects.detail.phDesc')" class-name="version-edit-input" />
               </div>
               <div class="version-edit-row">
                 <Checkbox
                   v-model="editEnable"
-                  label="开启 sheetwatch 自动派发（关掉后这张表改了也不会自动派任务）"
+                  :label="t('projects.detail.autoDispatchLabel')"
                 />
               </div>
               <div class="version-edit-actions">
                 <Button size="sm" :disabled="savingVersion" @click="saveEditVersion(v)">
-                  {{ savingVersion ? '保存中…' : '保存' }}
+                  {{ savingVersion ? t('projects.detail.saving') : t('projects.detail.save') }}
                 </Button>
                 <Button size="sm" variant="secondary" :disabled="savingVersion" @click="cancelEditVersion">
-                  取消
+                  {{ t('common.cancel') }}
                 </Button>
               </div>
             </div>

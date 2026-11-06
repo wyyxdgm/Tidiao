@@ -15,6 +15,7 @@
      已挂路由), 与 master ProjectsClient 重置 selectedId + scrollIntoView 同口径. */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useProjectsStore } from '@/stores/projects';
 import { createProject, deleteProject as apiDeleteProject, deleteVersion as apiDeleteVersion, listAvailablePorts, listProjectTemplates, updateProject as apiUpdateProject, updateVersion as apiUpdateVersion, type CreateProjectBody, type Project, type ProjectTemplate, type Version } from '@/api/projects';
 import { isHttpError } from '@/api/http';
@@ -35,6 +36,9 @@ import ProjectAdvancedOptionsPanel from '@/components/ProjectAdvancedOptionsPane
 const projectsStore = useProjectsStore();
 const router = useRouter();
 const toast = useToast();
+const { t } = useI18n();
+// applyProjectTemplate 的参数名 t 会遮蔽 i18n 的 t — 起个别名供该函数内用.
+const i18nT = t;
 const { confirm: confirmDialog } = useConfirm();
 
 /* ------------------------------------------------------------------ */
@@ -44,10 +48,11 @@ const { confirm: confirmDialog } = useConfirm();
 type SortKey = 'created_at' | 'recent_activity';
 
 const SORT_KEY = 'ao-projects-sort';
-const SORT_OPTIONS: SelectOption[] = [
-  { value: 'created_at', label: '按创建时间' },
-  { value: 'recent_activity', label: '按最近活跃' },
-];
+// i18n: label 走 t() → computed, 语言切换时跟着重算.
+const sortOptions = computed<SelectOption[]>(() => [
+  { value: 'created_at', label: t('projects.list.sortCreated') },
+  { value: 'recent_activity', label: t('projects.list.sortRecent') },
+]);
 
 const sort = ref<SortKey>('created_at');
 
@@ -186,7 +191,7 @@ async function togglePin(p: Project): Promise<void> {
     projectsStore.projects = projectsStore.projects.map((x) =>
       x.id === p.id ? { ...x, pinned: currentPinned } : x,
     );
-    toast.error('置顶失败, 已回滚');
+    toast.error(t('projects.list.pinFailed'));
   }
 }
 
@@ -208,13 +213,13 @@ async function setCurrentVersion(p: Project, v: Version): Promise<void> {
   );
   try {
     await apiUpdateProject(p.id, { current_version_id: v.id });
-    toast.success(`已将「${v.name}」设为当前版本`);
+    toast.success(t('projects.list.setCurrentDone', { name: v.name }));
     await projectsStore.load(true, sort.value);
   } catch {
     projectsStore.projects = projectsStore.projects.map((x) =>
       x.id === p.id ? { ...x, current_version_id: prevId, current_version_name: prevName } : x,
     );
-    toast.error('设为当前失败, 已回滚');
+    toast.error(t('projects.list.setCurrentFailed'));
   }
 }
 
@@ -229,19 +234,19 @@ async function setCurrentVersion(p: Project, v: Version): Promise<void> {
     '数据保留在数据库中, 可通过数据库恢复' 是 SPA 也带的提示. */
 async function deleteProject(p: Project): Promise<void> {
   const ok = await confirmDialog(
-    '将隐藏该项目及其下所有版本和任务，从列表中消失。数据保留在数据库中，可通过数据库恢复。继续？',
-    { title: '删除项目', type: 'danger', confirmText: '删除' },
+    t('projects.list.deleteConfirmMsg'),
+    { title: t('projects.list.deleteConfirmTitle'), type: 'danger', confirmText: t('projects.list.confirmDelete') },
   );
   if (!ok) return;
   try {
     await apiDeleteProject(p.id);
-    toast.success(`项目「${p.name}」已删除`);
+    toast.success(t('projects.list.deletedToast', { name: p.name }));
     await projectsStore.load(true, sort.value);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`删除项目失败: ${e.message}`);
+      toast.error(t('projects.list.deleteFailedWith', { msg: e.message }));
     } else {
-      toast.error('删除项目失败');
+      toast.error(t('projects.list.deleteFailed'));
     }
   }
 }
@@ -296,17 +301,17 @@ async function saveEditVersion(v: Version): Promise<void> {
     });
     toast.success(
       editVersionEnable.value
-        ? `版本「${v.name}」飞书绑定已更新`
-        : `版本「${v.name}」已保存, 自动派发已关闭`,
+        ? t('projects.list.versionSaved', { name: v.name })
+        : t('projects.list.versionSavedOff', { name: v.name }),
     );
     cancelEditVersion();
     await projectsStore.loadAllVersions(true);
     await projectsStore.load(true, sort.value);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`保存失败: ${e.message}`);
+      toast.error(t('projects.list.saveFailedWith', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('projects.list.saveFailed'));
     }
   }
 }
@@ -350,21 +355,21 @@ function versionsOf(projectId: string): Version[] {
     version 可能变了). */
 async function deleteVersion(v: Version): Promise<void> {
   const ok = await confirmDialog(
-    '将隐藏该版本及其下所有任务，从列表中消失。数据保留在数据库中，可通过数据库恢复。继续？',
-    { title: '删除版本', type: 'danger', confirmText: '删除' },
+    t('projects.list.versionDeleteConfirmMsg'),
+    { title: t('projects.list.versionDeleteConfirmTitle'), type: 'danger', confirmText: t('projects.list.confirmDelete') },
   );
   if (!ok) return;
   try {
     await apiDeleteVersion(v.id);
-    toast.success(`版本「${v.name}」已删除`);
+    toast.success(t('projects.list.versionDeleted', { name: v.name }));
     if (editingVersion.value === v.id) cancelEditVersion();
     await projectsStore.loadAllVersions(true);
     await projectsStore.load(true, sort.value);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`删除版本失败: ${e.message}`);
+      toast.error(t('projects.list.versionDeleteFailedWith', { msg: e.message }));
     } else {
-      toast.error('删除版本失败');
+      toast.error(t('projects.list.versionDeleteFailed'));
     }
   }
 }
@@ -399,13 +404,13 @@ function applyProjectTemplate(t: ProjectTemplate): void {
   }
   templateHint.value =
     t.id === 'requirement-collab'
-      ? '（记得建 version 时填 feishu_url + feishu_sheet）'
+      ? i18nT('projects.list.tplHintFeishu')
       : t.id === 'long-running-dev'
-        ? '（建完后看 19-templates.md §长跑开发 手动建 dev/test 角色 + DAG 任务）'
+        ? i18nT('projects.list.tplHintLongrun')
         : '';
   createOpen.value = true;
   showTemplatePicker.value = false;
-  toast.success(`已预填 ${t.icon ?? '📦'} ${t.name} 模板`);
+  toast.success(i18nT('projects.list.tplPrefilled', { icon: t.icon ?? '📦', name: t.name }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -442,16 +447,16 @@ async function autoPickPorts(): Promise<void> {
   try {
     const list = await listAvailablePorts(5);
     if (list.length === 0) {
-      toast.error('端口池已无可用端口, 请联系 admin 扩容');
+      toast.error(t('projects.list.portPoolEmpty'));
       return;
     }
     createForm.ports = list.join(', ');
-    toast.success(`已选 ${list.length} 个可用端口: ${list.join(', ')}`);
+    toast.success(t('projects.list.portsPicked', { n: list.length, ports: list.join(', ') }));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`自动选端口失败: ${e.message}`);
+      toast.error(t('projects.list.pickPortsFailedWith', { msg: e.message }));
     } else {
-      toast.error('自动选端口失败');
+      toast.error(t('projects.list.pickPortsFailed'));
     }
   } finally {
     pickingPorts.value = false;
@@ -470,13 +475,13 @@ function closeCreate(): void {
 }
 
 function validateCreate(f: CreateFormState): string | null {
-  if (!f.name.trim()) return '请填写项目名';
+  if (!f.name.trim()) return t('projects.list.errNameRequired');
   if (f.ports.trim()) {
     const parts = f.ports.split(',').map((p) => p.trim()).filter(Boolean);
     for (const p of parts) {
       const n = Number(p);
       if (!Number.isInteger(n) || n < 1024 || n > 65535) {
-        return `端口 "${p}" 非法: 需 1024-65535 整数`;
+        return t('projects.list.errPort', { port: p });
       }
     }
   }
@@ -501,7 +506,7 @@ async function submitCreate(): Promise<void> {
   }
   try {
     const created: Project = await createProject(body);
-    toast.success(`项目「${created.name}」已创建`);
+    toast.success(t('projects.list.createdToast', { name: created.name }));
     pendingProjectId.value = created.id;
     closeCreate();
     // 重拉列表 (强制刷新 store, 排除缓存)
@@ -511,11 +516,11 @@ async function submitCreate(): Promise<void> {
     await router.push(`/projects/${created.id}`);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `创建失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('projects.list.createFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('projects.list.errNetwork', { msg: e.message }));
     } else {
-      toast.error('创建失败');
+      toast.error(t('projects.list.createFailed'));
     }
   } finally {
     creating.value = false;
@@ -580,27 +585,27 @@ function toggleArchivedOpen(): void {
 async function unarchiveProject(p: Project): Promise<void> {
   try {
     await projectsStore.unarchiveProject(p.id);
-    toast.success(`已恢复「${p.name}」`);
+    toast.success(t('projects.list.restoredToast', { name: p.name }));
   } catch {
-    toast.error('恢复失败, 已回滚');
+    toast.error(t('projects.list.restoreFailed'));
   }
 }
 
 async function deleteArchivedProject(p: Project): Promise<void> {
   const ok = await confirmDialog(
-    '将隐藏该项目及其下所有版本和任务，从列表中消失。数据保留在数据库中，可通过数据库恢复。继续？',
-    { title: `删除项目「${p.name}」`, type: 'danger', confirmText: '删除' },
+    t('projects.list.deleteConfirmMsg'),
+    { title: t('projects.list.deleteNamedTitle', { name: p.name }), type: 'danger', confirmText: t('projects.list.confirmDelete') },
   );
   if (!ok) return;
   try {
     await apiDeleteProject(p.id);
     projectsStore.removeProjectLocally(p.id);
-    toast.success(`项目「${p.name}」已删除`);
+    toast.success(t('projects.list.deletedToast', { name: p.name }));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(`删除项目失败: ${e.message}`);
+      toast.error(t('projects.list.deleteFailedWith', { msg: e.message }));
     } else {
-      toast.error('删除项目失败');
+      toast.error(t('projects.list.deleteFailed'));
     }
   }
 }
@@ -626,7 +631,7 @@ function projectMetaText(p: Project): string {
         arr = Array.isArray(parsed) ? parsed.map((x) => Number(x)).filter(Number.isFinite) : [];
       } catch { arr = []; }
     } else arr = [];
-    if (arr.length > 0) parts.push(`端口 ${arr.join('/')}`);
+    if (arr.length > 0) parts.push(t('projects.list.portsMeta', { ports: arr.join('/') }));
   }
   return parts.join(' · ');
 }
@@ -646,38 +651,38 @@ onMounted(() => {
   <div class="projects-view">
     <header class="page-header">
       <div class="header-text">
-        <h2 class="page-title">项目</h2>
+        <h2 class="page-title">{{ t('projects.list.title') }}</h2>
         <p class="muted subtitle">
-          管理你的 agent 项目. 每个项目绑定一个工作目录, 任务在该目录下执行.
+          {{ t('projects.list.subtitle') }}
         </p>
       </div>
       <div class="header-meta">
         <div class="sort-group">
-          <span class="sort-label">排序</span>
+          <span class="sort-label">{{ t('projects.list.sortLabel') }}</span>
           <Select
             :model-value="sort"
-            :options="SORT_OPTIONS"
-            placeholder="请选择"
+            :options="sortOptions"
+            :placeholder="t('common.selectPlaceholder')"
             class-name="sort-select"
             @change="onSortChange"
           />
         </div>
         <span class="meta-count">
-          <template v-if="isSearching">匹配 {{ projects.length }} / {{ projectsStore.projects.length }}</template>
-          <template v-else>共 {{ projects.length }} 个项目</template>
+          <template v-if="isSearching">{{ t('projects.list.matchCount', { matched: projects.length, total: projectsStore.projects.length }) }}</template>
+          <template v-else>{{ t('projects.list.totalCount', { n: projects.length }) }}</template>
         </span>
-        <router-link to="/settings" class="quick-link" title="设置">⚙️ 设置</router-link>
-        <router-link to="/import" class="quick-link" title="批量导入">
-          批量导入
+        <router-link to="/settings" class="quick-link" :title="t('projects.list.settingsTitle')">{{ t('projects.list.settingsText') }}</router-link>
+        <router-link to="/import" class="quick-link" :title="t('projects.list.batchImport')">
+          {{ t('projects.list.batchImport') }}
         </router-link>
         <div v-if="projectTemplates.length > 0" class="template-wrap">
           <button
             type="button"
             class="quick-link"
-            :title="'从 docs/project-templates/ 选一套模板预填'"
+            :title="t('projects.list.templateTitle')"
             @click="toggleTemplatePicker"
           >
-            📦 从模板建 ▾
+            {{ t('projects.list.templateBtn') }}
           </button>
           <div v-if="showTemplatePicker" class="template-dropdown">
             <div
@@ -702,41 +707,41 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <Button variant="primary" size="sm" @click="openCreate">+ 新建项目</Button>
+        <Button variant="primary" size="sm" @click="openCreate">{{ t('projects.list.createProject') }}</Button>
       </div>
     </header>
 
     <div class="search-bar">
       <Input
         v-model="searchText"
-        placeholder="搜索项目名 / 描述 / cwd / 版本名…"
+        :placeholder="t('projects.list.searchPlaceholder')"
         clearable
         class-name="projects-search-input"
       />
     </div>
 
     <div v-if="projectsStore.loading && projects.length === 0" class="state-block">
-      <p class="muted">加载中…</p>
+      <p class="muted">{{ t('projects.list.loading') }}</p>
     </div>
 
     <div v-else-if="projectsStore.error" class="state-block">
       <p class="form-error">{{ projectsStore.error }}</p>
       <Button size="sm" variant="secondary" :loading="projectsStore.loading" @click="onRetry">
-        重试
+        {{ t('projects.list.retry') }}
       </Button>
     </div>
 
     <div v-else-if="projects.length === 0" class="empty-block">
       <template v-if="isSearching">
-        <p class="muted empty-title">没有匹配的项目</p>
+        <p class="muted empty-title">{{ t('projects.list.noMatch') }}</p>
         <p class="muted empty-hint">
-          搜索「{{ searchText }}」无结果.
-          <button type="button" class="link-btn" @click="clearSearch">清除搜索</button>
+          {{ t('projects.list.noMatchHint', { q: searchText }) }}
+          <button type="button" class="link-btn" @click="clearSearch">{{ t('projects.list.clearSearch') }}</button>
         </p>
       </template>
       <template v-else>
-        <p class="muted empty-title">还没有项目</p>
-        <p class="muted empty-hint">点右上角「+ 新建项目」创建第一个项目</p>
+        <p class="muted empty-title">{{ t('projects.list.noProjects') }}</p>
+        <p class="muted empty-hint">{{ t('projects.list.noProjectsHint') }}</p>
       </template>
     </div>
 
@@ -753,7 +758,7 @@ onMounted(() => {
         <div class="project-row">
           <div class="project-main">
             <div class="project-name">
-              <span v-if="p.pinned === 1" class="pin-badge" title="已置顶">📌</span>
+              <span v-if="p.pinned === 1" class="pin-badge" :title="t('projects.list.pinnedTitle')">📌</span>
               {{ p.name }}
             </div>
             <div v-if="p.description" class="muted project-desc">{{ p.description }}</div>
@@ -762,72 +767,72 @@ onMounted(() => {
             </div>
             <!-- R70: 项目级徽章 (版本数 / 任务计数 / 并发 / 超时 / 当前版本) -->
             <div class="project-badges">
-              <span class="project-badge muted">{{ versionsOf(p.id).length }} 个版本</span>
+              <span class="project-badge muted">{{ t('projects.list.nVersions', { n: versionsOf(p.id).length }) }}</span>
               <template v-if="projectTaskCounts(p).total > 0">
                 <span v-if="projectTaskCounts(p).running > 0" class="project-badge project-badge-running">
-                  {{ projectTaskCounts(p).running }} 运行
+                  {{ t('projects.list.nRunning', { n: projectTaskCounts(p).running }) }}
                 </span>
                 <span v-if="projectTaskCounts(p).reviewing > 0" class="project-badge project-badge-reviewing">
-                  {{ projectTaskCounts(p).reviewing }} 审核
+                  {{ t('projects.list.nReviewing', { n: projectTaskCounts(p).reviewing }) }}
                 </span>
-                <span class="project-badge muted">{{ projectTaskCounts(p).total }} 个任务</span>
+                <span class="project-badge muted">{{ t('projects.list.nTasks', { n: projectTaskCounts(p).total }) }}</span>
               </template>
               <template v-else>
-                <span class="project-badge muted">0 个任务</span>
+                <span class="project-badge muted">{{ t('projects.list.nTasks', { n: 0 }) }}</span>
               </template>
               <span
                 v-if="(p.parallel_limit ?? 1) > 1"
                 class="project-badge project-badge-warn"
-                :title="'本项目共享同一工作目录的任务可并发数'"
-              >⚡ 同目录并发 {{ p.parallel_limit }}</span>
+                :title="t('projects.list.concurrentTitle')"
+              >{{ t('projects.list.concurrentBadge', { n: p.parallel_limit }) }}</span>
               <span
                 v-if="runnerCount(p) > 0"
                 class="project-badge project-badge-warn"
-                :title="`已配 ${runnerCount(p)} 个 runner entry (高级选项 · Runners)`"
+                :title="t('projects.list.runnersTitle', { n: runnerCount(p) })"
               >🛰️ {{ runnerCount(p) }} runners</span>
               <span
                 v-if="p.timeout_minutes != null"
                 class="project-badge project-badge-warn"
-                :title="'本项目任务的壁钟超时(覆盖全局默认)'"
-              >⏱ 超时 {{ p.timeout_minutes }}min</span>
+                :title="t('projects.list.timeoutTitle')"
+              >{{ t('projects.list.timeoutBadge', { n: p.timeout_minutes }) }}</span>
               <span
                 v-if="p.current_version_name"
                 class="project-badge project-badge-current"
-              >⭐ 当前: {{ p.current_version_name }}</span>
+              >{{ t('projects.list.currentBadge', { name: p.current_version_name }) }}</span>
             </div>
           </div>
           <div class="project-actions">
             <button
               type="button"
               :class="['icon-btn', p.pinned === 1 ? 'is-active' : '']"
-              :title="p.pinned === 1 ? '取消置顶' : '置顶到顶部'"
+              :title="p.pinned === 1 ? t('projects.list.pinOff') : t('projects.list.pinOn')"
               @click="togglePin(p)"
             >
-              {{ p.pinned === 1 ? '📌 已置顶' : '📌 置顶' }}
+              {{ p.pinned === 1 ? t('projects.list.pinnedText') : t('projects.list.pinText') }}
             </button>
             <button
               type="button"
               :class="['icon-btn', editingLlmProjectId === p.id ? 'is-active' : '']"
-              title="项目级 LLM 配置 (可多份)"
+              :title="t('projects.list.llmBtnTitle')"
               @click="toggleLlmPanel(p.id)"
             >
-              📡 LLM 配置
+              {{ t('projects.list.llmBtn') }}
             </button>
             <button
               type="button"
               :class="['icon-btn', editingAdvancedProjectId === p.id ? 'is-active' : '']"
-              title="高级选项：同目录并发上限 + 任务超时 + 端口 + wiki 可读取的文件类型 + runners"
+              :title="t('projects.list.advancedBtnTitle')"
               @click="toggleAdvancedPanel(p.id)"
             >
-              ⚙️ 高级选项
+              {{ t('projects.list.advancedBtn') }}
             </button>
             <button
               type="button"
               class="icon-btn icon-btn-danger"
-              title="删除项目"
+              :title="t('projects.list.deleteTitle')"
               @click="deleteProject(p)"
             >
-              删除
+              {{ t('projects.list.delete') }}
             </button>
           </div>
         </div>
@@ -851,7 +856,7 @@ onMounted(() => {
               <span
                 v-if="v.feishu_url"
                 class="version-feish-badge"
-                :title="`飞书: ${v.feishu_url}`"
+                :title="t('projects.list.feishuTitle', { url: v.feishu_url })"
               >
                 🔗
               </span>
@@ -860,16 +865,16 @@ onMounted(() => {
               <span
                 v-if="v.feishu_url && v.enable !== 0"
                 class="version-watch-on"
-                title="sheetwatch 自动派发已开启 — 这张飞书表的改动会自动派任务"
+                :title="t('projects.list.watchOnTitle')"
               >
-                自动派发中
+                {{ t('projects.list.watchOn') }}
               </span>
               <span
                 v-if="v.feishu_url && v.enable === 0"
                 class="version-watch-off"
-                title="自动派发已关闭 — sheetwatch 不会扫这张飞书表"
+                :title="t('projects.list.watchOffTitle')"
               >
-                自动派发已关
+                {{ t('projects.list.watchOff') }}
               </span>
               <span v-if="v.is_released === 1" class="version-stable">stable</span>
               <!-- R176 迭代 (飞书): 编辑/删除推到行尾 + 适当隔开, 不再挤在
@@ -882,24 +887,24 @@ onMounted(() => {
                   v-if="v.id !== p.current_version_id"
                   type="button"
                   class="icon-btn-small"
-                  title="设为当前版本 — 新建任务默认预填此版本"
+                  :title="t('projects.list.setCurrentTitle')"
                   @click="setCurrentVersion(p, v)"
                 >
-                  设为当前
+                  {{ t('projects.list.setCurrent') }}
                 </button>
                 <button
                   type="button"
                   class="icon-btn-small"
                   @click="startEditVersion(v)"
                 >
-                  编辑
+                  {{ t('projects.list.edit') }}
                 </button>
                 <button
                   type="button"
                   class="icon-btn-small icon-btn-danger"
                   @click="deleteVersion(v)"
                 >
-                  删除
+                  {{ t('projects.list.delete') }}
                 </button>
               </div>
             </div>
@@ -907,7 +912,7 @@ onMounted(() => {
               <div class="version-edit-row">
                 <Input
                   v-model="editFeishuUrl"
-                  placeholder="飞书 sheet URL"
+                  :placeholder="t('projects.list.phFeishuUrl')"
                   class-name="version-edit-input"
                 />
                 <Input
@@ -919,21 +924,21 @@ onMounted(() => {
               <div class="version-edit-row">
                 <Checkbox
                   v-model="editVersionEnable"
-                  label="开启 sheetwatch 自动派发（关掉后这张表改了也不会自动派任务）"
+                  :label="t('projects.list.autoDispatchLabel')"
                 />
               </div>
               <div class="version-edit-row">
                 <Input
                   v-model="editVersionDescription"
-                  placeholder="版本干啥的（可选）"
+                  :placeholder="t('projects.list.phVersionDesc')"
                 />
               </div>
               <div class="version-edit-actions">
-                <Button size="sm" @click="saveEditVersion(v)">保存</Button>
+                <Button size="sm" @click="saveEditVersion(v)">{{ t('projects.list.save') }}</Button>
                 <Button size="sm" variant="secondary" @click="cancelEditVersion">
-                  取消
+                  {{ t('common.cancel') }}
                 </Button>
-                <span class="muted version-edit-hint">留空保存即清除绑定</span>
+                <span class="muted version-edit-hint">{{ t('projects.list.saveHint') }}</span>
               </div>
             </div>
           </div>
@@ -943,7 +948,7 @@ onMounted(() => {
             class="version-new-toggle"
             @click="toggleNewVersionForm(p.id)"
           >
-            + 新建版本
+            {{ t('projects.list.newVersion') }}
           </button>
           <div v-if="newVersionProjectId === p.id">
             <NewVersionForm
@@ -977,20 +982,20 @@ onMounted(() => {
         ConfirmDialog 二次确认 + 级联软删, 与卡片删除按钮同文案. -->
     <div v-if="archivedList.length" class="archived-section">
       <button type="button" class="archived-toggle" :aria-expanded="archivedOpen" @click="toggleArchivedOpen">
-        {{ archivedOpen ? '▼' : '▶' }} 🗂 已归档 ({{ archivedList.length }})
+        {{ archivedOpen ? '▼' : '▶' }} {{ t('projects.list.archivedGroup', { n: archivedList.length }) }}
       </button>
       <div v-if="archivedOpen" class="archived-items">
         <div v-for="p in archivedList" :key="p.id" class="archived-item">
           <div class="archived-item-name">
             {{ p.name }}
           </div>
-          <div class="muted archived-item-desc">{{ p.description || '无描述' }}</div>
+          <div class="muted archived-item-desc">{{ p.description || t('projects.list.noDesc') }}</div>
           <div class="archived-item-actions">
-            <button type="button" class="icon-btn" title="恢复到主列表" @click="unarchiveProject(p)">
-              📤 恢复
+            <button type="button" class="icon-btn" :title="t('projects.list.restoreTitle')" @click="unarchiveProject(p)">
+              {{ t('projects.list.restoreText') }}
             </button>
-            <button type="button" class="icon-btn icon-btn-danger" title="删除项目" @click="deleteArchivedProject(p)">
-              删除
+            <button type="button" class="icon-btn icon-btn-danger" :title="t('projects.list.deleteTitle')" @click="deleteArchivedProject(p)">
+              {{ t('projects.list.delete') }}
             </button>
           </div>
         </div>
@@ -1000,40 +1005,40 @@ onMounted(() => {
     <!-- R41-C1: 新建项目 modal -->
     <Modal
       :model-value="createOpen"
-      title="新建项目"
+      :title="t('projects.list.modalTitle')"
       size="md"
       @update:model-value="(v: boolean) => { if (!v) closeCreate(); }"
     >
       <div class="create-form">
         <div class="form-row">
-          <label class="form-label">项目名 <span class="required">*</span></label>
-          <Input v-model="createForm.name" placeholder="例如: 智能体中台" :disabled="creating" />
+          <label class="form-label">{{ t('projects.list.labelName') }} <span class="required">*</span></label>
+          <Input v-model="createForm.name" :placeholder="t('projects.list.phName')" :disabled="creating" />
         </div>
         <div class="form-row">
-          <label class="form-label">描述（可选）</label>
+          <label class="form-label">{{ t('projects.list.labelDesc') }}</label>
           <Textarea
             v-model="createForm.description"
             :rows="2"
-            placeholder="给项目的备注"
+            :placeholder="t('projects.list.phDesc')"
             :disabled="creating"
           />
         </div>
         <div class="form-row">
-          <label class="form-label">工作目录 cwd（可选）</label>
+          <label class="form-label">{{ t('projects.list.labelCwd') }}</label>
           <Input
             v-model="createForm.cwd"
             placeholder="/path/to/project"
             class-name="form-mono"
             :disabled="creating"
           />
-          <p class="form-hint">任务的执行根目录。留空 = 自动用 <code>~/.agent-orchestrator/projects/<项目 id></code>。</p>
+          <p class="form-hint">{{ t('projects.list.cwdHint') }}</p>
         </div>
         <div class="form-row">
-          <label class="form-label">端口（可选）</label>
+          <label class="form-label">{{ t('projects.list.labelPorts') }}</label>
           <div class="port-row">
             <Input
               v-model="createForm.ports"
-              placeholder="例如: 13001, 13002"
+              :placeholder="t('projects.list.phPorts')"
               class-name="form-mono port-input"
               :disabled="creating"
             />
@@ -1044,23 +1049,23 @@ onMounted(() => {
               :disabled="creating"
               @click="autoPickPorts"
             >
-              🎯 自动选可用
+              {{ t('projects.list.autoPick') }}
             </Button>
           </div>
-          <p class="form-hint">逗号分隔, 1024-65535, 最多 5 个. 默认端口池由平台分配.</p>
+          <p class="form-hint">{{ t('projects.list.portsHint') }}</p>
         </div>
         <p v-if="templateHint" class="form-hint form-hint-emphasis">
           {{ templateHint }}
         </p>
         <p v-else class="form-hint form-hint-emphasis">
-          创建后可一键建 v1.0 版本（在项目详情页点「+ 新建版本」）.
+          {{ t('projects.list.hintDefault') }}
         </p>
       </div>
 
       <template #footer>
-        <Button variant="secondary" :disabled="creating" @click="closeCreate">取消</Button>
+        <Button variant="secondary" :disabled="creating" @click="closeCreate">{{ t('common.cancel') }}</Button>
         <Button :loading="creating" :disabled="creating" @click="submitCreate">
-          {{ creating ? '创建中…' : '创建' }}
+          {{ creating ? t('projects.list.creating') : t('projects.list.create') }}
         </Button>
       </template>
     </Modal>

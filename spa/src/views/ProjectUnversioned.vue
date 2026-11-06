@@ -34,6 +34,7 @@
      "项目不存在或无权限访问", 无 retry 按钮 (重试无效). */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { getProjectById } from '@/api/projects';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/composables/useToast';
@@ -48,6 +49,7 @@ const route = useRoute();
 const router = useRouter();
 
 const toast = useToast();
+const { t } = useI18n();
 
 /** 路由参数 projectId (强转 string 兜底, Vue Router 4 params 推断为
     string | string[], 我们走的是 :projectId 单段). */
@@ -67,7 +69,7 @@ watch(
     if (!name) return;
     tags.applyTitle(
       route.path,
-      formatProjectWithLabel(name, '其他任务'),
+      formatProjectWithLabel(name, t('projects.unversioned.tabLabel')),
     );
   },
 );
@@ -76,7 +78,7 @@ const error = ref<string | null>(null);
 const retrying = ref(false);
 
 /** 404 文案独立, ErrorView 用 showRetry=false 隐藏重试按钮. */
-const NOT_FOUND_MSG = '项目不存在或无权限访问';
+const NOT_FOUND_MSG = '项目不存在或无权限访问'; // fallback; 实际展示走 t() (computed).
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -88,7 +90,7 @@ async function load(): Promise<void> {
     }
   } catch (e: unknown) {
     // getProjectById 内部已 catch → null, 理论走不到这里; 兜底防兜底.
-    error.value = e instanceof Error ? `网络异常: ${e.message}` : '加载失败';
+    error.value = e instanceof Error ? t('projects.unversioned.errNetwork', { msg: e.message }) : t('projects.unversioned.errGeneric');
   } finally {
     loading.value = false;
     retrying.value = false;
@@ -110,10 +112,10 @@ function goProject(): void {
 async function copyUrl(): Promise<void> {
   try {
     await copyToClipboard(window.location.href);
-    toast.success('已复制链接');
+    toast.success(t('projects.unversioned.copied'));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : '未知错误';
-    toast.error(`复制失败: ${msg}`);
+    const msg = err instanceof Error ? err.message : t('projects.unversioned.unknownError');
+    toast.error(t('projects.unversioned.copyFailed', { msg }));
   }
 }
 
@@ -156,6 +158,15 @@ function setViewMode(m: ViewMode): void {
   void router.replace({ query: next });
 }
 
+/** 五档视图切换按钮 label — 走 t() (i18n W3b). */
+function viewModeLabel(m: ViewMode): string {
+  if (m === 'cards') return t('projects.unversioned.viewCards');
+  if (m === 'kanban') return t('projects.unversioned.viewKanban');
+  if (m === 'chat') return t('projects.unversioned.viewChat');
+  if (m === 'category') return t('projects.unversioned.viewCategory');
+  return t('projects.unversioned.viewList');
+}
+
 /* ------------------------------------------------------------------ */
 /*  chrome 折叠 — 与版本页共用 localStorage key, 两页状态同步.          */
 /* ------------------------------------------------------------------ */
@@ -188,14 +199,14 @@ const projectShortId = computed<string>(() => projectId.value.slice(0, 8));
 
 /** 面包屑「项目」段降级 (project 未加载时). */
 const breadcrumbProjectLabel = computed<string>(() =>
-  project.value?.name ?? '项目',
+  project.value?.name ?? t('projects.unversioned.fallbackProject'),
 );
 
 /** 大标题 — 版本页形态是 `{project} / {version}`, 本页对应
     `{project} · 其他任务`. */
 const pageHeading = computed<string>(() => {
   const p = projectName.value;
-  return p ? `${p} · 其他任务` : '其他任务';
+  return p ? t('projects.unversioned.heading', { project: p }) : t('projects.unversioned.headingFallback');
 });
 
 /** 入口 href — Wiki 走项目级 (无 version query), 需求点走 unversioned 需求
@@ -232,14 +243,14 @@ watch(projectId, () => {
     <!-- Initial loading (project meta 未就绪) -->
     <div v-if="loading && !project" class="puv-loading">
       <Loading size="lg" />
-      <p class="puv-loading-text">加载中…</p>
+      <p class="puv-loading-text">{{ t('projects.unversioned.loading') }}</p>
     </div>
 
     <!-- Project meta 加载失败 -->
     <ErrorView
       v-else-if="error"
-      title="加载失败"
-      :description="error"
+      :title="t('projects.unversioned.loadFailedTitle')"
+      :description="error === NOT_FOUND_MSG ? t('projects.unversioned.notFound') : error"
       variant="error"
       :retrying="retrying"
       :show-retry="error !== NOT_FOUND_MSG"
@@ -255,21 +266,21 @@ watch(projectId, () => {
         <div class="puv-header-text">
           <!-- 面包屑行: 项目上下文 + 项目 › 其他任务 + 短 ID 复制. 常显不受折叠影响. -->
           <div class="puv-breadcrumb">
-            <span class="puv-context-label">项目上下文</span>
+            <span class="puv-context-label">{{ t('projects.unversioned.contextLabel') }}</span>
             <button
               type="button"
               class="puv-crumb-link puv-crumb-btn"
-              :title="`跳到 ${breadcrumbProjectLabel}`"
+              :title="t('projects.unversioned.jumpTitle', { name: breadcrumbProjectLabel })"
               @click="goProject"
             >
               {{ breadcrumbProjectLabel }}
             </button>
             <span class="puv-crumb-sep">›</span>
-            <span class="puv-crumb-current">其他任务</span>
+            <span class="puv-crumb-current">{{ t('projects.unversioned.tabLabel') }}</span>
             <button
               type="button"
               class="puv-short-id"
-              :title="`复制当前页面链接 (${projectId})`"
+              :title="t('projects.unversioned.copyTitle', { id: projectId })"
               @click="copyUrl"
             >
               ({{ projectShortId }}…)
@@ -279,14 +290,14 @@ watch(projectId, () => {
               v-if="!chromeOpen"
               type="button"
               class="puv-chrome-fab"
-              title="展开上方面板"
-              aria-label="展开上方面板"
+              :title="t('projects.unversioned.expandFabTitle')"
+              :aria-label="t('projects.unversioned.expandFabTitle')"
               @click="toggleChrome"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
               </svg>
-              <span>展开</span>
+              <span>{{ t('projects.unversioned.expand') }}</span>
             </button>
           </div>
 
@@ -306,8 +317,8 @@ watch(projectId, () => {
         <div v-if="chromeOpen" class="puv-header-right">
           <!-- 视图模式切换器 (看板/卡片/列表/分类/聊天) + chrome 收起 toggle
                — 版本页同款排布 (vd-controls 镜像). -->
-          <div class="puv-controls" role="toolbar" aria-label="视图模式">
-            <div class="puv-view-switcher" role="tablist" aria-label="视图模式">
+          <div class="puv-controls" role="toolbar" :aria-label="t('projects.unversioned.viewModeAria')">
+            <div class="puv-view-switcher" role="tablist" :aria-label="t('projects.unversioned.viewModeAria')">
               <button
                 v-for="m in (['kanban', 'cards', 'list', 'category', 'chat'] as ViewMode[])"
                 :key="m"
@@ -339,22 +350,22 @@ watch(projectId, () => {
                 <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M3 5a2 2 0 012-2h6a2 2 0 012 2v3a2 2 0 01-2 2H7l-3 3v-3H5a2 2 0 01-2-2V5z" />
                 </svg>
-                <span class="puv-view-label">{{ m === 'cards' ? '卡片' : m === 'kanban' ? '看板' : m === 'chat' ? '聊天' : m === 'category' ? '分类' : '列表' }}</span>
+                <span class="puv-view-label">{{ viewModeLabel(m) }}</span>
               </button>
             </div>
             <!-- chrome 折叠 toggle (版本页同位置同款) -->
             <button
               type="button"
               class="puv-chrome-toggle"
-              :title="chromeOpen ? '收起上方面板' : '展开上方面板'"
+              :title="chromeOpen ? t('projects.unversioned.collapseTitle') : t('projects.unversioned.expandTitle')"
               :aria-expanded="chromeOpen"
-              aria-label="切换上方面板折叠"
+              :aria-label="t('projects.unversioned.toggleAria')"
               @click="toggleChrome"
             >
               <svg class="puv-chrome-chevron" :class="{ 'puv-chrome-chevron-open': chromeOpen }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
               </svg>
-              <span>{{ chromeOpen ? '收起' : '展开' }}</span>
+              <span>{{ chromeOpen ? t('projects.unversioned.collapse') : t('projects.unversioned.expand') }}</span>
             </button>
           </div>
           <!-- 入口按钮组: 圆形「+」(对话式新建) / Wiki / 列表 / 需求点(旧). -->
@@ -362,8 +373,8 @@ watch(projectId, () => {
             <button
               type="button"
               class="puv-entry-fab"
-              title="新建任务 (对话式, Enter 发送)"
-              aria-label="新建任务"
+              :title="t('projects.unversioned.newTaskTitle')"
+              :aria-label="t('projects.unversioned.newTaskAria')"
               @click="quickCreateOpen = true"
             >
               <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -373,24 +384,24 @@ watch(projectId, () => {
             <router-link
               :to="wikiHref"
               class="btn btn-secondary puv-entry-btn"
-              title="项目 Wiki"
+              :title="t('projects.unversioned.wikiTitle')"
             >
               <span class="puv-entry-icon">📖</span><span class="puv-entry-text">Wiki</span>
             </router-link>
             <button
               type="button"
               class="btn btn-secondary puv-entry-btn"
-              title="项目列表（任务容器 — 全局看板「分类」视图, 替代需求入口）"
+              :title="t('projects.unversioned.listBtnTitle')"
               @click="goGlobalCategory"
             >
-              <span class="puv-entry-icon">🗂</span><span class="puv-entry-text">列表</span>
+              <span class="puv-entry-icon">🗂</span><span class="puv-entry-text">{{ t('projects.unversioned.listBtnText') }}</span>
             </button>
             <router-link
               :to="requirementsHref"
               class="btn btn-secondary puv-entry-btn"
-              title="需求点管理（旧版 — 已由「列表」替代, 数据保留可查）"
+              :title="t('projects.unversioned.reqOldTitle')"
             >
-              <span class="puv-entry-icon">📋</span><span class="puv-entry-text">需求点(旧)</span>
+              <span class="puv-entry-icon">📋</span><span class="puv-entry-text">{{ t('projects.unversioned.reqOldText') }}</span>
             </router-link>
           </div>
         </div><!-- /puv-header-right -->

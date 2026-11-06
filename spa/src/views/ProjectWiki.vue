@@ -41,6 +41,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useTagsStore } from '@/stores/tags';
 import { useTheme } from '@/lib/theme';
 import MarkdownIt from 'markdown-it';
@@ -122,6 +123,7 @@ interface ProjectCwdRef {
 const route = useRoute();
 const router = useRouter();
 const tags = useTagsStore();
+const { t } = useI18n();
 
 /** vue-router 4 params 类型 = string | string[], 单段路由强转 string. */
 const projectId = computed(() => String(route.params.projectId));
@@ -443,9 +445,9 @@ async function loadMeta(): Promise<void> {
     versionId.value = urlVersion || projRes.project.current_version_id || versions.value[0]?.id || null;
   } catch (e: unknown) {
     if (e instanceof HttpError) {
-      wikiError.value = e.message || `请求失败 (HTTP ${e.status})`;
+      wikiError.value = e.message || t('projects.wiki.errHttp', { status: e.status });
     } else {
-      wikiError.value = '加载项目元数据失败';
+      wikiError.value = t('projects.wiki.errMeta');
     }
   }
 }
@@ -460,9 +462,9 @@ async function loadTree(): Promise<void> {
   } catch (e: unknown) {
     tree.value = [];
     if (e instanceof HttpError) {
-      treeError.value = e.message || `请求失败 (HTTP ${e.status})`;
+      treeError.value = e.message || t('projects.wiki.errHttp', { status: e.status });
     } else {
-      treeError.value = '加载文件树失败';
+      treeError.value = t('projects.wiki.errTree');
     }
   }
 }
@@ -516,9 +518,9 @@ async function loadPath(raw: string): Promise<void> {
   } catch (e: unknown) {
     data.value = null;
     if (e instanceof HttpError) {
-      wikiError.value = e.message || `请求失败 (HTTP ${e.status})`;
+      wikiError.value = e.message || t('projects.wiki.errHttp', { status: e.status });
     } else {
-      wikiError.value = '加载文档失败';
+      wikiError.value = t('projects.wiki.errDoc');
     }
   } finally {
     loading.value = false;
@@ -585,7 +587,7 @@ function openBoard(): void {
   const path = `/${projectId.value}/console`;
   tags.visit({
     name: `project-console-${projectId.value}`,
-    title: `${project.value?.name ?? projectId.value} · 控制台`,
+    title: t('projects.wiki.consoleTab', { name: project.value?.name ?? projectId.value }),
     path,
   });
   void router.push(path);
@@ -601,7 +603,7 @@ function openRequirements(): void {
     name: versionId.value
       ? `version-requirements-${versionId.value}`
       : `project-unversioned-requirements-${projectId.value}`,
-    title: `${project.value?.name ?? projectId.value} · 需求点`,
+    title: t('projects.wiki.reqTab', { name: project.value?.name ?? projectId.value }),
     path,
   });
   void router.push(path);
@@ -713,7 +715,7 @@ async function renderMermaidBlocks(): Promise<void> {
       block.dataset.rendered = '1';
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      block.innerHTML = `<div class="mermaid-error"><div class="mermaid-error-title">⚠️ Mermaid 渲染失败</div><pre class="mermaid-error-source">${escapeHtml(code)}</pre><div class="mermaid-error-msg">${escapeHtml(errMsg)}</div></div>`;
+      block.innerHTML = `<div class="mermaid-error"><div class="mermaid-error-title">${escapeHtml(t('projects.wiki.mermaidError'))}</div><pre class="mermaid-error-source">${escapeHtml(code)}</pre><div class="mermaid-error-msg">${escapeHtml(errMsg)}</div></div>`;
       block.dataset.rendered = '1';
     }
   }
@@ -803,40 +805,40 @@ watch(
     <!-- Header: breadcrumb + project name + toolbar -->
     <header class="wiki-header">
       <div class="wiki-breadcrumb">
-        <span class="crumb">项目</span>
+        <span class="crumb">{{ t('projects.wiki.crumbProject') }}</span>
         <span class="crumb-sep">›</span>
         <span class="crumb-active">{{ project?.name ?? projectId }}</span>
         <span class="crumb-sep">›</span>
         <span class="crumb-active">Wiki</span>
       </div>
       <div class="wiki-title-row">
-        <h1 class="wiki-title">📖 {{ project?.name ?? 'Wiki' }} Wiki</h1>
+        <h1 class="wiki-title">{{ t('projects.wiki.title', { name: project?.name ?? t('projects.wiki.fallbackName') }) }}</h1>
         <div class="wiki-toolbar">
           <!-- R2xx: H5 目录抽屉开关 — 桌面态 display:none, ≤900px 显示. -->
-          <Button variant="ghost" size="sm" class="wiki-tree-toggle" title="打开文档目录" @click="drawerOpen = true">
-            ☰ 目录
+          <Button variant="ghost" size="sm" class="wiki-tree-toggle" :title="t('projects.wiki.tocBtnTitle')" @click="drawerOpen = true">
+            {{ t('projects.wiki.tocBtn') }}
           </Button>
           <!-- R87: 顶部快捷入口 — 与 Next.js wiki-client.tsx:380-401 1:1 镜像.
               样式与 ghost 按钮对齐, 桌面端显示 (R87 注释: 与左侧导航一致避免用户两边找入口). -->
-          <Button variant="ghost" size="sm" class="wiki-shortcut-btn" title="任务画布总控制台" @click="openBoard">
-            🎬 控制台
+          <Button variant="ghost" size="sm" class="wiki-shortcut-btn" :title="t('projects.wiki.consoleBtnTitle')" @click="openBoard">
+            {{ t('projects.wiki.consoleBtn') }}
           </Button>
-          <Button variant="ghost" size="sm" class="wiki-shortcut-btn" title="需求点列表" @click="openRequirements">
-            📋 需求
+          <Button variant="ghost" size="sm" class="wiki-shortcut-btn" :title="t('projects.wiki.reqBtnTitle')" @click="openRequirements">
+            {{ t('projects.wiki.reqBtn') }}
           </Button>
           <Select
             v-if="hasVersions"
             :model-value="versionId ?? ''"
             :options="versions.map((v) => ({ value: v.id, label: v.name }))"
-            placeholder="选择版本"
+            :placeholder="t('projects.wiki.selectVersion')"
             class-name="wiki-version-select"
             @update:model-value="changeVersion"
           />
           <Button variant="ghost" size="sm" @click="toggleFullWidth">
-            {{ fullWidth ? '🔲 铺满' : '📐 居中' }}
+            {{ fullWidth ? t('projects.wiki.fullwidth') : t('projects.wiki.centered') }}
           </Button>
           <Button v-if="canDownload" variant="ghost" size="sm" @click="downloadCurrent">
-            ⬇ 下载
+            {{ t('projects.wiki.download') }}
           </Button>
         </div>
       </div>
@@ -853,16 +855,16 @@ watch(
         <aside class="wiki-tree-card">
           <!-- R2xx: H5 抽屉标题行 — 详情页 dock-drawer-header 同款, 桌面 display:none. -->
           <div class="wiki-drawer-header">
-            <span class="wiki-drawer-title">📖 文档目录</span>
-            <button type="button" class="wiki-drawer-close" title="关闭" @click="drawerOpen = false">×</button>
+            <span class="wiki-drawer-title">{{ t('projects.wiki.drawerTitle') }}</span>
+            <button type="button" class="wiki-drawer-close" :title="t('common.close')" @click="drawerOpen = false">×</button>
           </div>
-          <div class="wiki-tree-heading">文档</div>
-          <Loading v-if="!treeError && tree.length === 0" size="sm" label="加载文件树" />
+          <div class="wiki-tree-heading">{{ t('projects.wiki.docsHeading') }}</div>
+          <Loading v-if="!treeError && tree.length === 0" size="sm" :label="t('projects.wiki.loadingTreeLabel')" />
           <Empty
             v-else-if="!treeError && tree.length === 0"
             illustration="folder"
-            title="无可读文件"
-            :description="`放行扩展名: ${allowedExts.map((e) => '.' + e).join(' ')}`"
+            :title="t('projects.wiki.noFiles')"
+            :description="t('projects.wiki.allowedExts', { exts: allowedExts.map((e) => '.' + e).join(' ') })"
             size="sm"
           />
           <p v-else-if="treeError" class="wiki-tree-error">{{ treeError }}</p>
@@ -878,7 +880,7 @@ watch(
             H5 抽屉态不可拖 (CSS display:none). -->
         <div
           class="wiki-resize-handle"
-          title="拖拽调整宽度"
+          :title="t('projects.wiki.resizeTitle')"
           @mousedown="handleSidebarDrag"
         ></div>
       </div>
@@ -889,12 +891,12 @@ watch(
 
       <!-- 右栏: 正文 -->
       <main ref="mainRef" class="wiki-main">
-        <Loading v-if="loading && !data" size="md" label="加载文档" />
+        <Loading v-if="loading && !data" size="md" :label="t('projects.wiki.loadingDocLabel')" />
 
         <ErrorView
           v-else-if="wikiError && !data"
           variant="error"
-          title="加载文档失败"
+          :title="t('projects.wiki.loadFailedTitle')"
           :description="wikiError"
           :retrying="retrying"
           @retry="retry"
@@ -904,19 +906,11 @@ watch(
           v-else-if="!data || !data.exists"
           class="wiki-missing"
         >
-          <p v-if="data?.reason === 'no-cwd'">
-            该项目未设置 <code>cwd</code>,无法浏览文档。
-            <br />请在项目设置中配置工作目录。
-          </p>
-          <p v-else-if="data?.reason === 'too-large'">
-            <code>{{ currentPath }}</code> 太大 ({{ fmtBytes(data.size ?? 0) }}),
-            超过 {{ fmtBytes(data.limit ?? 0) }} 上限, 未加载。
-            <br />非 .md 文件有大小上限, 避免几十 MB 的数据文件把页面卡死。
-          </p>
-          <p v-else>
-            未找到 <code>{{ currentPath }}</code>。
-            <br />可在项目 cwd 根目录创建 <code>INDEX.md</code> 作为 Wiki 入口 (支持 frontmatter links)。
-          </p>
+          <!-- 文案含 <code>/<br/> 标签 — 走 locale 消息 + v-html (locale 内容可信,
+               无用户输入; i18n W3b). -->
+          <p v-if="data?.reason === 'no-cwd'" v-html="t('projects.wiki.noCwdHtml')"></p>
+          <p v-else-if="data?.reason === 'too-large'" v-html="t('projects.wiki.tooLargeHtml', { path: currentPath, size: fmtBytes(data.size ?? 0), limit: fmtBytes(data.limit ?? 0) })"></p>
+          <p v-else v-html="t('projects.wiki.notFoundHtml', { path: currentPath })"></p>
         </div>
 
         <!-- kind:text → 纯文本路径 (与 master 一致) -->
