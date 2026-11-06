@@ -22,6 +22,7 @@
 
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   createSchedule,
   deleteSchedule,
@@ -52,6 +53,7 @@ import Loading from '@/components/Loading.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 
 const router = useRouter();
+const { t } = useI18n();
 
 /* ------------------------------------------------------------------ */
 /*  类型 (本视图局部用)                                                  */
@@ -199,11 +201,11 @@ const filterActive = computed<boolean>(
 /** 版本选项 — 客户端按 projectId 过滤.
     飞书 AO-DEV R218: 追加「其他版本」桶 (value='null' 字面量) = 未挂版本的 schedule. */
 const versionOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '全部版本' },
+  { value: '', label: t('misc.schedules.allVersions') },
   ...versions.value
     .filter((v) => !filter.projectId || v.project_id === filter.projectId)
     .map((v) => ({ value: v.id, label: v.name })),
-  { value: 'null', label: '其他版本（未挂版本）' },
+  { value: 'null', label: t('misc.schedules.otherVersions') },
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -229,9 +231,9 @@ async function refetch(): Promise<void> {
     schedules.value = Array.isArray(list) ? list : [];
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('misc.schedules.loadFailedHttp', { n: e.status });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.schedules.loadFailed');
     }
   } finally {
     loading.value = false;
@@ -289,10 +291,10 @@ async function onToggle(s: Schedule): Promise<void> {
   try {
     const updated = await toggleSchedule(s.id, next);
     Object.assign(s, updated);
-    toast.success(next ? '已启用' : '已停用');
+    toast.success(next ? t('misc.schedules.enabled') : t('misc.schedules.disabled'));
   } catch (e: unknown) {
     s.enabled = prev;
-    toast.error(isHttpError(e) ? e.message : '操作失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.opFailed'));
   }
 }
 
@@ -314,14 +316,14 @@ function closeCreate(): void {
 }
 
 function validateForm(f: FormState): string | null {
-  if (!f.name.trim()) return '请填写任务名';
-  if (!f.schedule_expr.trim()) return '请填写调度表达式（cron 5 段或 ISO 时间）';
+  if (!f.name.trim()) return t('misc.schedules.errNameRequired');
+  if (!f.schedule_expr.trim()) return t('misc.schedules.errExprRequired');
   if (f.exec_type === 'agent') {
-    if (!f.project_id) return '请选择项目';
-    if (!f.title.trim()) return '请填写任务标题（agent 派任务用）';
-    if (!f.prompt.trim()) return '请填写 prompt（agent 派任务用）';
+    if (!f.project_id) return t('misc.schedules.errProjectRequired');
+    if (!f.title.trim()) return t('misc.schedules.errTitleRequired');
+    if (!f.prompt.trim()) return t('misc.schedules.errPromptRequired');
   } else if (!f.command.trim()) {
-    return '请填写 shell 命令';
+    return t('misc.schedules.errCommandRequired');
   }
   return null;
 }
@@ -333,7 +335,7 @@ async function submitCreate(): Promise<void> {
     return;
   }
   if (!createForm.description.trim()) {
-    toast.warn('没填描述,排查事故时不易快速定位意图');
+    toast.warn(t('misc.schedules.descWarn'));
   }
   creating.value = true;
   const body: CreateScheduleBody = {
@@ -355,10 +357,10 @@ async function submitCreate(): Promise<void> {
   try {
     const created = await createSchedule(body);
     schedules.value = [created, ...schedules.value];
-    toast.success('已创建');
+    toast.success(t('misc.schedules.created'));
     closeCreate();
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '创建失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.createFailed'));
   } finally {
     creating.value = false;
   }
@@ -400,7 +402,7 @@ async function submitEdit(): Promise<void> {
     return;
   }
   if (!editForm.description.trim()) {
-    toast.warn('没填描述,排查事故时不易快速定位意图');
+    toast.warn(t('misc.schedules.descWarn'));
   }
   editing.value = true;
   const body: ScheduleUpdate = {
@@ -421,10 +423,10 @@ async function submitEdit(): Promise<void> {
     const updated = await updateSchedule(editTarget.value.id, body);
     const idx = schedules.value.findIndex((s) => s.id === updated.id);
     if (idx >= 0) schedules.value[idx] = updated;
-    toast.success('已保存');
+    toast.success(t('misc.schedules.saved'));
     closeEdit();
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '保存失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.saveFailed'));
   } finally {
     editing.value = false;
   }
@@ -445,9 +447,9 @@ async function confirmDelete(): Promise<void> {
   try {
     await deleteSchedule(target.id);
     schedules.value = schedules.value.filter((s) => s.id !== target.id);
-    toast.success('已删除');
+    toast.success(t('misc.schedules.deleted'));
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '删除失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.deleteFailed'));
   }
 }
 
@@ -457,21 +459,21 @@ async function confirmDelete(): Promise<void> {
 
 async function onTriggerNow(s: Schedule): Promise<void> {
   if (s.deleted_at) {
-    toast.error('已软删除的 schedule 不能触发');
+    toast.error(t('misc.schedules.errSoftDeleted'));
     return;
   }
   triggering[s.id] = true;
   try {
     const result = await triggerNow(s.id);
     if (s.exec_type === 'agent' && result.task_id) {
-      toast.success(`已触发 · 任务 ${result.task_id.slice(0, 8)}`);
+      toast.success(t('misc.schedules.triggeredTask', { id: result.task_id.slice(0, 8) }));
     } else {
-      toast.success('已触发 · shell 已开始执行');
+      toast.success(t('misc.schedules.triggeredShell'));
     }
     runsPage[s.id] = 0;
     void fetchRuns(s.id, 0);
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '触发失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.triggerFailed'));
   } finally {
     triggering[s.id] = false;
   }
@@ -490,7 +492,7 @@ async function fetchRuns(scheduleId: string, page: number): Promise<void> {
     runsData[scheduleId] = data;
     runsPage[scheduleId] = page;
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '加载触发历史失败');
+    toast.error(isHttpError(e) ? e.message : t('misc.schedules.loadRunsFailed'));
   } finally {
     runsLoading[scheduleId] = false;
   }
@@ -613,9 +615,9 @@ function fmt(iso: string | null): string {
 
 interface Badge { text: string; cls: string }
 function exitBadge(code: number | null): Badge {
-  if (code === null) return { text: '进行中', cls: 'badge-running' };
-  if (code === 0) return { text: `成功 (${code})`, cls: 'badge-success' };
-  return { text: `失败 (${code})`, cls: 'badge-failed' };
+  if (code === null) return { text: t('misc.schedules.badgeRunning'), cls: 'badge-running' };
+  if (code === 0) return { text: t('misc.schedules.badgeSuccess', { n: code }), cls: 'badge-success' };
+  return { text: t('misc.schedules.badgeFailed', { n: code }), cls: 'badge-failed' };
 }
 
 /** R75 agent run → 跳转 task 详情页. R6 原走 window.location 整页跳 (理由: hash
@@ -623,7 +625,7 @@ function exitBadge(code: number | null): Badge {
     SPA router, 改走 router.push 同 SPA 内跳转 (G2 收口硬跳转). */
 function handleTaskNav(taskId: string | null): void {
   if (!taskId) {
-    toast.error('该 run 没有关联 task_id, 无法跳转');
+    toast.error(t('misc.schedules.noTaskId'));
     return;
   }
   void router.push(`/tasks/${taskId}`);
@@ -669,14 +671,14 @@ watch(() => projectsStore.projects, (next) => {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">定时任务 Schedules</h1>
+        <h1 class="page-title">{{ t('misc.schedules.pageTitle') }}</h1>
         <p class="page-subtitle">
-          到点自动创建并启动任务. 支持 agent(派给 Claude Code)和 shell(直接执行命令)两种类型.
+          {{ t('misc.schedules.pageSubtitle') }}
         </p>
       </div>
       <div class="header-meta">
-        <span class="meta-count">启用 {{ enabledCount }} / {{ schedules.length }}</span>
-        <Button variant="primary" @click="openCreate">+ 新建定时任务</Button>
+        <span class="meta-count">{{ t('misc.schedules.enabledCount', { n: enabledCount, total: schedules.length }) }}</span>
+        <Button variant="primary" @click="openCreate">{{ t('misc.schedules.newBtn') }}</Button>
       </div>
     </header>
 
@@ -684,72 +686,72 @@ watch(() => projectsStore.projects, (next) => {
     <div class="toolbar">
       <div class="toolbar-filters">
         <div class="filter-item">
-          <span class="filter-label">项目</span>
+          <span class="filter-label">{{ t('misc.schedules.projectLabel') }}</span>
           <div class="filter-control">
             <Select
               :model-value="filter.projectId || null"
               @update:model-value="(v: string | null) => onFilterChange({ projectId: v || '' })"
-              :options="[{ value: '', label: '全部项目' }, ...projects.map(p => ({ value: p.id, label: p.name }))]"
-              placeholder="全部项目"
+              :options="[{ value: '', label: t('misc.schedules.allProjects') }, ...projects.map(p => ({ value: p.id, label: p.name }))]"
+              :placeholder="t('misc.schedules.allProjects')"
             />
           </div>
         </div>
 
         <div class="filter-item">
-          <span class="filter-label">版本</span>
+          <span class="filter-label">{{ t('misc.schedules.versionLabel') }}</span>
           <div class="filter-control">
             <Select
               :model-value="filter.versionId || null"
               @update:model-value="(v: string | null) => onFilterChange({ versionId: v || '' })"
               :options="versionOptions"
-              placeholder="全部版本"
+              :placeholder="t('misc.schedules.allVersions')"
             />
           </div>
         </div>
 
         <div class="filter-item">
-          <span class="filter-label">状态</span>
+          <span class="filter-label">{{ t('misc.schedules.statusLabel') }}</span>
           <div class="filter-control">
             <Select
               :model-value="filter.enabled || null"
               @update:model-value="(v: string | null) => onFilterChange({ enabled: v || '' })"
               :options="[
-                { value: '', label: '全部状态' },
-                { value: 'true', label: '启用' },
-                { value: 'false', label: '停用' },
+                { value: '', label: t('misc.schedules.allStatuses') },
+                { value: 'true', label: t('misc.schedules.enabled') },
+                { value: 'false', label: t('misc.schedules.disabled') },
               ]"
-              placeholder="全部状态"
+              :placeholder="t('misc.schedules.allStatuses')"
               :filterable="false"
             />
           </div>
         </div>
 
         <div class="filter-item">
-          <span class="filter-label">上次</span>
+          <span class="filter-label">{{ t('misc.schedules.lastLabel') }}</span>
           <DateTimePicker
             :model-value="filter.lastRunFrom"
-            aria-label="上次执行起始"
+            :aria-label="t('misc.schedules.lastFromAria')"
             @update:model-value="(v: string) => onFilterChange({ lastRunFrom: v })"
           />
           <span class="filter-sep">→</span>
           <DateTimePicker
             :model-value="filter.lastRunTo"
-            aria-label="上次执行结束"
+            :aria-label="t('misc.schedules.lastToAria')"
             @update:model-value="(v: string) => onFilterChange({ lastRunTo: v })"
           />
         </div>
 
         <div class="filter-item">
-          <span class="filter-label">下次</span>
+          <span class="filter-label">{{ t('misc.schedules.nextLabel') }}</span>
           <DateTimePicker
             :model-value="filter.nextRunFrom"
-            aria-label="下次执行起始"
+            :aria-label="t('misc.schedules.nextFromAria')"
             @update:model-value="(v: string) => onFilterChange({ nextRunFrom: v })"
           />
           <span class="filter-sep">→</span>
           <DateTimePicker
             :model-value="filter.nextRunTo"
-            aria-label="下次执行结束"
+            :aria-label="t('misc.schedules.nextToAria')"
             @update:model-value="(v: string) => onFilterChange({ nextRunTo: v })"
           />
         </div>
@@ -759,11 +761,11 @@ watch(() => projectsStore.projects, (next) => {
             :model-value="showDeleted"
             @update:model-value="(v: boolean) => onToggleShowDeleted(v)"
           />
-          <span>显示已软删除</span>
+          <span>{{ t('misc.schedules.showDeleted') }}</span>
         </label>
 
         <Button v-if="filterActive" variant="ghost" size="sm" @click="resetFilters">
-          重置
+          {{ t('misc.schedules.reset') }}
         </Button>
       </div>
     </div>
@@ -772,12 +774,12 @@ watch(() => projectsStore.projects, (next) => {
     <div class="page-body">
       <div v-if="loading && schedules.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('misc.schedules.loading') }}</p>
       </div>
 
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('misc.schedules.loadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -786,10 +788,10 @@ watch(() => projectsStore.projects, (next) => {
 
       <Empty
         v-else-if="schedules.length === 0"
-        :title="filterActive ? '无匹配结果' : '还没有定时任务'"
+        :title="filterActive ? t('misc.schedules.noMatchTitle') : t('misc.schedules.emptyTitle')"
         :description="filterActive
-          ? '试试调整筛选条件或点重置'
-          : '点右上角「+ 新建定时任务」创建'"
+          ? t('misc.schedules.noMatchDesc')
+          : t('misc.schedules.emptyDesc')"
         illustration="inbox"
       />
 
@@ -803,18 +805,18 @@ watch(() => projectsStore.projects, (next) => {
             <div class="card-info">
               <div class="card-title-row">
                 <h3 class="card-title">{{ s.name }}</h3>
-                <span v-if="s.deleted_at" class="chip chip-deleted" :title="`已软删除于 ${fmt(s.deleted_at)}`">
-                  已删除
+                <span v-if="s.deleted_at" class="chip chip-deleted" :title="t('misc.schedules.deletedAtTip', { time: fmt(s.deleted_at) })">
+                  {{ t('misc.schedules.deleted') }}
                 </span>
                 <span :class="['chip', s.enabled ? 'chip-enabled' : 'chip-disabled']">
-                  {{ s.enabled ? '启用' : '停用' }}
+                  {{ s.enabled ? t('misc.schedules.enabled') : t('misc.schedules.disabled') }}
                 </span>
                 <span class="chip chip-exec">{{ s.exec_type }}</span>
                 <span :class="['chip', s.schedule_type === 'cron' ? 'chip-cron' : 'chip-once']">
-                  {{ s.schedule_type === 'cron' ? 'cron 定时' : 'once 一次性' }}
+                  {{ s.schedule_type === 'cron' ? t('misc.schedules.chipCron') : t('misc.schedules.chipOnce') }}
                 </span>
                 <span class="chip chip-expr">{{ s.schedule_expr }}</span>
-                <span v-if="s.skip_if_running" class="chip chip-skip">跳过重叠</span>
+                <span v-if="s.skip_if_running" class="chip chip-skip">{{ t('misc.schedules.skipIfRunning') }}</span>
               </div>
 
               <div v-if="s.exec_type === 'agent' && s.title" class="card-sub">
@@ -827,7 +829,7 @@ watch(() => projectsStore.projects, (next) => {
               <div
                 v-if="s.description"
                 :class="['card-desc', expandedId === s.id ? '' : 'desc-clamp']"
-                :title="expandedId === s.id ? '点击收起' : '点击展开完整描述'"
+                :title="expandedId === s.id ? t('misc.schedules.collapseDesc') : t('misc.schedules.expandDesc')"
                 @click="expandedId = expandedId === s.id ? null : s.id"
               >
                 {{ s.description }}
@@ -835,20 +837,20 @@ watch(() => projectsStore.projects, (next) => {
 
               <div class="card-meta">
                 <span class="meta-item">
-                  创建: <span class="meta-value">{{ fmt(s.created_at) }}</span>
+                  {{ t('misc.schedules.createdLabel') }} <span class="meta-value">{{ fmt(s.created_at) }}</span>
                 </span>
                 <span class="meta-item">
-                  下次: <span class="meta-value">{{ s.enabled ? fmt(s.next_run) : '—' }}</span>
+                  {{ t('misc.schedules.nextLabel') }}: <span class="meta-value">{{ s.enabled ? fmt(s.next_run) : '—' }}</span>
                 </span>
                 <span class="meta-item">
-                  上次: <span class="meta-value">{{ fmt(s.last_run) }}</span>
+                  {{ t('misc.schedules.lastLabel') }}: <span class="meta-value">{{ fmt(s.last_run) }}</span>
                 </span>
                 <span v-if="s.exec_type === 'agent' && s.last_task_id" class="meta-item">
-                  上次任务:
+                  {{ t('misc.schedules.lastTaskLabel') }}
                   <span class="meta-value mono">{{ s.last_task_id.slice(0, 8) }}</span>
                 </span>
                 <span v-if="s.exec_type === 'shell' && s.last_exit_code !== null" class="meta-item">
-                  上次结果:
+                  {{ t('misc.schedules.lastResultLabel') }}
                   <span :class="['badge', exitBadge(s.last_exit_code).cls]">
                     {{ exitBadge(s.last_exit_code).text }}
                   </span>
@@ -865,7 +867,7 @@ watch(() => projectsStore.projects, (next) => {
                 :disabled="!!s.deleted_at"
                 @click="onToggle(s)"
               >
-                {{ s.enabled ? '停用' : '启用' }}
+                {{ s.enabled ? t('misc.schedules.disabled') : t('misc.schedules.enabled') }}
               </Button>
               <Button
                 size="sm"
@@ -874,16 +876,16 @@ watch(() => projectsStore.projects, (next) => {
                 :disabled="!!s.deleted_at || !!triggering[s.id]"
                 @click="onTriggerNow(s)"
               >
-                {{ triggering[s.id] ? '触发中…' : '立即执行' }}
+                {{ triggering[s.id] ? t('misc.schedules.triggering') : t('misc.schedules.triggerNow') }}
               </Button>
-              <Button size="sm" variant="secondary" @click="openEdit(s)">编辑</Button>
+              <Button size="sm" variant="secondary" @click="openEdit(s)">{{ t('misc.schedules.edit') }}</Button>
               <Button
                 size="sm"
                 variant="danger"
                 :disabled="!!s.deleted_at"
                 @click="askDelete(s)"
               >
-                删除
+                {{ t('misc.schedules.delete') }}
               </Button>
             </div>
           </div>
@@ -896,7 +898,7 @@ watch(() => projectsStore.projects, (next) => {
               :aria-expanded="!!runsOpen[s.id]"
               @click="toggleRuns(s.id)"
             >
-              {{ runsOpen[s.id] ? '收起历史' : '触发历史' }}
+              {{ runsOpen[s.id] ? t('misc.schedules.collapseHistory') : t('misc.schedules.runsHistory') }}
             </Button>
           </div>
 
@@ -904,9 +906,9 @@ watch(() => projectsStore.projects, (next) => {
           <div v-if="runsOpen[s.id]" class="runs-panel">
             <div class="runs-panel-header">
               <div class="runs-panel-title">
-                触发历史
+                {{ t('misc.schedules.runsHistory') }}
                 <span class="runs-panel-count">
-                  共 {{ runsData[s.id]?.total ?? 0 }} 条 · 第 {{ (runsPage[s.id] ?? 0) + 1 }} / {{ Math.max(1, Math.ceil((runsData[s.id]?.total ?? 0) / PAGE_SIZE)) }} 页
+                  {{ t('misc.schedules.runsCount', { total: runsData[s.id]?.total ?? 0, page: (runsPage[s.id] ?? 0) + 1, pages: Math.max(1, Math.ceil((runsData[s.id]?.total ?? 0) / PAGE_SIZE)) }) }}
                 </span>
               </div>
               <div class="runs-panel-pager">
@@ -916,7 +918,7 @@ watch(() => projectsStore.projects, (next) => {
                   :disabled="(runsPage[s.id] ?? 0) <= 0 || !!runsLoading[s.id]"
                   @click="gotoPage(s.id, (runsPage[s.id] ?? 0) - 1)"
                 >
-                  上一页
+                  {{ t('misc.schedules.prevPage') }}
                 </button>
                 <button
                   type="button"
@@ -924,13 +926,13 @@ watch(() => projectsStore.projects, (next) => {
                   :disabled="(runsPage[s.id] ?? 0) + 1 >= Math.max(1, Math.ceil((runsData[s.id]?.total ?? 0) / PAGE_SIZE)) || !!runsLoading[s.id]"
                   @click="gotoPage(s.id, (runsPage[s.id] ?? 0) + 1)"
                 >
-                  下一页
+                  {{ t('misc.schedules.nextPage') }}
                 </button>
               </div>
             </div>
 
-            <div v-if="!!runsLoading[s.id] && !(runsData[s.id]?.runs?.length)" class="runs-empty">加载中…</div>
-            <div v-else-if="!runsLoading[s.id] && (runsData[s.id]?.total ?? 0) === 0" class="runs-empty">暂无触发记录</div>
+            <div v-if="!!runsLoading[s.id] && !(runsData[s.id]?.runs?.length)" class="runs-empty">{{ t('misc.schedules.loading') }}</div>
+            <div v-else-if="!runsLoading[s.id] && (runsData[s.id]?.total ?? 0) === 0" class="runs-empty">{{ t('misc.schedules.noRuns') }}</div>
 
             <div v-else-if="(runsData[s.id]?.runs?.length ?? 0) > 0" class="runs-table-wrap">
               <table class="runs-table">
@@ -944,14 +946,14 @@ watch(() => projectsStore.projects, (next) => {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>开始时间</th>
-                    <th>结束时间</th>
-                    <th>类型</th>
-                    <th>状态</th>
+                    <th>{{ t('misc.schedules.thStart') }}</th>
+                    <th>{{ t('misc.schedules.thEnd') }}</th>
+                    <th>{{ t('misc.schedules.thType') }}</th>
+                    <th>{{ t('misc.schedules.thStatus') }}</th>
                     <th>
-                      {{ s.exec_type === 'agent' ? '任务 / 错误' : '命令 / 输出 / 错误' }}
+                      {{ s.exec_type === 'agent' ? t('misc.schedules.thAgentCol') : t('misc.schedules.thShellCol') }}
                     </th>
-                    <th class="text-right">操作</th>
+                    <th class="text-right">{{ t('misc.schedules.thActions') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -966,7 +968,7 @@ watch(() => projectsStore.projects, (next) => {
                       <div>
                         <span v-if="s.exec_type === 'agent' && r.task_id" class="task-link">
                           <span class="mono">{{ r.task_id.slice(0, 8) }}</span>
-                          <span class="text-muted">查看 task</span>
+                          <span class="text-muted">{{ t('misc.schedules.viewTask') }}</span>
                         </span>
                         <code v-if="s.exec_type === 'shell' && r.command" class="run-command">
                           $ {{ r.command }}
@@ -985,10 +987,10 @@ watch(() => projectsStore.projects, (next) => {
                         type="button"
                         class="row-action-btn"
                         :disabled="!r.task_id"
-                        :title="r.task_id ? '查看任务的完整 transcript' : '该 run 未生成 task'"
+                        :title="r.task_id ? t('misc.schedules.viewLogTip') : t('misc.schedules.noTaskTip')"
                         @click="handleTaskNav(r.task_id)"
                       >
-                        查看日志 →
+                        {{ t('misc.schedules.viewLog') }}
                       </button>
                       <button
                         v-else
@@ -996,7 +998,7 @@ watch(() => projectsStore.projects, (next) => {
                         class="row-action-btn"
                         @click="openLogDialog(r)"
                       >
-                        查看日志 →
+                        {{ t('misc.schedules.viewLog') }}
                       </button>
                     </td>
                   </tr>
@@ -1011,7 +1013,7 @@ watch(() => projectsStore.projects, (next) => {
     <!-- 新建 modal (R68 v2) -->
     <Modal
       :model-value="createOpen"
-      title="新建定时任务"
+      :title="t('misc.schedules.createTitle')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeCreate(); }"
     >
@@ -1019,42 +1021,42 @@ watch(() => projectsStore.projects, (next) => {
       <div class="schedule-form">
         <div class="form-row-2col">
           <div class="form-row">
-            <label class="form-label">任务名 <span class="required">*</span></label>
-            <Input v-model="createForm.name" placeholder="例如: 每日 9 点巡检" />
+            <label class="form-label">{{ t('misc.schedules.nameLabel') }} <span class="required">*</span></label>
+            <Input v-model="createForm.name" :placeholder="t('misc.schedules.phName')" />
           </div>
           <div class="form-row">
-            <label class="form-label">时区</label>
+            <label class="form-label">{{ t('misc.schedules.timezoneLabel') }}</label>
             <Input v-model="createForm.timezone" placeholder="Asia/Shanghai" />
-            <p class="form-hint">IANA 名, 默认 Asia/Shanghai.</p>
+            <p class="form-hint">{{ t('misc.schedules.hintTimezone') }}</p>
           </div>
         </div>
 
         <div class="form-row">
-          <label class="form-label">执行体 <span class="required">*</span></label>
+          <label class="form-label">{{ t('misc.schedules.execLabel') }} <span class="required">*</span></label>
           <Select
             :model-value="createForm.exec_type"
             @update:model-value="(v: string | null) => createForm.exec_type = (v || 'agent') as 'agent' | 'shell'"
             :options="[
-              { value: 'agent', label: 'agent — 派给 Claude Code' },
-              { value: 'shell', label: 'shell — 直接执行命令' },
+              { value: 'agent', label: t('misc.schedules.optAgent') },
+              { value: 'shell', label: t('misc.schedules.optShell') },
             ]"
           />
         </div>
 
         <div class="form-row-2col">
           <div class="form-row">
-            <label class="form-label">调度类型 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.typeLabel') }} <span class="required">*</span></label>
             <Select
               :model-value="createForm.schedule_type"
               @update:model-value="(v: string | null) => createForm.schedule_type = (v || 'cron') as 'cron' | 'once'"
               :options="[
-                { value: 'cron', label: 'cron 周期' },
-                { value: 'once', label: 'once 一次性' },
+                { value: 'cron', label: t('misc.schedules.optCron') },
+                { value: 'once', label: t('misc.schedules.optOnce') },
               ]"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">调度表达式 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.exprLabel') }} <span class="required">*</span></label>
             <Input
               v-model="createForm.schedule_expr"
               :placeholder="createForm.schedule_type === 'cron' ? '0 9 * * *' : '2026-12-31T16:00:00Z'"
@@ -1062,76 +1064,76 @@ watch(() => projectsStore.projects, (next) => {
             />
             <p class="form-hint">
               {{ createForm.schedule_type === 'cron'
-                ? '5 段: 分 时 日 月 周, 如 0 9 * * *'
-                : 'ISO 时间, 如 2026-12-31T16:00:00Z' }}
+                ? t('misc.schedules.hintCron')
+                : t('misc.schedules.hintOnce') }}
             </p>
           </div>
         </div>
 
         <div class="form-row">
-          <label class="form-label">描述 (可选)</label>
+          <label class="form-label">{{ t('misc.schedules.descLabel') }}</label>
           <Textarea
             v-model="createForm.description"
             :rows="2"
-            placeholder="给这个 schedule 的备注"
+            :placeholder="t('misc.schedules.phDesc')"
           />
         </div>
 
         <!-- agent 字段 -->
         <div v-if="createForm.exec_type === 'agent'" class="form-section">
-          <div class="form-section-title">agent 字段</div>
+          <div class="form-section-title">{{ t('misc.schedules.agentSection') }}</div>
           <div class="form-row">
-            <label class="form-label">项目 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.projectLabel') }} <span class="required">*</span></label>
             <Select
               :model-value="createForm.project_id || null"
               @update:model-value="(v: string | null) => createForm.project_id = v || ''"
               :options="projects.map(p => ({ value: p.id, label: p.name }))"
-              :placeholder="projects.length === 0 ? '（暂无项目）' : '选择项目'"
+              :placeholder="projects.length === 0 ? t('misc.schedules.noProjects') : t('misc.schedules.selectProject')"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">任务标题 <span class="required">*</span></label>
-            <Input v-model="createForm.title" placeholder="例如: 每日项目状态巡检" />
-            <p class="form-hint">agent 派任务时显示的标题.</p>
+            <label class="form-label">{{ t('misc.schedules.titleLabel') }} <span class="required">*</span></label>
+            <Input v-model="createForm.title" :placeholder="t('misc.schedules.phTitle')" />
+            <p class="form-hint">{{ t('misc.schedules.hintTitle') }}</p>
           </div>
           <div class="form-row">
             <label class="form-label">prompt <span class="required">*</span></label>
             <Textarea
               v-model="createForm.prompt"
               :rows="9"
-              placeholder="检查项目状态并汇报"
+              :placeholder="t('misc.schedules.phPrompt')"
             />
-            <p class="form-hint">agent 派任务时收到的指令 (自然语言).</p>
+            <p class="form-hint">{{ t('misc.schedules.hintPrompt') }}</p>
           </div>
         </div>
 
         <!-- shell 字段 -->
         <div v-else class="form-section">
-          <div class="form-section-title">shell 字段</div>
+          <div class="form-section-title">{{ t('misc.schedules.shellSection') }}</div>
           <div class="form-row">
-            <label class="form-label">命令 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.commandLabel') }} <span class="required">*</span></label>
             <Input
               v-model="createForm.command"
-              placeholder="例如: echo tick && date"
+              :placeholder="t('misc.schedules.phCommand')"
               class-name="form-mono"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">cwd (可选)</label>
+            <label class="form-label">{{ t('misc.schedules.cwdLabel') }}</label>
             <Input
               v-model="createForm.cwd"
               placeholder="/path/to/workdir"
               class-name="form-mono"
             />
-            <p class="form-hint">默认 ORCHESTRATOR_HOME.</p>
+            <p class="form-hint">{{ t('misc.schedules.hintCwd') }}</p>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <Button variant="secondary" :disabled="creating" @click="closeCreate">取消</Button>
+        <Button variant="secondary" :disabled="creating" @click="closeCreate">{{ t('misc.schedules.cancel') }}</Button>
         <Button :loading="creating" :disabled="creating" @click="submitCreate">
-          {{ creating ? '创建中…' : '创建' }}
+          {{ creating ? t('misc.schedules.creating') : t('misc.schedules.create') }}
         </Button>
       </template>
     </Modal>
@@ -1139,45 +1141,45 @@ watch(() => projectsStore.projects, (next) => {
     <!-- 编辑 modal (R86) -->
     <Modal
       :model-value="!!editTarget"
-      :title="`编辑定时任务${editTarget ? ' · ' + editTarget.id.slice(0, 8) : ''}`"
+      :title="editTarget ? t('misc.schedules.editTitle', { id: editTarget.id.slice(0, 8) }) : ''"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeEdit(); }"
     >
       <div class="schedule-form">
         <div class="form-row-2col">
           <div class="form-row">
-            <label class="form-label">任务名 <span class="required">*</span></label>
-            <Input v-model="editForm.name" placeholder="例如: 每日 9 点巡检" />
+            <label class="form-label">{{ t('misc.schedules.nameLabel') }} <span class="required">*</span></label>
+            <Input v-model="editForm.name" :placeholder="t('misc.schedules.phName')" />
           </div>
           <div class="form-row">
-            <label class="form-label">时区</label>
+            <label class="form-label">{{ t('misc.schedules.timezoneLabel') }}</label>
             <Input v-model="editForm.timezone" placeholder="Asia/Shanghai" />
-            <p class="form-hint">IANA 名, 默认 Asia/Shanghai.</p>
+            <p class="form-hint">{{ t('misc.schedules.hintTimezone') }}</p>
           </div>
         </div>
 
         <div class="form-row">
-          <label class="form-label">执行体</label>
+          <label class="form-label">{{ t('misc.schedules.execLabel') }}</label>
           <div class="exec-locked">
-            {{ editForm.exec_type === 'agent' ? 'agent — 派给 Claude Code' : 'shell — 直接执行命令' }}
+            {{ editForm.exec_type === 'agent' ? t('misc.schedules.optAgent') : t('misc.schedules.optShell') }}
           </div>
-          <p class="form-hint">编辑时不能切换类型 (后端 PATCH 白名单不含 exec_type).</p>
+          <p class="form-hint">{{ t('misc.schedules.hintExecLocked') }}</p>
         </div>
 
         <div class="form-row-2col">
           <div class="form-row">
-            <label class="form-label">调度类型 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.typeLabel') }} <span class="required">*</span></label>
             <Select
               :model-value="editForm.schedule_type"
               @update:model-value="(v: string | null) => editForm.schedule_type = (v || 'cron') as 'cron' | 'once'"
               :options="[
-                { value: 'cron', label: 'cron 周期' },
-                { value: 'once', label: 'once 一次性' },
+                { value: 'cron', label: t('misc.schedules.optCron') },
+                { value: 'once', label: t('misc.schedules.optOnce') },
               ]"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">调度表达式 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.exprLabel') }} <span class="required">*</span></label>
             <Input
               v-model="editForm.schedule_expr"
               :placeholder="editForm.schedule_type === 'cron' ? '0 9 * * *' : '2026-12-31T16:00:00Z'"
@@ -1185,27 +1187,27 @@ watch(() => projectsStore.projects, (next) => {
             />
             <p class="form-hint">
               {{ editForm.schedule_type === 'cron'
-                ? '5 段: 分 时 日 月 周, 如 0 9 * * *'
-                : 'ISO 时间, 如 2026-12-31T16:00:00Z' }}
+                ? t('misc.schedules.hintCron')
+                : t('misc.schedules.hintOnce') }}
             </p>
           </div>
         </div>
 
         <div class="form-row">
-          <label class="form-label">描述 (可选)</label>
+          <label class="form-label">{{ t('misc.schedules.descLabel') }}</label>
           <Textarea
             v-model="editForm.description"
             :rows="2"
-            placeholder="给这个 schedule 的备注"
+            :placeholder="t('misc.schedules.phDesc')"
           />
         </div>
 
         <!-- agent 字段 (exec_type 锁定后决定展示) -->
         <div v-if="editForm.exec_type === 'agent'" class="form-section">
-          <div class="form-section-title">agent 字段</div>
+          <div class="form-section-title">{{ t('misc.schedules.agentSection') }}</div>
           <div class="form-row">
-            <label class="form-label">任务标题 <span class="required">*</span></label>
-            <Input v-model="editForm.title" placeholder="例如: 每日项目状态巡检" />
+            <label class="form-label">{{ t('misc.schedules.titleLabel') }} <span class="required">*</span></label>
+            <Input v-model="editForm.title" :placeholder="t('misc.schedules.phTitle')" />
           </div>
           <div class="form-row">
             <label class="form-label">prompt <span class="required">*</span></label>
@@ -1214,17 +1216,17 @@ watch(() => projectsStore.projects, (next) => {
         </div>
 
         <div v-else class="form-section">
-          <div class="form-section-title">shell 字段</div>
+          <div class="form-section-title">{{ t('misc.schedules.shellSection') }}</div>
           <div class="form-row">
-            <label class="form-label">命令 <span class="required">*</span></label>
+            <label class="form-label">{{ t('misc.schedules.commandLabel') }} <span class="required">*</span></label>
             <Input
               v-model="editForm.command"
-              placeholder="例如: echo tick && date"
+              :placeholder="t('misc.schedules.phCommand')"
               class-name="form-mono"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">cwd (可选)</label>
+            <label class="form-label">{{ t('misc.schedules.cwdLabel') }}</label>
             <Input
               v-model="editForm.cwd"
               placeholder="/path/to/workdir"
@@ -1235,9 +1237,9 @@ watch(() => projectsStore.projects, (next) => {
       </div>
 
       <template #footer>
-        <Button variant="secondary" :disabled="editing" @click="closeEdit">取消</Button>
+        <Button variant="secondary" :disabled="editing" @click="closeEdit">{{ t('misc.schedules.cancel') }}</Button>
         <Button :loading="editing" :disabled="editing" @click="submitEdit">
-          {{ editing ? '保存中…' : '保存' }}
+          {{ editing ? t('misc.schedules.saving') : t('misc.schedules.save') }}
         </Button>
       </template>
     </Modal>
@@ -1245,7 +1247,7 @@ watch(() => projectsStore.projects, (next) => {
     <!-- 完整日志弹窗 (R79 + R86 SSE) -->
     <Modal
       :model-value="!!logDialogRun"
-      :title="`完整日志${liveCompleted ? ` · 已完成 ${liveExitCode !== null ? '· exit=' + liveExitCode : ''}` : ' · 实时推送中…'}`"
+      :title="liveCompleted ? t('misc.schedules.logTitleDone', { exit: liveExitCode !== null ? ' · exit=' + liveExitCode : '' }) : t('misc.schedules.logTitleLive')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeLogDialog(); }"
     >
@@ -1258,10 +1260,10 @@ watch(() => projectsStore.projects, (next) => {
         <div class="log-section">
           <div class="log-label">
             stdout
-            <span class="log-count">({{ ((liveStdout || logDialogRun.output) ?? '').length }} 字符)</span>
+            <span class="log-count">{{ t('misc.schedules.charsCount', { n: ((liveStdout || logDialogRun.output) ?? '').length }) }}</span>
           </div>
           <pre class="log-pre log-pre-stdout">
-            <span v-if="!(liveStdout || logDialogRun.output)" class="log-empty">（空）</span>
+            <span v-if="!(liveStdout || logDialogRun.output)" class="log-empty">{{ t('misc.schedules.emptyOutput') }}</span>
             <template v-else>{{ liveStdout || logDialogRun.output }}</template>
             <div ref="stdoutEndRef" />
           </pre>
@@ -1269,10 +1271,10 @@ watch(() => projectsStore.projects, (next) => {
         <div class="log-section">
           <div class="log-label">
             stderr
-            <span class="log-count">({{ ((liveStderr || logDialogRun.error) ?? '').length }} 字符)</span>
+            <span class="log-count">{{ t('misc.schedules.charsCount', { n: ((liveStderr || logDialogRun.error) ?? '').length }) }}</span>
           </div>
           <pre class="log-pre log-pre-stderr">
-            <span v-if="!(liveStderr || logDialogRun.error)" class="log-empty">（空）</span>
+            <span v-if="!(liveStderr || logDialogRun.error)" class="log-empty">{{ t('misc.schedules.emptyOutput') }}</span>
             <template v-else>{{ liveStderr || logDialogRun.error }}</template>
             <div ref="stderrEndRef" />
           </pre>
@@ -1283,12 +1285,12 @@ watch(() => projectsStore.projects, (next) => {
     <!-- 删除二次确认 (R6) -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="删除定时任务?"
+      :title="t('misc.schedules.deleteConfirmTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.name}」将立即删除, 且不可恢复 (不会软删除). 已触发过的历史也会一并删除.`
+        ? t('misc.schedules.deleteConfirmMsg', { name: pendingDelete.name })
         : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :confirm-text="t('misc.schedules.delete')"
+      :cancel-text="t('misc.schedules.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"

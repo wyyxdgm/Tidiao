@@ -34,6 +34,7 @@
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { getStats, type StatsData } from '@/api/stats';
 import { isHttpError } from '@/api/http';
 import Button from '@/components/Button.vue';
@@ -52,14 +53,16 @@ type TabId = 'usage' | 'dimensions' | 'requirements' | 'periodic';
 
 interface TabDef {
   id: TabId;
-  label: string;
+  labelKey: string;
 }
 
+// tab 元数据: label 走 i18n key (misc.stats.tab*), 渲染时经 t() 转换 —— 模块级
+// 中文常量非响应式, 语言切换不会更新, 故这里只存 key 不存文案.
 const TABS: TabDef[] = [
-  { id: 'usage', label: '用量统计' },
-  { id: 'dimensions', label: '维度分析' },
-  { id: 'requirements', label: '需求分析' },
-  { id: 'periodic', label: '周期统计' },
+  { id: 'usage', labelKey: 'misc.stats.tabUsage' },
+  { id: 'dimensions', labelKey: 'misc.stats.tabDimensions' },
+  { id: 'requirements', labelKey: 'misc.stats.tabRequirements' },
+  { id: 'periodic', labelKey: 'misc.stats.tabPeriodic' },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
@@ -67,6 +70,11 @@ const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 /* ------------------------------------------------------------------ */
 /*  状态                                                                */
 /* ------------------------------------------------------------------ */
+
+const { t } = useI18n();
+
+/** tab 列表带本地化 label — computed 保证语言切换即时生效. */
+const tabs = computed(() => TABS.map((tab) => ({ id: tab.id, label: t(tab.labelKey) })));
 
 const stats = ref<StatsData | null>(null);
 const loading = ref<boolean>(false);
@@ -125,11 +133,11 @@ async function fetchData(): Promise<void> {
     stats.value = await getStats();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('misc.stats.loadFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('misc.stats.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.stats.loadFailed');
     }
   } finally {
     loading.value = false;
@@ -158,15 +166,15 @@ onMounted(() => {
          注意 master 用 Link href="/" (平台首页); SPA 路由里平台首页 = /global
          (root 路径 / 是带子路由的 LayoutContainer, 没有可用落地页). -->
     <div class="back-link-row">
-      <router-link to="/global" class="back-link">← 返回</router-link>
+      <router-link to="/global" class="back-link">{{ t('misc.stats.back') }}</router-link>
     </div>
 
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">统计看板</h1>
+        <h1 class="page-title">{{ t('misc.stats.title') }}</h1>
         <p class="page-subtitle">
-          用量 / 维度 / 需求 / 周期。完整镜像 Next.js /stats。
+          {{ t('misc.stats.subtitle') }}
         </p>
       </div>
       <div class="header-actions">
@@ -177,7 +185,7 @@ onMounted(() => {
           :disabled="loading"
           @click="onManualRefresh"
         >
-          ↻ 刷新
+          ↻ {{ t('misc.stats.refresh') }}
         </Button>
       </div>
     </header>
@@ -185,7 +193,7 @@ onMounted(() => {
     <!-- Tab bar -->
     <nav class="tab-bar" role="tablist">
       <button
-        v-for="tab in TABS"
+        v-for="tab in tabs"
         :key="tab.id"
         type="button"
         role="tab"
@@ -202,13 +210,13 @@ onMounted(() => {
       <!-- 加载态 (顶层) — 后 3 tab 自己有内层 loading, usage 共享本态. -->
       <div v-if="loading && !stats && currentTab === 'usage'" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('misc.stats.loading') }}</p>
       </div>
 
       <!-- 顶层错误态 — 仅 usage tab 依赖顶层 stats; 后 3 tab 各自 fetch 不共用. -->
       <ErrorView
         v-else-if="error && currentTab === 'usage'"
-        title="加载失败"
+        :title="t('misc.stats.loadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"

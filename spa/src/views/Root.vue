@@ -14,10 +14,12 @@
 //   2) R5 全局看板路由上线后 (/global), Root 入口改回跳 /global (sheet 字面).
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
 const auth = useAuthStore();
+const { t } = useI18n();
 
 onMounted(async () => {
   // router beforeEach 已处理 unknown -> checkSession, 但 Root 是入口,
@@ -34,7 +36,7 @@ onMounted(async () => {
 <template>
   <!-- 占位: 在 redirect 完成前不显示空页面闪烁 -->
   <div class="root-loading">
-    <span class="root-loading-text">加载中…</span>
+    <span class="root-loading-text">{{ t('misc.root.loading') }}</span>
   </div>
 </template>
 

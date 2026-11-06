@@ -23,6 +23,7 @@
        改导航导致 Vue Router 警告 (replace 在 nextTick 之后是 SPA 友好做法). */
 import { computed, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import Loading from '@/components/Loading.vue';
 
 /* ------------------------------------------------------------------ */
@@ -31,6 +32,8 @@ import Loading from '@/components/Loading.vue';
 
 const route = useRoute();
 const router = useRouter();
+// i18n (W3c A2): 用户可见字符串走 t('requirements.version.reqDetail.*').
+const { t } = useI18n();
 
 /** 路由参数 :id (Next.js [id] 1:1 镜像). 强转 string 兜底
     (Vue Router 4 params 类型推断为 string | string[]). */
@@ -76,8 +79,8 @@ nextTick(() => {
     <!-- 占位: 在 redirect 完成前不让用户看到空帧. 镜像 R24 ProjectDetail 同款
          loading 态, 1:1 视觉. -->
     <div class="state-block">
-      <Loading size="lg" label="加载需求点" />
-      <p class="state-text muted">跳转到需求点详情…</p>
+      <Loading size="lg" :label="t('requirements.version.reqDetail.loading')" />
+      <p class="state-text muted">{{ t('requirements.version.reqDetail.redirecting') }}</p>
     </div>
   </div>
 </template>

@@ -33,6 +33,7 @@
 */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { getProjectById, getVersionById } from '@/api/projects';
 import type { Project, Version } from '@/api/projects';
 import ErrorView from '@/components/ErrorView.vue';
@@ -41,6 +42,8 @@ import BoardPage from '@/views/BoardPage.vue';
 
 const route = useRoute();
 const router = useRouter();
+// i18n (W3c A2): 用户可见字符串走 t('requirements.version.board.*').
+const { t } = useI18n();
 
 /** 路由参数 projectId / versionId (强转 string 兜底). */
 const projectId = computed(() => String(route.params.projectId));
@@ -52,9 +55,11 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const retrying = ref(false);
 
-/** 404 文案 (与 master /api/versions/[id] route 行为对齐:
-    项目 404 / 版本 404 / 版本不属于该项目 三种都视为 404). */
-const NOT_FOUND_MSG = '版本不存在或不属于该项目';
+/** 404 判定标志 (与 master /api/versions/[id] route 行为对齐:
+    项目 404 / 版本 404 / 版本不属于该项目 三种都视为 404).
+    文案走 i18n, 用标志位 (而非字符串比对) 判定 ErrorView 是否给重试. */
+const projectMissing = ref(false);
+const versionMissing = ref(false);
 
 /** 校验 project 是否拿到 (404 也归一为 error, 走 ErrorView showRetry=false). */
 async function load(): Promise<void> {
@@ -62,6 +67,8 @@ async function load(): Promise<void> {
   error.value = null;
   project.value = null;
   version.value = null;
+  projectMissing.value = false;
+  versionMissing.value = false;
   try {
     // 并发两路, 任一失败各自分支处理.
     const [proj, ver] = await Promise.all([
@@ -72,14 +79,23 @@ async function load(): Promise<void> {
     version.value = ver;
     // 任一缺失 → 视为不存在.
     if (!proj || !ver) {
-      error.value = !proj ? '项目不存在或无权限访问' : NOT_FOUND_MSG;
+      if (!proj) {
+        projectMissing.value = true;
+        error.value = t('requirements.version.board.projectNotFound');
+      } else {
+        versionMissing.value = true;
+        error.value = t('requirements.version.board.versionNotFound');
+      }
     } else if (ver.project_id !== proj.id) {
       // version 存在但不属于该项目 → 当作 404 (master route 同款).
-      error.value = NOT_FOUND_MSG;
+      versionMissing.value = true;
+      error.value = t('requirements.version.board.versionNotFound');
     }
   } catch (e: unknown) {
     // getProjectById/getVersionById 内部已 catch → null; 这里兜底网络异常.
-    error.value = e instanceof Error ? `网络异常: ${e.message}` : '加载失败';
+    error.value = e instanceof Error
+      ? t('requirements.version.board.errNetwork', { msg: e.message })
+      : t('requirements.version.board.errGeneric');
   } finally {
     loading.value = false;
     retrying.value = false;
@@ -102,7 +118,7 @@ const pageTitle = computed<string>(() => {
   }
   if (version.value) return version.value.name;
   if (project.value) return project.value.name;
-  return '版本看板';
+  return t('requirements.version.board.title');
 });
 
 onMounted(() => {
@@ -130,15 +146,15 @@ watch([projectId, versionId], () => {
     <header class="vb-header">
       <div class="vb-header-text">
         <h1 class="vb-title">{{ pageTitle }}</h1>
-        <p v-if="project && version" class="vb-subtitle">该项目该版本下的任务看板</p>
+        <p v-if="project && version" class="vb-subtitle">{{ t('requirements.version.board.subtitle') }}</p>
       </div>
       <div class="vb-header-actions">
         <!-- R177: 画布总控制台互跳 (画布已替代版本看板作项目门面). -->
-        <router-link :to="`/${projectId}/console`" class="btn btn-secondary" title="任务画布总控制台">
-          🎬 画布
+        <router-link :to="`/${projectId}/console`" class="btn btn-secondary" :title="t('requirements.version.board.canvasTitle')">
+          🎬 {{ t('requirements.version.board.canvas') }}
         </router-link>
         <button type="button" class="btn btn-secondary" @click="goBack">
-          ← 返回项目
+          ← {{ t('requirements.version.board.backToProject') }}
         </button>
       </div>
     </header>
@@ -146,17 +162,17 @@ watch([projectId, versionId], () => {
     <!-- Initial loading (project + version 都没就绪) -->
     <div v-if="loading && !project && !version" class="vb-loading">
       <Loading size="lg" />
-      <p class="vb-loading-text">加载中…</p>
+      <p class="vb-loading-text">{{ t('requirements.version.board.loading') }}</p>
     </div>
 
     <!-- 404 / 网络错 -->
     <ErrorView
       v-else-if="error"
-      title="加载失败"
+      :title="t('requirements.version.board.loadFailedTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
-      :show-retry="error !== '项目不存在或无权限访问' && error !== NOT_FOUND_MSG"
+      :show-retry="!projectMissing && !versionMissing"
       @retry="onRetry"
     />
 

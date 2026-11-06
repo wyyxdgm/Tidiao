@@ -21,6 +21,7 @@
    - 状态机走 R11 Loading + R13 ErrorView (retry) — 与 R17/R19 详情页同口径. */
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   getWebhook,
   getWebhookDeliveries,
@@ -38,6 +39,7 @@ import Loading from '@/components/Loading.vue';
 /* ------------------------------------------------------------------ */
 
 const route = useRoute();
+const { t } = useI18n();
 const webhookId = computed<string>(() => String(route.params.webhookId));
 
 /* ------------------------------------------------------------------ */
@@ -92,10 +94,10 @@ function shortTaskId(id: string): string {
     与 events 表 type 字段经后端映射后的字面值. */
 function statusFor(status: string): { label: string; color: string } {
   if (status === 'delivered') {
-    return { label: '已投递', color: 'status-active' };
+    return { label: t('misc.webhookDetail.statusDelivered'), color: 'status-active' };
   }
   if (status === 'failed') {
-    return { label: '失败', color: 'status-inactive' };
+    return { label: t('misc.webhookDetail.statusFailed'), color: 'status-inactive' };
   }
   return { label: status, color: 'status-default' };
 }
@@ -134,7 +136,7 @@ async function loadWebhook(): Promise<void> {
   } catch (e: unknown) {
     if (e instanceof HttpError) {
       if (e.status === 403) {
-        error.value = '无权限查看该 webhook';
+        error.value = t('misc.webhookDetail.errForbidden');
         webhook.value = null;
         return;
       }
@@ -145,12 +147,12 @@ async function loadWebhook(): Promise<void> {
       }
       // 401: http.ts 内部已尝试 refresh+retry, 仍 401 = 会话失效, 由 router guard
       // 拦截后续 navigation; 此处把后端 message 直接展示, 用户重试或刷新即恢复.
-      error.value = e.message || `请求失败 (HTTP ${e.status})`;
+      error.value = e.message || t('misc.webhookDetail.requestFailedHttp', { status: e.status });
       webhook.value = null;
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('misc.webhookDetail.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.webhookDetail.loadFailed');
     }
   } finally {
     loading.value = false;
@@ -167,7 +169,7 @@ async function loadDeliveries(): Promise<void> {
   } catch (e: unknown) {
     if (e instanceof HttpError) {
       if (e.status === 403) {
-        deliveriesError.value = '无权限查看投递历史';
+        deliveriesError.value = t('misc.webhookDetail.errDeliveriesForbidden');
         return;
       }
       if (e.status === 404) {
@@ -177,11 +179,11 @@ async function loadDeliveries(): Promise<void> {
         webhook.value = null;
         return;
       }
-      deliveriesError.value = e.message || `请求失败 (HTTP ${e.status})`;
+      deliveriesError.value = e.message || t('misc.webhookDetail.requestFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      deliveriesError.value = `网络异常: ${e.message}`;
+      deliveriesError.value = t('misc.webhookDetail.errNetwork', { msg: e.message });
     } else {
-      deliveriesError.value = '加载投递历史失败';
+      deliveriesError.value = t('misc.webhookDetail.loadDeliveriesFailed');
     }
   } finally {
     deliveriesLoading.value = false;
@@ -213,7 +215,7 @@ onMounted(() => {
     <!-- Header: 面包屑 + 标题 + 状态 chip + URL + 订阅事件 chips -->
     <header v-if="webhook" class="page-header">
       <nav class="breadcrumb">
-        <span class="crumb">项目</span>
+        <span class="crumb">{{ t('misc.webhookDetail.crumbProjects') }}</span>
         <span class="crumb-sep">›</span>
         <span class="crumb">Webhooks</span>
         <span class="crumb-sep">›</span>
@@ -223,7 +225,7 @@ onMounted(() => {
       <div class="title-row">
         <h2 class="page-title">{{ webhook.name }}</h2>
         <span :class="['status-chip', isActive ? 'status-active' : 'status-inactive']">
-          {{ isActive ? '启用' : '禁用' }}
+          {{ isActive ? t('misc.webhookDetail.statusActive') : t('misc.webhookDetail.statusDisabled') }}
         </span>
       </div>
 
@@ -240,13 +242,13 @@ onMounted(() => {
 
     <!-- Body: loading / error / 404 / content -->
     <div v-if="loading && !webhook" class="state-block">
-      <Loading size="lg" label="加载 webhook 详情" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('misc.webhookDetail.loadingLabel')" />
+      <p class="state-text muted">{{ t('misc.webhookDetail.loading') }}</p>
     </div>
 
     <ErrorView
       v-else-if="error"
-      title="加载失败"
+      :title="t('misc.webhookDetail.loadFailed')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -256,8 +258,8 @@ onMounted(() => {
     <Empty
       v-else-if="notFound"
       illustration="doc"
-      title="Webhook 不存在"
-      description="该 webhook 可能已被删除,或当前用户无权访问"
+      :title="t('misc.webhookDetail.notFoundTitle')"
+      :description="t('misc.webhookDetail.notFoundDesc')"
       size="md"
     />
 
@@ -265,19 +267,19 @@ onMounted(() => {
       <!-- 投递历史 section (R38: 接 GET /api/webhooks/[id]/deliveries, 删 R11 占位 notice) -->
       <section class="history-section">
         <h3 class="section-title">
-          投递历史 (最近 {{ deliveries.length }} 条)
+          {{ t('misc.webhookDetail.historyCount', { n: deliveries.length }) }}
         </h3>
 
         <!-- deliveries 加载态: 与 webhook 主加载解耦, 主面板已渲染时不覆盖. -->
         <div v-if="deliveriesLoading && deliveries.length === 0" class="state-block-sm">
-          <Loading size="md" label="加载投递历史" />
-          <p class="state-text muted">加载投递历史中…</p>
+          <Loading size="md" :label="t('misc.webhookDetail.loadingDeliveries')" />
+          <p class="state-text muted">{{ t('misc.webhookDetail.loadingDeliveriesDots') }}</p>
         </div>
 
         <!-- deliveries 错误态: 子面板 ErrorView, 主面板不受影响, 一键重试. -->
         <ErrorView
           v-else-if="deliveriesError && deliveries.length === 0"
-          title="加载投递历史失败"
+          :title="t('misc.webhookDetail.loadDeliveriesFailed')"
           :description="deliveriesError"
           variant="error"
           size="sm"
@@ -293,11 +295,11 @@ onMounted(() => {
           <table class="history-table">
             <thead>
               <tr>
-                <th class="col-time">时间</th>
-                <th class="col-status">状态</th>
-                <th class="col-event">事件</th>
-                <th class="col-task">关联 task</th>
-                <th class="col-detail">详情</th>
+                <th class="col-time">{{ t('misc.webhookDetail.colTime') }}</th>
+                <th class="col-status">{{ t('misc.webhookDetail.colStatus') }}</th>
+                <th class="col-event">{{ t('misc.webhookDetail.colEvent') }}</th>
+                <th class="col-task">{{ t('misc.webhookDetail.colTask') }}</th>
+                <th class="col-detail">{{ t('misc.webhookDetail.colDetail') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -348,11 +350,11 @@ onMounted(() => {
           <table class="history-table">
             <thead>
               <tr>
-                <th class="col-time">时间</th>
-                <th class="col-status">状态</th>
-                <th class="col-event">事件</th>
-                <th class="col-task">关联 task</th>
-                <th class="col-detail">详情</th>
+                <th class="col-time">{{ t('misc.webhookDetail.colTime') }}</th>
+                <th class="col-status">{{ t('misc.webhookDetail.colStatus') }}</th>
+                <th class="col-event">{{ t('misc.webhookDetail.colEvent') }}</th>
+                <th class="col-task">{{ t('misc.webhookDetail.colTask') }}</th>
+                <th class="col-detail">{{ t('misc.webhookDetail.colDetail') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -361,8 +363,8 @@ onMounted(() => {
                   <Empty
                     illustration="inbox"
                     size="sm"
-                    title="暂无投递记录"
-                    description="该 webhook 还没被任何 task 事件触发过,或事件已超过 100 条上限。"
+                    :title="t('misc.webhookDetail.emptyTitle')"
+                    :description="t('misc.webhookDetail.emptyDesc')"
                   />
                 </td>
               </tr>

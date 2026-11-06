@@ -32,6 +32,7 @@
 
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   listTemplates,
   createTemplate,
@@ -65,15 +66,12 @@ import Loading from '@/components/Loading.vue';
 /* ------------------------------------------------------------------ */
 
 /** 推理强度档位 — 与 master src/lib/constants.ts EFFORT_LEVELS 对齐. 内联在此是因为
-    SPA bundle 不依赖 master 仓; 增删改一处即可, 后端校验是最终口径. */
-const EFFORT_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: '默认' },
-  { value: 'low', label: 'low' },
-  { value: 'medium', label: 'medium' },
-  { value: 'high', label: 'high' },
-  { value: 'xhigh', label: 'xhigh' },
-  { value: 'max', label: 'max' },
-];
+    SPA bundle 不依赖 master 仓; 增删改一处即可, 后端校验是最终口径.
+    i18n: label 走 t() (computed), value 是协议值原样. */
+const EFFORT_VALUES = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+const effortOptions = computed<{ value: string; label: string }[]>(() =>
+  EFFORT_VALUES.map((v) => ({ value: v, label: v === '' ? t('misc.templates.effortDefault') : v })),
+);
 
 /* ------------------------------------------------------------------ */
 /*  类型                                                                */
@@ -120,6 +118,7 @@ function emptyForm(): FormState {
 
 const toast = useToast();
 const router = useRouter();
+const { t } = useI18n();
 
 const templates = ref<Template[]>([]);
 const llmConfigs = ref<AvailableLlmConfig[]>([]);
@@ -144,10 +143,10 @@ const pendingDelete = ref<Template | null>(null);
 
 /** LLM 配置下拉 options — 空选项代表「默认 (按解析链)」. */
 const llmConfigOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '', label: '默认 (按解析链)' },
+  { value: '', label: t('misc.templates.llmDefault') },
   ...llmConfigs.value.map((c) => ({
     value: c.id,
-    label: `${c.source === 'self' ? '我的' : '平台'} · ${c.name}${c.is_default ? ' (默认)' : ''}`,
+    label: `${c.source === 'self' ? t('misc.templates.llmMine') : t('misc.templates.llmPlatform')} · ${c.name}${c.is_default ? t('misc.templates.llmIsDefault') : ''}`,
   })),
 ]);
 
@@ -167,11 +166,11 @@ async function refresh(): Promise<void> {
     templates.value = Array.isArray(list) ? list : [];
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('misc.templates.loadFailedHttp', { n: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('misc.templates.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.templates.loadFailed');
     }
   } finally {
     loading.value = false;
@@ -206,18 +205,18 @@ function openCreate(): void {
   modal.open = true;
 }
 
-function openEdit(t: Template): void {
+function openEdit(tpl: Template): void {
   modal.isEditing = true;
-  modal.targetId = t.id;
+  modal.targetId = tpl.id;
   modal.form = {
-    name: t.name,
-    prompt: t.prompt,
-    model: t.model ?? '',
-    llm_config_id: t.llm_config_id,
-    effort: t.effort ?? '',
-    maxTurns: t.max_turns ? String(t.max_turns) : '',
-    autoApprove: !!t.auto_approve,
-    tags: parseTags(t.tags).join(', '),
+    name: tpl.name,
+    prompt: tpl.prompt,
+    model: tpl.model ?? '',
+    llm_config_id: tpl.llm_config_id,
+    effort: tpl.effort ?? '',
+    maxTurns: tpl.max_turns ? String(tpl.max_turns) : '',
+    autoApprove: !!tpl.auto_approve,
+    tags: parseTags(tpl.tags).join(', '),
   };
   modal.submitting = false;
   modal.open = true;
@@ -241,16 +240,16 @@ async function submitModal(): Promise<void> {
   const name = modal.form.name.trim();
   const prompt = modal.form.prompt.trim();
   if (!name) {
-    toast.error('请填写模板名称');
+    toast.error(t('misc.templates.errNameRequired'));
     return;
   }
   if (!prompt) {
-    toast.error('请填写 Prompt');
+    toast.error(t('misc.templates.errPromptRequired'));
     return;
   }
   const maxTurnsNum = modal.form.maxTurns.trim() ? parseInt(modal.form.maxTurns, 10) : undefined;
   if (modal.form.maxTurns.trim() && (Number.isNaN(maxTurnsNum!) || maxTurnsNum! <= 0)) {
-    toast.error('最大轮次必须是正整数');
+    toast.error(t('misc.templates.errMaxTurns'));
     return;
   }
 
@@ -273,7 +272,7 @@ async function submitModal(): Promise<void> {
       const updated = await updateTemplate(modal.targetId, body);
       const idx = templates.value.findIndex((t) => t.id === updated.id);
       if (idx >= 0) templates.value[idx] = updated;
-      toast.success('已保存');
+      toast.success(t('misc.templates.saved'));
       closeModal();
     } else {
       // 创建 — POST; maxTurns/effort/model/llm_config_id/tags 走「空 = 不传」语义 (master 后端
@@ -291,16 +290,16 @@ async function submitModal(): Promise<void> {
       };
       const created = await createTemplate(body);
       templates.value.unshift(created);
-      toast.success('已创建');
+      toast.success(t('misc.templates.created'));
       closeModal();
     }
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `保存失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.templates.saveFailedHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('misc.templates.errNetwork', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('misc.templates.saveFailed'));
     }
   } finally {
     modal.submitting = false;
@@ -311,8 +310,8 @@ async function submitModal(): Promise<void> {
 /*  删除                                                                */
 /* ------------------------------------------------------------------ */
 
-function askDelete(t: Template): void {
-  pendingDelete.value = t;
+function askDelete(tpl: Template): void {
+  pendingDelete.value = tpl;
 }
 
 async function confirmDelete(): Promise<void> {
@@ -322,14 +321,14 @@ async function confirmDelete(): Promise<void> {
   try {
     await deleteTemplate(target.id);
     templates.value = templates.value.filter((t) => t.id !== target.id);
-    toast.success('已删除');
+    toast.success(t('misc.templates.deleted'));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.templates.deleteFailedHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('misc.templates.errNetwork', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('misc.templates.deleteFailed'));
     }
   }
 }
@@ -344,20 +343,20 @@ async function confirmDelete(): Promise<void> {
 
     template.name → task title (符合 task 描述 "title" 字段语义);
     template.tags 是 JSON 字符串数组, 走 TaskNew 字符串入参 (前端 parseCsvTags 再处理). */
-function onInstantiate(t: Template): void {
+function onInstantiate(tpl: Template): void {
   const params: Record<string, string> = {};
-  params.name = t.name;
-  if (t.prompt) params.prompt = t.prompt;
-  if (t.model) params.model = t.model;
-  if (t.llm_config_id) params.llm_config_id = t.llm_config_id;
-  if (t.effort) params.effort = t.effort;
-  if (typeof t.max_turns === 'number' && Number.isFinite(t.max_turns)) {
-    params.maxTurns = String(t.max_turns);
+  params.name = tpl.name;
+  if (tpl.prompt) params.prompt = tpl.prompt;
+  if (tpl.model) params.model = tpl.model;
+  if (tpl.llm_config_id) params.llm_config_id = tpl.llm_config_id;
+  if (tpl.effort) params.effort = tpl.effort;
+  if (typeof tpl.max_turns === 'number' && Number.isFinite(tpl.max_turns)) {
+    params.maxTurns = String(tpl.max_turns);
   }
-  params.autoApprove = t.auto_approve ? 'true' : 'false';
-  if (t.tags) {
+  params.autoApprove = tpl.auto_approve ? 'true' : 'false';
+  if (tpl.tags) {
     try {
-      const parsed = JSON.parse(t.tags);
+      const parsed = JSON.parse(tpl.tags);
       if (Array.isArray(parsed) && parsed.length > 0) {
         params.tags = parsed.filter((x): x is string => typeof x === 'string').join(',');
       }
@@ -392,21 +391,23 @@ function llmConfigName(id: string | null): string | null {
   return found ? found.name : `#${id.slice(-8)}`;
 }
 
-/** 卡片 meta 字段 — 把配置名 / 模型 / effort / maxTurns / autoApprove 拍平成字符串数组. */
-function cardMeta(t: Template): string[] {
-  const parts: string[] = [];
-  const llmName = llmConfigName(t.llm_config_id);
-  if (llmName) parts.push(`LLM: ${llmName}`);
-  if (t.model) parts.push(t.model);
-  if (t.effort) parts.push(t.effort);
-  if (t.max_turns) parts.push(`${t.max_turns} 轮`);
-  if (t.auto_approve) parts.push('自动审批');
+/** 卡片 meta 字段 — 把配置名 / 模型 / effort / maxTurns / autoApprove 拍平成片段.
+    i18n: 用 {text, llm} 结构替代原 startsWith('LLM:') 判定 (en 前缀不同, 不能靠前缀识别). */
+function cardMeta(tpl: Template): Array<{ text: string; llm: boolean }> {
+  // 改名 tpl: 原 const t 参数会遮蔽 i18n 的 t(), 调 t('...') 会炸 (i18n W3c B2 迁移时修)
+  const parts: Array<{ text: string; llm: boolean }> = [];
+  const llmName = llmConfigName(tpl.llm_config_id);
+  if (llmName) parts.push({ text: t('misc.templates.metaLlm', { name: llmName }), llm: true });
+  if (tpl.model) parts.push({ text: tpl.model, llm: false });
+  if (tpl.effort) parts.push({ text: tpl.effort, llm: false });
+  if (tpl.max_turns) parts.push({ text: t('misc.templates.metaTurns', { n: tpl.max_turns }), llm: false });
+  if (tpl.auto_approve) parts.push({ text: t('misc.templates.autoApprove'), llm: false });
   return parts;
 }
 
 /** 标签 chips — 最多展示 3 个, 多的隐藏 (与 Next 端 TemplateCard 同款). */
-function cardTags(t: Template): string[] {
-  return parseTags(t.tags).slice(0, 3);
+function cardTags(tpl: Template): string[] {
+  return parseTags(tpl.tags).slice(0, 3);
 }
 </script>
 
@@ -415,10 +416,9 @@ function cardTags(t: Template): string[] {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">模板管理 Templates</h1>
+        <h1 class="page-title">{{ t('misc.templates.pageTitle') }}</h1>
         <p class="page-subtitle">
-          把常用 prompt + 模型/LLM 配置 + 最大轮次 + 推理强度 + 自动审批等打包成模板,
-          创建任务时一键复用.
+          {{ t('misc.templates.pageSubtitle') }}
         </p>
       </div>
       <div class="header-actions">
@@ -427,7 +427,7 @@ function cardTags(t: Template): string[] {
           size="sm"
           @click="openCreate"
         >
-          + 新建模板
+          {{ t('misc.templates.newBtn') }}
         </Button>
       </div>
     </header>
@@ -436,12 +436,12 @@ function cardTags(t: Template): string[] {
     <div class="page-body">
       <div v-if="loading && templates.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('misc.templates.loading') }}</p>
       </div>
 
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('misc.templates.loadFailed')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -450,26 +450,26 @@ function cardTags(t: Template): string[] {
 
       <Empty
         v-else-if="templates.length === 0"
-        title="还没有模板"
-        description="新建模板把常用 prompt + 配置打包, 后续创建任务时一键复用"
+        :title="t('misc.templates.emptyTitle')"
+        :description="t('misc.templates.emptyDesc')"
         illustration="inbox"
       />
 
       <div v-else class="card-grid">
         <article
-          v-for="t in templates"
-          :key="t.id"
+          v-for="tpl in templates"
+          :key="tpl.id"
           class="template-card"
         >
           <!-- Header row -->
           <div class="card-top">
-            <h3 class="card-title" :title="t.name">{{ t.name }}</h3>
+            <h3 class="card-title" :title="tpl.name">{{ tpl.name }}</h3>
             <div class="card-actions">
               <button
                 class="icon-btn"
-                title="编辑模板"
-                aria-label="编辑模板"
-                @click="openEdit(t)"
+                :title="t('misc.templates.editBtn')"
+                :aria-label="t('misc.templates.editBtn')"
+                @click="openEdit(tpl)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                   <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828zM5 12.586V14h1.414l7.586-7.586L12.586 5 5 12.586z" />
@@ -477,9 +477,9 @@ function cardTags(t: Template): string[] {
               </button>
               <button
                 class="icon-btn icon-btn-danger"
-                title="删除模板"
-                aria-label="删除模板"
-                @click="askDelete(t)"
+                :title="t('misc.templates.deleteBtn')"
+                :aria-label="t('misc.templates.deleteBtn')"
+                @click="askDelete(tpl)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                   <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
@@ -489,23 +489,23 @@ function cardTags(t: Template): string[] {
           </div>
 
           <!-- Prompt summary -->
-          <p class="card-prompt">{{ t.prompt }}</p>
+          <p class="card-prompt">{{ tpl.prompt }}</p>
 
           <!-- Meta row -->
           <div class="card-meta">
             <span
-              v-for="(m, i) in cardMeta(t)"
+              v-for="(m, i) in cardMeta(tpl)"
               :key="i"
-              :class="['meta-item', m.startsWith('LLM:') ? 'meta-llm' : '']"
+              :class="['meta-item', m.llm ? 'meta-llm' : '']"
             >
-              {{ m }}
+              {{ m.text }}
             </span>
-            <span v-if="t.auto_approve" class="meta-auto">自动审批</span>
-            <div v-if="cardTags(t).length > 0" class="meta-tags">
-              <span v-for="(tag, i) in cardTags(t)" :key="i" class="tag-chip">{{ tag }}</span>
+            <span v-if="tpl.auto_approve" class="meta-auto">{{ t('misc.templates.autoApprove') }}</span>
+            <div v-if="cardTags(tpl).length > 0" class="meta-tags">
+              <span v-for="(tag, i) in cardTags(tpl)" :key="i" class="tag-chip">{{ tag }}</span>
             </div>
             <span class="meta-time">
-              {{ fmt(t.updated_at) }}
+              {{ fmt(tpl.updated_at) }}
             </span>
           </div>
 
@@ -513,9 +513,9 @@ function cardTags(t: Template): string[] {
           <button
             class="instantiate-btn"
             type="button"
-            @click="onInstantiate(t)"
+            @click="onInstantiate(tpl)"
           >
-            从此模板创建任务
+            {{ t('misc.templates.instantiate') }}
           </button>
         </article>
       </div>
@@ -524,17 +524,17 @@ function cardTags(t: Template): string[] {
     <!-- Create / Edit Modal -->
     <Modal
       :model-value="modal.open"
-      :title="modal.isEditing ? '编辑模板' : '新建模板'"
+      :title="modal.isEditing ? t('misc.templates.editTitle') : t('misc.templates.createTitle')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeModal(); }"
     >
       <div class="form">
         <!-- Name -->
         <div class="form-row">
-          <label class="form-label">模板名称 <span class="required">*</span></label>
+          <label class="form-label">{{ t('misc.templates.nameLabel') }} <span class="required">*</span></label>
           <Input
             v-model="modal.form.name"
-            placeholder="例如：代码审查"
+            :placeholder="t('misc.templates.phName')"
             :disabled="modal.submitting"
           />
         </div>
@@ -545,7 +545,7 @@ function cardTags(t: Template): string[] {
           <Textarea
             v-model="modal.form.prompt"
             :rows="8"
-            placeholder="模板的 agent 指令..."
+            :placeholder="t('misc.templates.phPrompt')"
             :disabled="modal.submitting"
           />
         </div>
@@ -553,55 +553,55 @@ function cardTags(t: Template): string[] {
         <!-- Optional config grid -->
         <div class="form-grid">
           <div class="form-row">
-            <label class="form-label">模型</label>
+            <label class="form-label">{{ t('misc.templates.modelLabel') }}</label>
             <Select
               v-model="modal.form.model"
               :options="modelOptions"
-              placeholder="默认"
+              :placeholder="t('misc.templates.phDefault')"
               :disabled="modal.submitting"
             />
-            <p class="form-hint">留空按解析链默认; 也可指定具体模型.</p>
+            <p class="form-hint">{{ t('misc.templates.hintModel') }}</p>
           </div>
           <div class="form-row">
-            <label class="form-label">LLM 配置</label>
+            <label class="form-label">{{ t('misc.templates.llmLabel') }}</label>
             <Select
               v-model="modal.form.llm_config_id"
               :options="llmConfigOptions"
-              placeholder="默认 (按解析链)"
+              :placeholder="t('misc.templates.llmDefault')"
               :disabled="modal.submitting"
             />
-            <p class="form-hint">选「默认」按解析链; 选具体配置则用此配置.</p>
+            <p class="form-hint">{{ t('misc.templates.hintLlm') }}</p>
           </div>
           <div class="form-row">
-            <label class="form-label">推理强度</label>
+            <label class="form-label">{{ t('misc.templates.effortLabel') }}</label>
             <Select
               v-model="modal.form.effort"
-              :options="EFFORT_OPTIONS"
-              placeholder="默认"
+              :options="effortOptions"
+              :placeholder="t('misc.templates.phDefault')"
               :disabled="modal.submitting"
             />
           </div>
           <div class="form-row">
-            <label class="form-label">最大轮次</label>
+            <label class="form-label">{{ t('misc.templates.maxTurnsLabel') }}</label>
             <Input
               v-model="modal.form.maxTurns"
               type="number"
-              placeholder="默认"
+              :placeholder="t('misc.templates.phDefault')"
               :disabled="modal.submitting"
             />
           </div>
           <div class="form-row form-row-inline">
             <Checkbox v-model="modal.form.autoApprove" :disabled="modal.submitting" />
-            <span>自动审批</span>
+            <span>{{ t('misc.templates.autoApprove') }}</span>
           </div>
         </div>
 
         <!-- Tags -->
         <div class="form-row">
-          <label class="form-label">标签</label>
+          <label class="form-label">{{ t('misc.templates.tagsLabel') }}</label>
           <Input
             v-model="modal.form.tags"
-            placeholder="review, code（逗号分隔）"
+            :placeholder="t('misc.templates.phTags')"
             :disabled="modal.submitting"
           />
         </div>
@@ -609,10 +609,10 @@ function cardTags(t: Template): string[] {
 
       <template #footer>
         <Button variant="secondary" :disabled="modal.submitting" @click="closeModal">
-          取消
+          {{ t('misc.templates.cancel') }}
         </Button>
         <Button :loading="modal.submitting" :disabled="modal.submitting" @click="submitModal">
-          {{ modal.isEditing ? '保存修改' : '创建模板' }}
+          {{ modal.isEditing ? t('misc.templates.save') : t('misc.templates.create') }}
         </Button>
       </template>
     </Modal>
@@ -620,12 +620,12 @@ function cardTags(t: Template): string[] {
     <!-- Delete confirm (R6) -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="删除模板?"
+      :title="t('misc.templates.deleteConfirmTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.name}」将立即删除, 且不可恢复.`
+        ? t('misc.templates.deleteConfirmMsg', { name: pendingDelete.name })
         : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :confirm-text="t('misc.templates.delete')"
+      :cancel-text="t('misc.templates.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"

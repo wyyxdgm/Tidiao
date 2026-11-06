@@ -52,6 +52,7 @@
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   getRequirementDetail,
   updateRequirement,
@@ -90,6 +91,11 @@ import TaskStatusChip from '@/components/TaskStatusChip.vue';
 
 const route = useRoute();
 const router = useRouter();
+
+// i18n (W3c): 用户可见字符串走 t('requirements.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/requirements.json; 协议常量
+//   (event type / actor 类型 / 颜色 class) 不迁移.
+const { t } = useI18n();
 
 const requirementId = computed<string>(() => {
   const id = route.params.requirementId;
@@ -130,12 +136,14 @@ const attachments = ref<RequirementAttachment[]>([]);
 /** task events — Map<taskId, TaskEvent[]>. 单 task fetch 失败 = 数组空, 不阻断整体. */
 const taskEventsByTaskId = ref<Map<string, TaskEvent[]>>(new Map());
 
-const projectName = ref<string>('未分类');
-const versionName = ref<string>('未挂版本');
+const projectName = ref<string>('');
+const versionName = ref<string>('');
 
 const loading = ref<boolean>(true);
 const loadError = ref<string | null>(null);
 const retrying = ref<boolean>(false);
+/** 404 = 需求点不存在 / 无权限 → ErrorView 标题切 notFound 文案 (不靠中文子串判断). */
+const notFound = ref<boolean>(false);
 
 /** rootTaskId — 森林里 created 最早且无 dispatched_by 的 = root. 与 master
     page.tsx:121 同款 (R78 W3 §4.1). 多个无 dispatched_by 的并行 root,
@@ -164,6 +172,7 @@ const backHref = computed<string>(() => {
 async function loadAll(): Promise<void> {
   loading.value = true;
   loadError.value = null;
+  notFound.value = false;
   try {
     const req = await getRequirementDetail(requirementId.value);
     detail.value = req;
@@ -176,11 +185,11 @@ async function loadAll(): Promise<void> {
     projectName.value =
       pjRes.status === 'fulfilled' && pjRes.value?.name
         ? pjRes.value.name
-        : '未分类';
+        : t('requirements.detail.uncategorized');
     versionName.value =
       req.version_id && verRes.status === 'fulfilled' && verRes.value?.name
         ? verRes.value.name
-        : '未挂版本';
+        : t('requirements.detail.versionNone');
 
     // revisions + attachments 并行拉, 失败静默 (R107 + R71 端点是「详情附」,
     // 失败不影响主视图)
@@ -212,14 +221,14 @@ async function loadAll(): Promise<void> {
     taskEventsByTaskId.value = map;
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      loadError.value =
-        e.status === 404
-          ? '需求点不存在或无权限访问'
-          : e.message || `加载失败 (HTTP ${e.status})`;
+      notFound.value = e.status === 404;
+      loadError.value = e.status === 404
+        ? t('requirements.detail.errNotFound')
+        : e.message || t('requirements.detail.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      loadError.value = `网络异常: ${e.message}`;
+      loadError.value = t('requirements.detail.errNetwork', { msg: e.message });
     } else {
-      loadError.value = '加载失败';
+      loadError.value = t('requirements.detail.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -263,11 +272,16 @@ const progressEditOpen = ref(false);
 const progressEditValue = ref<string>('');
 const progressEditNote = ref<string>('');
 
-const SOURCE_LABEL: Record<string, string> = {
-  rule: '⚙ 规则算',
-  manual: '✋ 手动',
-  ai: '🤖 AI 评估',
-};
+/** progress_source 显示文案 — 走 i18n (原模块级常量非响应式, 改函数). */
+function sourceLabel(s: string): string {
+  const map: Record<string, string> = {
+    rule: 'requirements.detail.sourceRule',
+    manual: 'requirements.detail.sourceManual',
+    ai: 'requirements.detail.sourceAi',
+  };
+  const key = map[s];
+  return key ? t(key) : s;
+}
 
 const progressPct = computed<number | null>(() => {
   const v = detail.value?.progress;
@@ -287,7 +301,7 @@ async function saveProgress(): Promise<void> {
   const raw = progressEditValue.value.trim();
   const value = raw === '' ? null : Number(raw);
   if (value !== null && (!Number.isInteger(value) || value < 0 || value > 100)) {
-    toast.error('完成度需为 0-100 整数 (留空 = 清空)');
+    toast.error(t('requirements.detail.errProgressRange'));
     return;
   }
   progressSaving.value = true;
@@ -298,9 +312,13 @@ async function saveProgress(): Promise<void> {
     });
     detail.value = { ...detail.value, ...updated };
     progressEditOpen.value = false;
-    toast.success(value === null ? '已清空完成度' : `完成度已更新为 ${value}%`);
+    toast.success(
+      value === null
+        ? t('requirements.detail.progressCleared')
+        : t('requirements.detail.progressUpdated', { value }),
+    );
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '保存失败');
+    toast.error(isHttpError(e) ? e.message : t('requirements.detail.progressSaveFailed'));
   } finally {
     progressSaving.value = false;
   }
@@ -313,9 +331,9 @@ async function recalcProgress(): Promise<void> {
   try {
     const updated = await recalcRequirementProgress(detail.value.id);
     detail.value = { ...detail.value, ...updated };
-    toast.success(`已按规则重算: ${updated.progress}%`);
+    toast.success(t('requirements.detail.recalcDone', { value: updated.progress }));
   } catch (e: unknown) {
-    toast.error(isHttpError(e) ? e.message : '重算失败');
+    toast.error(isHttpError(e) ? e.message : t('requirements.detail.recalcFailed'));
   } finally {
     progressRecalcing.value = false;
   }
@@ -328,7 +346,7 @@ function onAttachmentDeleted(id: string): void {
 
 /** 新建 task 后 → 主动拉一次 detail 拿到最新 tasks + eligible_for_done. */
 async function onTaskCreated(taskId: string): Promise<void> {
-  toast.success(`已创建关联任务, 跳到详情页`);
+  toast.success(t('requirements.detail.taskCreatedToast'));
   // SPA 跳到 /tasks/[id] (TaskDetailView R19), 让用户看即时反馈.
   // 与 R15 RequirementNew 拍板"创建后跳列表"不同: 本视图是详情页,
   // 用户期待看刚建任务详情; 而且 R107 R 列要求 context 携带, 但新建任务
@@ -398,7 +416,7 @@ const taskEventEntries = computed<
     for (const t of detail.value.tasks) taskTitleById.set(t.id, t.title);
   }
   for (const [taskId, evs] of taskEventsByTaskId.value.entries()) {
-    const taskTitle = taskTitleById.get(taskId) ?? '(已删除)';
+    const taskTitle = taskTitleById.get(taskId) ?? t('requirements.detail.deletedTask');
     for (const ev of evs) {
       // 后端兜底 created_at = null; 用稳定 fallback (按 id 排序时可能乱序,
       // 但 events 表 id DESC 保证有序, 详见 G5 route.ts:50 comment).
@@ -437,21 +455,26 @@ const ACTOR_COLOR: Record<string, string> = {
   user: 'bg-blue-100 text-blue-700',
   system: 'bg-gray-100 text-gray-600',
 };
-const ACTOR_LABEL: Record<string, string> = {
-  agent: 'AI',
-  user: '人',
-  system: '系统',
+/** 变更执行者显示文案 — 走 i18n requirements.actor.* (公共 key, 主控预置). */
+function actorLabel(a: string): string {
+  return t(`requirements.actor.${a}`);
+}
+/** 字段显示文案 — 6 个公共字段走 requirements.field.*, progress 系走 detail 私有
+    key; 未知字段 = 原 key (与 Next 端保持兜底展示). */
+const FIELD_KEY_MAP: Record<string, string> = {
+  title: 'requirements.field.title',
+  description: 'requirements.field.description',
+  status: 'requirements.field.status',
+  priority: 'requirements.field.priority',
+  tags: 'requirements.field.tags',
+  version_id: 'requirements.field.version_id',
+  progress: 'requirements.detail.fieldProgress',
+  progress_note: 'requirements.detail.fieldProgressNote',
 };
-const FIELD_LABEL: Record<string, string> = {
-  title: '标题',
-  description: '描述',
-  status: '状态',
-  priority: '优先级',
-  tags: '标签',
-  version_id: '版本',
-  progress: '完成度',
-  progress_note: '完成度依据',
-};
+function fieldLabel(f: string): string {
+  const key = FIELD_KEY_MAP[f];
+  return key ? t(key) : f;
+}
 
 function diffPreview(
   oldVal: string | null,
@@ -486,17 +509,22 @@ function fmtShortDate(iso: string): string {
 
 // event type → 视觉颜色 (点 + chip 背景). 与 master TASK_STATUS_DOT
 // (feedback-timeline.tsx:101) 同款 status 调色, 扩展到其它 type 用中性色.
-const TASK_EVENT_TYPE_LABEL: Record<string, string> = {
-  status_change: '状态变更',
-  tool_use: '工具调用',
-  tool_result: '工具结果',
-  message: '消息',
-  cost: '成本',
-  error: '错误',
-  webhook_delivered: 'Webhook 送达',
-  webhook_delivery_failed: 'Webhook 失败',
-  parent_notify_dispatched: '父子通知',
+/** event type → 显示文案 (走 i18n; 未知 type = 原样展示协议值). */
+const TASK_EVENT_TYPE_KEY: Record<string, string> = {
+  status_change: 'requirements.detail.eventStatusChange',
+  tool_use: 'requirements.detail.eventToolUse',
+  tool_result: 'requirements.detail.eventToolResult',
+  message: 'requirements.detail.eventMessage',
+  cost: 'requirements.detail.eventCost',
+  error: 'requirements.detail.eventError',
+  webhook_delivered: 'requirements.detail.eventWebhookDelivered',
+  webhook_delivery_failed: 'requirements.detail.eventWebhookFailed',
+  parent_notify_dispatched: 'requirements.detail.eventParentNotify',
 };
+function eventTypeLabel(type: string): string {
+  const key = TASK_EVENT_TYPE_KEY[type];
+  return key ? t(key) : type;
+}
 const TASK_EVENT_DOT_COLOR: Record<string, string> = {
   status_change: 'bg-sky-400',
   tool_use: 'bg-indigo-400',
@@ -554,10 +582,10 @@ function eventLine(ev: TaskEvent): string {
     const from = typeof d.from === 'string' ? d.from : null;
     const to = typeof d.to === 'string' ? d.to : null;
     if (from && to) return `${from} → ${to}`;
-    if (to) return `启动 · ${to}`;
+    if (to) return t('requirements.detail.startedTo', { to });
   }
   const summary = eventSummary(ev.data);
-  return summary || TASK_EVENT_TYPE_LABEL[ev.type] || ev.type;
+  return summary || eventTypeLabel(ev.type);
 }
 
 /* ------------------------------------------------------------------ */
@@ -577,7 +605,7 @@ function taskDeps(t: RequirementTask): string[] {
         :to="backHref"
         class="text-sm text-blue-600 hover:underline"
       >
-        ← 需求点列表
+        {{ t('requirements.detail.backLink') }}
       </RouterLink>
     </div>
 
@@ -587,7 +615,7 @@ function taskDeps(t: RequirementTask): string[] {
     <!-- 错误态 -->
     <ErrorView
       v-else-if="loadError"
-      :title="loadError.includes('不存在') || loadError.includes('无权限') ? '需求点不存在' : '加载失败'"
+      :title="notFound ? t('requirements.detail.notFoundTitle') : t('requirements.detail.loadFailedTitle')"
       :description="loadError"
       variant="error"
       :retrying="retrying"
@@ -631,18 +659,18 @@ function taskDeps(t: RequirementTask): string[] {
             v-else
             class="px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700"
           >
-            未挂版本
+            {{ t('requirements.detail.versionNone') }}
           </span>
           <span
-            v-for="t in tags"
-            :key="t"
+            v-for="tag in tags"
+            :key="tag"
             class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600"
           >
-            #{{ t }}
+            #{{ tag }}
           </span>
-          <span v-if="detail.priority !== null">优先级 P{{ detail.priority }}</span>
-          <span>· 创建于 {{ fmtDate(detail.created_at) }}</span>
-          <span>· 更新于 {{ fmtDate(detail.updated_at) }}</span>
+          <span v-if="detail.priority !== null">{{ t('requirements.detail.priorityLabel', { priority: detail.priority }) }}</span>
+          <span>{{ t('requirements.detail.createdAt', { time: fmtDate(detail.created_at) }) }}</span>
+          <span>{{ t('requirements.detail.updatedAt', { time: fmtDate(detail.updated_at) }) }}</span>
         </div>
       </div>
 
@@ -653,7 +681,7 @@ function taskDeps(t: RequirementTask): string[] {
            口径: 100% = done 终态 (部署+验证通过); 0-90 由 task 聚合. -->
       <div class="bg-white rounded-lg shadow mb-6 p-4">
         <div class="flex items-center justify-between mb-2">
-          <h2 class="font-semibold">完成度</h2>
+          <h2 class="font-semibold">{{ t('requirements.detail.progressTitle') }}</h2>
           <div class="flex items-center gap-2">
             <button
               type="button"
@@ -661,14 +689,14 @@ function taskDeps(t: RequirementTask): string[] {
               :disabled="progressRecalcing"
               @click="recalcProgress"
             >
-              {{ progressRecalcing ? '重算中…' : '⚙ 规则重算' }}
+              {{ progressRecalcing ? t('requirements.detail.recalcing') : t('requirements.detail.recalcBtn') }}
             </button>
             <button
               type="button"
               class="text-xs px-2 py-1 rounded border border-blue-300 text-blue-600 hover:bg-blue-50"
               @click="openProgressEdit"
             >
-              ✋ 修正
+              {{ t('requirements.detail.fixBtn') }}
             </button>
           </div>
         </div>
@@ -681,20 +709,20 @@ function taskDeps(t: RequirementTask): string[] {
             />
           </div>
           <span class="text-sm font-semibold whitespace-nowrap">
-            {{ progressPct === null ? '未评估' : `${progressPct}%` }}
+            {{ progressPct === null ? t('requirements.detail.notEvaluated') : `${progressPct}%` }}
           </span>
           <span
             v-if="detail.progress_source"
             class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap"
           >
-            {{ SOURCE_LABEL[detail.progress_source] ?? detail.progress_source }}
+            {{ sourceLabel(detail.progress_source) }}
           </span>
         </div>
         <p v-if="detail.progress_note" class="text-xs text-gray-500 mt-2" :title="detail.progress_updated_at ?? ''">
           {{ detail.progress_note }}
         </p>
         <p v-else class="text-xs text-gray-400 mt-2">
-          100% = 部署上去并验证通过 (status done); 未评估时点「规则重算」按 task 聚合生成.
+          {{ t('requirements.detail.progressHint') }}
         </p>
         <!-- 修正表单 (点「修正」展开) -->
         <div v-if="progressEditOpen" class="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
@@ -703,13 +731,13 @@ function taskDeps(t: RequirementTask): string[] {
             type="number"
             min="0"
             max="100"
-            placeholder="0-100, 留空清空"
+            :placeholder="t('requirements.detail.progressPlaceholder')"
             class="w-32 px-2 py-1 text-sm border rounded"
           />
           <input
             v-model="progressEditNote"
             type="text"
-            placeholder="修正依据 (可选)"
+            :placeholder="t('requirements.detail.progressNotePlaceholder')"
             class="flex-1 min-w-[160px] px-2 py-1 text-sm border rounded"
           />
           <button
@@ -718,7 +746,7 @@ function taskDeps(t: RequirementTask): string[] {
             :disabled="progressSaving"
             @click="saveProgress"
           >
-            {{ progressSaving ? '保存中…' : '保存' }}
+            {{ progressSaving ? t('requirements.detail.saving') : t('requirements.detail.saveBtn') }}
           </button>
         </div>
       </div>
@@ -727,11 +755,11 @@ function taskDeps(t: RequirementTask): string[] {
       <div class="bg-white rounded-lg shadow mb-6">
         <div class="p-4 border-b">
           <h2 class="font-semibold">
-            最近反馈 ({{ revisionCount }} 字段变更)
+            {{ t('requirements.detail.feedbackTitle', { n: revisionCount }) }}
           </h2>
         </div>
         <div v-if="visibleRevisions.length === 0" class="p-6 text-center text-sm text-gray-500">
-          暂无字段变更记录
+          {{ t('requirements.detail.noRevisions') }}
         </div>
         <ul v-else class="divide-y">
           <li
@@ -745,12 +773,12 @@ function taskDeps(t: RequirementTask): string[] {
                 ACTOR_COLOR[entry.rev.actor_type] ?? 'bg-gray-100 text-gray-600',
               ]"
             >
-              {{ ACTOR_LABEL[entry.rev.actor_type] ?? entry.rev.actor_type }}
+              {{ actorLabel(entry.rev.actor_type) }}
             </span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 text-sm">
                 <span class="font-medium text-gray-900">
-                  {{ FIELD_LABEL[entry.rev.field] ?? entry.rev.field }}
+                  {{ fieldLabel(entry.rev.field) }}
                 </span>
                 <span
                   class="text-xs text-gray-500 truncate"
@@ -770,7 +798,7 @@ function taskDeps(t: RequirementTask): string[] {
                   :to="`/tasks/${entry.rev.task_id}`"
                   class="ml-1 text-blue-600 hover:underline"
                 >
-                  · 回溯 task
+                  {{ t('requirements.detail.traceTask') }}
                 </RouterLink>
               </div>
             </div>
@@ -785,9 +813,9 @@ function taskDeps(t: RequirementTask): string[] {
             target="_blank"
             rel="noreferrer"
             class="text-xs text-blue-600 hover:underline"
-            title="查看所有字段级变更 (status / description / priority / tags / version)"
+            :title="t('requirements.detail.viewAllRevisionsTitle')"
           >
-            查看字段变更 ({{ revisionCount }}) →
+            {{ t('requirements.detail.viewAllRevisions', { n: revisionCount }) }}
           </a>
         </div>
       </div>
@@ -796,15 +824,15 @@ function taskDeps(t: RequirementTask): string[] {
       <div class="bg-white rounded-lg shadow mb-6">
         <div class="p-4 border-b">
           <h2 class="font-semibold">
-            📜 Task 执行事件 ({{ taskEventCount }})
+            {{ t('requirements.detail.taskEventsTitle', { n: taskEventCount }) }}
           </h2>
         </div>
         <div v-if="visibleTaskEvents.length === 0" class="p-6 text-center text-sm text-gray-500">
           <template v-if="detail.tasks.length === 0">
-            该需求点暂无关联任务
+            {{ t('requirements.detail.noLinkedTasks') }}
           </template>
           <template v-else>
-            暂无 task 执行事件
+            {{ t('requirements.detail.noTaskEvents') }}
           </template>
         </div>
         <ul v-else class="divide-y">
@@ -828,7 +856,7 @@ function taskDeps(t: RequirementTask): string[] {
                     TASK_EVENT_CHIP_COLOR[entry.ev.type] ?? 'bg-gray-100 text-gray-600',
                   ]"
                 >
-                  {{ TASK_EVENT_TYPE_LABEL[entry.ev.type] ?? entry.ev.type }}
+                  {{ eventTypeLabel(entry.ev.type) }}
                 </span>
                 <span class="text-gray-700 truncate" :title="eventLine(entry.ev)">
                   {{ eventLine(entry.ev) }}
@@ -842,7 +870,7 @@ function taskDeps(t: RequirementTask): string[] {
                 </RouterLink>
               </div>
               <div class="text-xs text-gray-400 mt-0.5">
-                {{ entry.createdAt ? fmtShortDate(entry.createdAt) : '时间未知' }}
+                {{ entry.createdAt ? fmtShortDate(entry.createdAt) : t('requirements.detail.timeUnknown') }}
               </div>
             </div>
           </li>
@@ -852,7 +880,7 @@ function taskDeps(t: RequirementTask): string[] {
           class="px-4 py-3 border-t flex flex-wrap items-center justify-center gap-x-4 gap-y-1"
         >
           <span class="text-xs text-gray-600">
-            执行记录 ({{ taskEventCount }}) ·
+            {{ t('requirements.detail.execRecords', { n: taskEventCount }) }}
             <template
               v-for="(id, i) in taskIdsForFooter.slice(0, 3)"
               :key="id"
@@ -861,15 +889,15 @@ function taskDeps(t: RequirementTask): string[] {
               <RouterLink
                 :to="`/tasks/${id}`"
                 class="text-blue-600 hover:underline font-mono"
-                :title="`跳转到 task ${id.slice(0, 8)} 详情页 (右侧时间线)`"
+                :title="t('requirements.detail.taskLinkTitle', { id: id.slice(0, 8) })"
               >
                 #{{ id.slice(0, 8) }}
               </RouterLink>
             </template>
             <span v-if="taskIdsForFooter.length > 3" class="text-gray-400">
-              等 {{ taskIdsForFooter.length }} 个
+              {{ t('requirements.detail.andMore', { n: taskIdsForFooter.length }) }}
             </span>
-            <span class="text-gray-400"> · 看每个 task 右侧时间线</span>
+            <span class="text-gray-400"> {{ t('requirements.detail.footerHint') }}</span>
           </span>
         </div>
       </div>
@@ -877,10 +905,10 @@ function taskDeps(t: RequirementTask): string[] {
       <!-- ⑤ 附件列表 -->
       <div class="bg-white rounded-lg shadow mb-6">
         <div class="p-4 border-b">
-          <h2 class="font-semibold">附件 ({{ attachments.length }})</h2>
+          <h2 class="font-semibold">{{ t('requirements.detail.attachmentsTitle', { n: attachments.length }) }}</h2>
         </div>
         <div v-if="attachments.length === 0" class="p-6 text-center text-sm text-gray-500">
-          暂无附件
+          {{ t('requirements.detail.noAttachments') }}
         </div>
         <ul v-else class="divide-y">
           <li
@@ -912,7 +940,7 @@ function taskDeps(t: RequirementTask): string[] {
       <!-- ⑦ 关联任务森林 -->
       <div class="bg-white rounded-lg shadow">
         <div class="p-4 border-b flex items-center justify-between">
-          <h2 class="font-semibold">关联任务 ({{ detail.tasks.length }})</h2>
+          <h2 class="font-semibold">{{ t('requirements.detail.relatedTasksTitle', { n: detail.tasks.length }) }}</h2>
           <CreateRequirementTaskButton
             :requirement-id="detail.id"
             :project-id="detail.project_id"
@@ -921,19 +949,19 @@ function taskDeps(t: RequirementTask): string[] {
           />
         </div>
         <div v-if="detail.tasks.length === 0" class="p-8 text-center text-sm text-gray-500">
-          暂无关联任务
+          {{ t('requirements.detail.noRelatedTasks') }}
         </div>
         <div v-else class="divide-y">
           <div
-            v-for="t in detail.tasks"
-            :key="t.id"
+            v-for="task in detail.tasks"
+            :key="task.id"
             class="p-4"
           >
             <div class="flex items-center gap-2 flex-wrap">
               <span
-                v-if="t.id === rootTaskId"
+                v-if="task.id === rootTaskId"
                 class="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold"
-                title="root task = 创建最早且无 dispatched_by 的 task"
+                :title="t('requirements.detail.rootTaskTitle')"
               >
                 root
               </span>
@@ -944,17 +972,17 @@ function taskDeps(t: RequirementTask): string[] {
                 sub-task
               </span>
               <RouterLink
-                :to="`/tasks/${t.id}`"
+                :to="`/tasks/${task.id}`"
                 class="font-medium text-gray-900 hover:text-blue-600"
               >
-                {{ t.title }}
+                {{ task.title }}
               </RouterLink>
             </div>
             <div class="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
-              <span>状态: {{ t.status }}</span>
-              <span v-if="taskDeps(t).length > 0">· 依赖 {{ taskDeps(t).length }} 个上游 task</span>
-              <TaskByChip v-if="t.dispatched_by_task_id" :dispatched-by-task-id="t.dispatched_by_task_id" />
-              <TaskStatusChip v-if="t.latest_checkpoint_status" :status="t.latest_checkpoint_status" />
+              <span>{{ t('requirements.detail.statusLabel', { status: task.status }) }}</span>
+              <span v-if="taskDeps(task).length > 0">{{ t('requirements.detail.depsLabel', { n: taskDeps(task).length }) }}</span>
+              <TaskByChip v-if="task.dispatched_by_task_id" :dispatched-by-task-id="task.dispatched_by_task_id" />
+              <TaskStatusChip v-if="task.latest_checkpoint_status" :status="task.latest_checkpoint_status" />
             </div>
           </div>
         </div>

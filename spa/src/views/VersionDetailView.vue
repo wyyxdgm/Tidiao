@@ -36,6 +36,7 @@
      泄漏 + 阻止新窗口反向操控父页. */
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, HttpError } from '@/api/http';
 import { getProjectById } from '@/api/projects';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -86,14 +87,15 @@ interface ProjectMeta {
   cwd: string | null;
 }
 
-/** sync_strategy → 中文 + 视觉提示. 与 master versions API 的 'manual/weak/strong'
+/** sync_strategy → label + 视觉提示. 与 master versions API 的 'manual/weak/strong'
     三态对齐 (v45 强同步引入). manual = 没配飞书源, 仅人工管; weak = 当前手动
-    diff 行为; strong = 飞书即需求物理存储 (CUD 自动派). */
-const SYNC_STRATEGY_LABEL: Record<Version['sync_strategy'], string> = {
-  manual: '手动',
-  weak: '弱同步',
-  strong: '强同步',
-};
+    diff 行为; strong = 飞书即需求物理存储 (CUD 自动派).
+    i18n: label 走 computed (模块级常量非响应式, 语言切换不会更新). */
+const SYNC_STRATEGY_LABEL = computed<Record<Version['sync_strategy'], string>>(() => ({
+  manual: t('requirements.version.detail.syncManual'),
+  weak: t('requirements.version.detail.syncWeak'),
+  strong: t('requirements.version.detail.syncStrong'),
+}));
 const SYNC_STRATEGY_COLOR: Record<Version['sync_strategy'], string> = {
   manual: 'sync-manual',
   weak: 'sync-weak',
@@ -107,6 +109,8 @@ const SYNC_STRATEGY_COLOR: Record<Version['sync_strategy'], string> = {
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+// i18n (W3c A2): 用户可见字符串走 t('requirements.version.detail.*').
+const { t } = useI18n();
 
 /* R232 Round4 (damo 10-10): 「+ 新建 Task」入口改聊天式弹窗 — 原来跳
    /tasks/new 表单页, 现在就地弹对话窗 (项目/版本预选当前页, 可切换).
@@ -269,7 +273,7 @@ const projectName = computed<string>(() => project.value?.name ?? '');
 
 /** 面包屑 / 大标题的「项目 › 未加载」降级. */
 const breadcrumbProjectLabel = computed<string>(() =>
-  project.value?.name ?? '项目',
+  project.value?.name ?? t('requirements.version.detail.projectFallback'),
 );
 
 /** 大标题 — Next 端 master board-client.tsx:1103-1104 写 `{project.name} /
@@ -277,7 +281,7 @@ const breadcrumbProjectLabel = computed<string>(() =>
     (URL 锁死, 拿不到 version 走 404 不进 chrome), 所以直接拼. */
 const pageHeading = computed<string>(() => {
   const p = projectName.value;
-  const v = version.value?.name ?? '版本';
+  const v = version.value?.name ?? t('requirements.version.detail.versionFallback');
   return p ? `${p} / ${v}` : v;
 });
 
@@ -352,12 +356,12 @@ async function loadVersion(silent = false): Promise<void> {
         notFound.value = true;
         error.value = null;
       } else {
-        error.value = e.message || `请求失败 (HTTP ${e.status})`;
+        error.value = e.message || t('requirements.version.detail.errHttp', { n: e.status });
       }
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('requirements.version.detail.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('requirements.version.detail.errGeneric');
     }
   } finally {
     if (!silent) {
@@ -377,10 +381,26 @@ function retry(): void {
 async function copyUrl(): Promise<void> {
   try {
     await copyToClipboard(window.location.href);
-    toast.success('已复制链接');
+    toast.success(t('requirements.version.detail.copied'));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : '未知错误';
-    toast.error(`复制失败: ${msg}`);
+    const msg = err instanceof Error ? err.message : t('requirements.version.detail.unknownError');
+    toast.error(t('requirements.version.detail.copyFailed', { msg }));
+  }
+}
+
+/** 视图模式 label (i18n) — kanban/cards/list/category/chat 五档. */
+function viewModeLabel(m: ViewMode): string {
+  switch (m) {
+    case 'cards':
+      return t('requirements.version.detail.modeCards');
+    case 'list':
+      return t('requirements.version.detail.modeList');
+    case 'category':
+      return t('requirements.version.detail.modeCategory');
+    case 'chat':
+      return t('requirements.version.detail.modeChat');
+    default:
+      return t('requirements.version.detail.modeKanban');
   }
 }
 
@@ -441,21 +461,21 @@ onActivated(() => {
   <div class="version-detail">
     <!-- Body: loading / error / not-found / content -->
     <div v-if="loading && !version" class="state-block">
-      <Loading size="lg" label="加载版本元数据" />
-      <p class="state-text muted">加载中…</p>
+      <Loading size="lg" :label="t('requirements.version.detail.loadingMeta')" />
+      <p class="state-text muted">{{ t('requirements.version.detail.loading') }}</p>
     </div>
 
     <ErrorView
       v-else-if="notFound"
-      title="版本不存在"
-      description="该版本可能已被删除, 或当前账号无访问权限"
+      :title="t('requirements.version.detail.notFoundTitle')"
+      :description="t('requirements.version.detail.notFoundDesc')"
       variant="warning"
       :show-retry="false"
     />
 
     <ErrorView
       v-else-if="error"
-      title="加载版本失败"
+      :title="t('requirements.version.detail.loadFailedTitle')"
       :description="error"
       variant="error"
       :retrying="retrying"
@@ -486,13 +506,13 @@ onActivated(() => {
         <div class="vd-breadcrumb">
           <!-- R58: 镜像 Next.js master board-client.tsx:610-613 — 顶部 pill
                加一个 "项目上下文" 小灰标签, 与 chat-view.tsx 同款. -->
-          <span class="vd-context-label">项目上下文</span>
-          <router-link to="/projects" class="vd-crumb-link">项目</router-link>
+          <span class="vd-context-label">{{ t('requirements.version.detail.contextLabel') }}</span>
+          <router-link to="/projects" class="vd-crumb-link">{{ t('requirements.version.detail.project') }}</router-link>
           <span class="vd-crumb-sep">›</span>
           <button
             type="button"
             class="vd-crumb-link vd-crumb-btn"
-            :title="`跳到 ${breadcrumbProjectLabel}`"
+            :title="t('requirements.version.detail.jumpToProject', { name: breadcrumbProjectLabel })"
             @click="goProject"
           >
             {{ breadcrumbProjectLabel }}
@@ -502,7 +522,7 @@ onActivated(() => {
           <button
             type="button"
             class="vd-short-id"
-            :title="`复制当前页面链接 (${projectId} / ${versionId})`"
+            :title="t('requirements.version.detail.copyLinkTitle', { p: projectId, v: versionId })"
             @click="copyUrl"
           >
             ({{ projectShortId }}…/{{ versionShortId }}…)
@@ -514,10 +534,10 @@ onActivated(() => {
             v-if="version.feishu_url"
             :class="['vd-watch-chip', version.enable === 0 ? 'vd-watch-chip-off' : 'vd-watch-chip-on']"
             :title="version.enable === 0
-              ? '自动派发已关闭 — sheetwatch 不会扫这张飞书表'
-              : 'sheetwatch 自动派发已开启 — 这张飞书表的改动会自动派任务'"
+              ? t('requirements.version.detail.watchOffTitle')
+              : t('requirements.version.detail.watchOnTitle')"
           >
-            {{ version.enable === 0 ? '飞书 · 已关' : '飞书 · 监听中' }}
+            {{ version.enable === 0 ? t('requirements.version.detail.watchOff') : t('requirements.version.detail.watchOn') }}
           </span>
           <!-- R58.5+: chrome 折叠态 FAB 兜底展开 — 放面包屑末尾 (跟
                breadcrumb 同一行 inline, 自然水平居中 — 用户反馈「展开
@@ -529,14 +549,14 @@ onActivated(() => {
             v-if="!chromeOpen"
             type="button"
             class="vd-chrome-fab"
-            title="展开上方面板"
-            aria-label="展开上方面板"
+            :title="t('requirements.version.detail.expandPanels')"
+            :aria-label="t('requirements.version.detail.expandPanels')"
             @click="toggleChrome"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
             </svg>
-            <span>展开</span>
+            <span>{{ t('requirements.version.detail.expand') }}</span>
           </button>
         </div>
 
@@ -554,7 +574,7 @@ onActivated(() => {
           <div v-if="effectiveCwd" class="vd-cwd">
             <span class="muted">cwd:</span>
             <span class="vd-cwd-path">{{ effectiveCwd }}</span>
-            <span v-if="inheritedCwd" class="vd-cwd-hint">(继承自项目)</span>
+            <span v-if="inheritedCwd" class="vd-cwd-hint">{{ t('requirements.version.detail.cwdInherited') }}</span>
           </div>
         </div>
         </template>
@@ -566,12 +586,12 @@ onActivated(() => {
              本 stack 视觉对齐, chrome 高度 = max(左侧文本, 右侧控件).
              chromeOpen=false 时整块隐藏, 跟 GlobalBoard 同步行为. -->
         <div v-if="chromeOpen" class="vd-header-right">
-          <div class="vd-controls" role="toolbar" aria-label="视图模式">
+          <div class="vd-controls" role="toolbar" :aria-label="t('requirements.version.detail.viewMode')">
             <!-- 飞书 R244 (damo): 活跃/历史从 chrome 撤除 — 挪进 BoardPage 状态
                  chip 行头部改当分组宏 (镜像 GlobalBoard R236), 本处不再持有. -->
             <!-- 视图模式 (kanban / cards / list / category / chat) — 看板调第一位.
                  R244: 补 category (分类视图, 镜像 GlobalBoard af48068d). -->
-            <div class="vd-view-switcher" role="tablist" aria-label="视图模式">
+            <div class="vd-view-switcher" role="tablist" :aria-label="t('requirements.version.detail.viewMode')">
               <button
                 v-for="m in (['kanban', 'cards', 'list', 'category', 'chat'] as ViewMode[])"
                 :key="m"
@@ -603,22 +623,22 @@ onActivated(() => {
                 <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M3 5a2 2 0 012-2h6a2 2 0 012 2v3a2 2 0 01-2 2H7l-3 3v-3H5a2 2 0 01-2-2V5z" />
                 </svg>
-                <span class="vd-view-label">{{ m === 'cards' ? '卡片' : m === 'kanban' ? '看板' : m === 'chat' ? '聊天' : m === 'category' ? '分类' : '列表' }}</span>
+                <span class="vd-view-label">{{ viewModeLabel(m) }}</span>
               </button>
             </div>
             <!-- chrome 折叠 toggle (跟 GlobalBoard chrome-toggle 同位置) -->
             <button
               type="button"
               class="vd-chrome-toggle"
-              :title="chromeOpen ? '收起上方面板' : '展开上方面板'"
+              :title="chromeOpen ? t('requirements.version.detail.collapsePanels') : t('requirements.version.detail.expandPanels')"
               :aria-expanded="chromeOpen"
-              aria-label="切换上方面板折叠"
+              :aria-label="t('requirements.version.detail.togglePanels')"
               @click="toggleChrome"
             >
               <svg class="vd-chrome-chevron" :class="{ 'vd-chrome-chevron-open': chromeOpen }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
               </svg>
-              <span>{{ chromeOpen ? '收起' : '展开' }}</span>
+              <span>{{ chromeOpen ? t('requirements.version.detail.collapse') : t('requirements.version.detail.expand') }}</span>
             </button>
           </div>
           <!-- R58.5+: 三个入口按钮 (+新建Task/Wiki/需求点) 挪进 .vd-header-right
@@ -633,8 +653,8 @@ onActivated(() => {
             <button
               type="button"
               class="vd-entry-fab"
-              title="新建任务 (对话式, Enter 发送)"
-              aria-label="新建任务"
+              :title="t('requirements.version.detail.newTaskTitle')"
+              :aria-label="t('requirements.version.detail.newTask')"
               @click="quickCreateOpen = true"
             >
               <!-- R233 Round7: 文本「+」字形受字体基线影响视觉偏下, 换 SVG 十字几何居中. -->
@@ -645,24 +665,24 @@ onActivated(() => {
             <router-link
               :to="wikiHref"
               class="btn btn-secondary vd-entry-btn"
-              title="项目 Wiki"
+              :title="t('requirements.version.detail.wikiTitle')"
             >
               <span class="vd-entry-icon">📖</span><span class="vd-entry-text">Wiki</span>
             </router-link>
             <button
               type="button"
               class="btn btn-secondary vd-entry-btn"
-              title="项目列表（任务容器 — 全局看板「分类」视图, 替代需求入口）"
+              :title="t('requirements.version.detail.listTitle')"
               @click="router.push({ path: '/global', query: { mode: 'category', project: projectId } })"
             >
-              <span class="vd-entry-icon">🗂</span><span class="vd-entry-text">列表</span>
+              <span class="vd-entry-icon">🗂</span><span class="vd-entry-text">{{ t('requirements.version.detail.list') }}</span>
             </button>
             <router-link
               :to="requirementsHref"
               class="btn btn-secondary vd-entry-btn"
-              title="需求点管理（旧版 — 已由「列表」替代, 数据保留可查）"
+              :title="t('requirements.version.detail.reqsTitle')"
             >
-              <span class="vd-entry-icon">📋</span><span class="vd-entry-text">需求点(旧)</span>
+              <span class="vd-entry-icon">📋</span><span class="vd-entry-text">{{ t('requirements.version.detail.reqsLegacy') }}</span>
             </router-link>
           </div>
         </div><!-- /vd-header-right -->
@@ -689,17 +709,17 @@ onActivated(() => {
         <h3 class="section-title section-title-toggleable" role="button" tabindex="0"
           :aria-expanded="metaOpen" @click="toggleMeta" @keydown.enter="toggleMeta"
           @keydown.space.prevent="toggleMeta">
-          <span>版本元数据</span>
+          <span>{{ t('requirements.version.detail.metaTitle') }}</span>
           <svg class="meta-chevron" :class="{ 'meta-chevron-open': metaOpen }"
             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
           </svg>
         </h3>
         <dl v-if="metaOpen" class="meta-grid">
-          <dt class="muted">名称</dt>
+          <dt class="muted">{{ t('requirements.version.detail.fieldName') }}</dt>
           <dd class="meta-value">{{ version.name }}</dd>
 
-          <dt class="muted">飞书源</dt>
+          <dt class="muted">{{ t('requirements.version.detail.fieldFeishu') }}</dt>
           <dd class="meta-value">
             <a
               v-if="feishuHref"
@@ -720,24 +740,24 @@ onActivated(() => {
             <span v-else class="muted">—</span>
           </dd>
 
-          <dt class="muted">同步策略</dt>
+          <dt class="muted">{{ t('requirements.version.detail.fieldSyncStrategy') }}</dt>
           <dd class="meta-value">
             <span :class="['sync-inline', SYNC_STRATEGY_COLOR[version.sync_strategy]]">
               {{ SYNC_STRATEGY_LABEL[version.sync_strategy] }}
             </span>
           </dd>
 
-          <dt class="muted">自动派发</dt>
+          <dt class="muted">{{ t('requirements.version.detail.fieldAutoDispatch') }}</dt>
           <dd class="meta-value">
             <span v-if="version.feishu_url && version.enable === 0" class="watch-off-inline">
-              已关闭
+              {{ t('requirements.version.detail.dispatchOff') }}
             </span>
             <span v-else class="muted">
-              {{ version.feishu_url ? '开启' : '—' }}
+              {{ version.feishu_url ? t('requirements.version.detail.dispatchOn') : '—' }}
             </span>
           </dd>
 
-          <dt class="muted">创建于</dt>
+          <dt class="muted">{{ t('requirements.version.detail.fieldCreatedAt') }}</dt>
           <dd class="meta-value muted">{{ formatDate(version.created_at) }}</dd>
         </dl>
       </section>

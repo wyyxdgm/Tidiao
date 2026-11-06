@@ -36,6 +36,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { get, HttpError, post } from '@/api/http';
 import { useToast } from '@/composables/useToast';
 import {
@@ -76,6 +77,7 @@ import { formatShortDateTime } from '@/lib/datetime';
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const { t } = useI18n();
 
 const projectId = computed(() => String(route.params.projectId ?? ''));
 
@@ -90,7 +92,7 @@ watch(
   () => projectName.value,
   (name) => {
     if (!name) return;
-    tags.applyTitle(route.path, formatProjectWithLabel(name, '总控制台'));
+    tags.applyTitle(route.path, formatProjectWithLabel(name, t('misc.console.tabTitle')));
   },
 );
 
@@ -164,7 +166,7 @@ async function refresh(): Promise<void> {
     void loadDetails();
   } catch (err) {
     // 与 BoardPage 同款: 失败 toast, 保留上一次模型 (画布不清空).
-    toast.error(err instanceof Error ? err.message : '加载失败');
+    toast.error(err instanceof Error ? err.message : t('misc.console.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -506,32 +508,33 @@ function actingDel(id: string): void {
 /** 验收 (reviewing → completed). awaiting_owner_review=1 时后端 approve 会被
  *  409 gate 拦 — 先 unset-awaiting-review 再 approve (与 LifecycleActions
  *  callApi 同款语义). */
-async function approveFromCard(t: { id: string; title: string; awaitingOwnerReview?: boolean | null }): Promise<void> {
-  if (acting.value.has(t.id)) return;
-  actingAdd(t.id);
+async function approveFromCard(task: { id: string; title: string; awaitingOwnerReview?: boolean | null }): Promise<void> {
+  // 改名 task: 原 const t 参数会遮蔽 i18n 的 t(), 调 t('...') 会炸 (i18n W3c B2 迁移时修)
+  if (acting.value.has(task.id)) return;
+  actingAdd(task.id);
   try {
-    if (t.awaitingOwnerReview) {
-      await unsetAwaitingReview(t.id);
+    if (task.awaitingOwnerReview) {
+      await unsetAwaitingReview(task.id);
     }
-    await post(`/api/tasks/${t.id}/approve`);
-    toast.success(`已验收: ${clip(t.title, 24)}`);
+    await post(`/api/tasks/${task.id}/approve`);
+    toast.success(t('misc.console.approved', { title: clip(task.title, 24) }));
     await refresh();
   } catch (err) {
     if (err instanceof HttpError && err.status === 409) {
       // awaiting flag 竞态 (刚被别处改) — 再试一次 approve
       try {
-        await post(`/api/tasks/${t.id}/approve`);
-        toast.success(`已验收: ${clip(t.title, 24)}`);
+        await post(`/api/tasks/${task.id}/approve`);
+        toast.success(t('misc.console.approved', { title: clip(task.title, 24) }));
         await refresh();
         return;
       } catch (err2) {
-        toast.error(err2 instanceof Error ? err2.message : '验收失败');
+        toast.error(err2 instanceof Error ? err2.message : t('misc.console.approveFailed'));
       }
     } else {
-      toast.error(err instanceof Error ? err.message : '验收失败');
+      toast.error(err instanceof Error ? err.message : t('misc.console.approveFailed'));
     }
   } finally {
-    actingDel(t.id);
+    actingDel(task.id);
   }
 }
 
@@ -558,12 +561,12 @@ async function sendReply(): Promise<void> {
   sending.value = true;
   try {
     await post(`/api/tasks/${id}/message`, { message: text, sender_type: 'user' });
-    toast.success('已转达, 任务继续');
+    toast.success(t('misc.console.relayed'));
     replyFor.value = null;
     replyText.value = '';
     await refresh();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '发送失败');
+    toast.error(err instanceof Error ? err.message : t('misc.console.sendFailed'));
   } finally {
     sending.value = false;
   }
@@ -640,11 +643,11 @@ async function runDigestAction(item: DigestItem): Promise<void> {
       message: buildAgreeMessage(item.suggestion),
       sender_type: 'user',
     });
-    toast.success(`已同意: ${clip(digestTitle(item), 24)}`);
+    toast.success(t('misc.console.agreed', { title: clip(digestTitle(item), 24) }));
     await refresh();
     void loadDigest();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '发送失败');
+    toast.error(err instanceof Error ? err.message : t('misc.console.sendFailed'));
   } finally {
     actingDel(item.id);
   }
@@ -684,10 +687,10 @@ interface ZoneChip {
 const chips = computed<ZoneChip[]>(() => {
   const s = model.value?.stats;
   return [
-    { key: 'focus', label: '在跑', value: s?.focus ?? 0, cls: 'chip-focus' },
-    { key: 'waiting', label: '等我', value: s?.waiting ?? 0, cls: 'chip-waiting' },
-    { key: 'queued', label: '排队', value: s?.queued ?? 0, cls: 'chip-queued' },
-    { key: 'open', label: '需求', value: s?.openRequirements ?? 0, cls: 'chip-open' },
+    { key: 'focus', label: t('misc.console.chipFocus'), value: s?.focus ?? 0, cls: 'chip-focus' },
+    { key: 'waiting', label: t('misc.console.chipWaiting'), value: s?.waiting ?? 0, cls: 'chip-waiting' },
+    { key: 'queued', label: t('misc.console.chipQueued'), value: s?.queued ?? 0, cls: 'chip-queued' },
+    { key: 'open', label: t('misc.console.chipOpen'), value: s?.openRequirements ?? 0, cls: 'chip-open' },
   ];
 });
 
@@ -696,10 +699,10 @@ const quadrantGroups = computed(() => {
   const pick = (q: QuadrantNode['quadrant']) =>
     nodes.filter((n) => n.quadrant === q).slice(0, 12);
   return [
-    { key: 'q2', label: QUADRANT_LABELS.q2, hint: '重要 · 不紧急', nodes: pick('q2') },
-    { key: 'q1', label: QUADRANT_LABELS.q1, hint: '紧急 · 重要', nodes: pick('q1') },
-    { key: 'q4', label: QUADRANT_LABELS.q4, hint: '不紧急 · 不重要', nodes: pick('q4') },
-    { key: 'q3', label: QUADRANT_LABELS.q3, hint: '紧急 · 不重要', nodes: pick('q3') },
+    { key: 'q2', label: QUADRANT_LABELS.q2, hint: t('misc.console.q2Hint'), nodes: pick('q2') },
+    { key: 'q1', label: QUADRANT_LABELS.q1, hint: t('misc.console.q1Hint'), nodes: pick('q1') },
+    { key: 'q4', label: QUADRANT_LABELS.q4, hint: t('misc.console.q4Hint'), nodes: pick('q4') },
+    { key: 'q3', label: QUADRANT_LABELS.q3, hint: t('misc.console.q3Hint'), nodes: pick('q3') },
   ] as const;
 });
 
@@ -756,7 +759,7 @@ async function dispatchFromChat(): Promise<void> {
   if (!text || dispatching.value) return;
   dispatching.value = true;
   try {
-    const title = text.split('\n')[0].slice(0, 60) || '画布派发';
+    const title = text.split('\n')[0].slice(0, 60) || t('misc.console.defaultCanvasTitle');
     const task = await createTask({
       title,
       prompt: text,
@@ -765,12 +768,12 @@ async function dispatchFromChat(): Promise<void> {
       priority: 2,
     });
     await startTask(task.id);
-    toast.success('已派发并启动');
+    toast.success(t('misc.console.dispatched'));
     aiText.value = '';
     aiOpen.value = false;
     await refresh();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '派发失败');
+    toast.error(err instanceof Error ? err.message : t('misc.console.dispatchFailed'));
   } finally {
     dispatching.value = false;
   }
@@ -818,7 +821,7 @@ async function dispatchControl(): Promise<void> {
   if (!instruction || controlling.value) return;
   controlling.value = true;
   try {
-    const title = `🎛 总控 · ${clip(instruction, 40)}`;
+    const title = `🎛 ${t('misc.console.controllerTitlePrefix')} · ${clip(instruction, 40)}`;
     const task = await createTask({
       title,
       prompt: buildControllerPrompt(instruction),
@@ -827,12 +830,12 @@ async function dispatchControl(): Promise<void> {
       priority: 2,
     });
     await startTask(task.id);
-    toast.success('总控指令已下达');
+    toast.success(t('misc.console.controlSent'));
     aiText.value = '';
     aiOpen.value = false;
     await refresh();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '控制指令下达失败');
+    toast.error(err instanceof Error ? err.message : t('misc.console.controlFailed'));
   } finally {
     controlling.value = false;
   }
@@ -844,8 +847,8 @@ async function dispatchControl(): Promise<void> {
     <!-- 顶部指标带 (F4/F5) -->
     <header class="console-header">
       <div class="console-title">
-        <h1>🎬 {{ projectName || '项目' }} · 总控制台</h1>
-        <p class="headline">{{ model?.headline ?? '加载中…' }}</p>
+        <h1>🎬 {{ projectName || t('misc.console.projectFallback') }} · {{ t('misc.console.title') }}</h1>
+        <p class="headline">{{ model?.headline ?? t('misc.console.loading') }}</p>
       </div>
       <div class="console-chips">
         <div
@@ -861,13 +864,13 @@ async function dispatchControl(): Promise<void> {
         <div class="header-tools">
           <span v-if="lastRefreshed" class="refreshed">{{ lastRefreshed }}</span>
           <button class="btn btn-secondary" :disabled="loading" @click="refresh">
-            {{ loading ? '刷新中…' : '↻ 刷新' }}
+            {{ loading ? t('misc.console.refreshing') : t('misc.console.refresh') }}
           </button>
-          <router-link class="btn btn-secondary" :to="`/${projectId}/unversioned`" title="任务卡片看板 (含聊天视图)">
-            📋 任务
+          <router-link class="btn btn-secondary" :to="`/${projectId}/unversioned`" :title="t('misc.console.navTasksTitle')">
+            📋 {{ t('misc.console.navTasks') }}
           </router-link>
-          <router-link class="btn btn-secondary" :to="`/${projectId}/unversioned/requirements`" title="需求点列表">
-            📋 需求
+          <router-link class="btn btn-secondary" :to="`/${projectId}/unversioned/requirements`" :title="t('misc.console.navReqsTitle')">
+            📋 {{ t('misc.console.navReqs') }}
           </router-link>
         </div>
       </div>
@@ -876,29 +879,29 @@ async function dispatchControl(): Promise<void> {
     <!-- AI 全局归纳 (R195): 结合项目业务文档的分类/建议/一键同意 -->
     <section class="digest" :class="{ 'digest-collapsed': digestCollapsed }">
       <div class="digest-head">
-        <span class="digest-badge">✦ AI 归纳</span>
+        <span class="digest-badge">✦ {{ t('misc.console.digestBadge') }}</span>
         <p class="digest-headline">
           <template v-if="digest && digest.headline">{{ digest.headline }}</template>
-          <template v-else-if="digestLoading">归纳生成中…</template>
-          <template v-else-if="digestFailed">归纳暂不可用 (LLM 未配置或失败)</template>
-          <template v-else>暂无归纳</template>
+          <template v-else-if="digestLoading">{{ t('misc.console.digestLoading') }}</template>
+          <template v-else-if="digestFailed">{{ t('misc.console.digestFailed') }}</template>
+          <template v-else>{{ t('misc.console.digestEmpty') }}</template>
         </p>
         <div class="digest-tools">
           <span
             v-if="digestSource === 'stale'"
             class="digest-stale"
-            title="最新数据归纳失败, 显示的是上一次归纳"
-          >旧</span>
+            :title="t('misc.console.staleTitle')"
+          >{{ t('misc.console.staleLabel') }}</span>
           <button
             class="btn btn-secondary btn-sm"
             :disabled="digestLoading"
-            title="忽略缓存, 重新结合项目文档归纳 (花一次 LLM)"
+            :title="t('misc.console.recalcTitle')"
             @click="loadDigest(true)"
-          >{{ digestLoading ? '归纳中…' : '↻ 重算' }}</button>
+          >{{ digestLoading ? t('misc.console.recalcRunning') : t('misc.console.recalc') }}</button>
           <button
             class="btn btn-secondary btn-sm"
             @click="digestCollapsed = !digestCollapsed"
-          >{{ digestCollapsed ? '展开' : '收起' }}</button>
+          >{{ digestCollapsed ? t('misc.console.expand') : t('misc.console.collapse') }}</button>
         </div>
       </div>
       <div v-if="!digestCollapsed && digestGroups.length" class="digest-body">
@@ -924,10 +927,10 @@ async function dispatchControl(): Promise<void> {
                 :class="{ 'digest-agree': digestActionFor(item, rowsById.get(item.id)) === 'agree' }"
                 :disabled="acting.has(item.id)"
                 :title="digestActionFor(item, rowsById.get(item.id)) === 'approve'
-                  ? '验收 (reviewing → completed)'
+                  ? t('misc.console.actApproveTitle')
                   : digestActionFor(item, rowsById.get(item.id)) === 'agree'
-                    ? '一键同意: 让任务按建议继续 (自动转达唤醒)'
-                    : '回复一句话, 自动转达并唤醒该任务'"
+                    ? t('misc.console.actAgreeTitle')
+                    : t('misc.console.actReplyTitle')"
                 @click.stop="runDigestAction(item)"
               >{{ acting.has(item.id) ? '…' : actionLabel(digestActionFor(item, rowsById.get(item.id))) }}</button>
             </li>
@@ -937,12 +940,12 @@ async function dispatchControl(): Promise<void> {
                   v-model="replyText"
                   class="reply-input"
                   type="text"
-                  placeholder="回复一句话, Enter 转达…"
+                  :placeholder="t('misc.console.replyPlaceholder')"
                   :disabled="sending"
                   @keydown.enter.exact.prevent="sendReply"
                 />
                 <button class="card-act card-act-send" :disabled="sending || !replyText.trim()" @click="sendReply">
-                  {{ sending ? '发送中' : '转达 ▶' }}
+                  {{ sending ? t('misc.console.sending') : t('misc.console.relay') }}
                 </button>
               </div>
             </li>
@@ -954,35 +957,35 @@ async function dispatchControl(): Promise<void> {
     <!-- 画布主体 -->
     <div v-if="model" class="console-canvas">
       <!-- 左: 近期聚焦 (F2) -->
-      <section class="zone zone-focus" title="运行/验收中的任务, 按最近更新">
-        <h2>⚡ 近期聚焦</h2>
-        <p v-if="!model.focusTasks.length" class="empty">现在没有在跑的</p>
+      <section class="zone zone-focus" :title="t('misc.console.zoneFocusTitle')">
+        <h2>⚡ {{ t('misc.console.zoneFocus') }}</h2>
+        <p v-if="!model.focusTasks.length" class="empty">{{ t('misc.console.focusEmpty') }}</p>
         <ul class="task-flow">
           <li
-            v-for="t in model.focusTasks"
-            :key="t.id"
+            v-for="tk in model.focusTasks"
+            :key="tk.id"
             class="task-card anim-pulse"
-            @click="openTask(t.id, $event)"
+            @click="openTask(tk.id, $event)"
           >
             <div class="card-main">
-              <span class="dot" :class="taskStatusClass(t.status)" />
-              <span class="task-title">{{ t.title }}</span>
+              <span class="dot" :class="taskStatusClass(tk.status)" />
+              <span class="task-title">{{ tk.title }}</span>
               <!-- R191: 任务时间上卡片 — 最后更新 (短格式, title 全量) -->
               <span
-                v-if="formatShortDateTime(t.updatedAt)"
+                v-if="formatShortDateTime(tk.updatedAt)"
                 class="task-time"
-                :title="`最后更新 ${t.updatedAt ?? ''}`"
-              >{{ formatShortDateTime(t.updatedAt) }}</span>
-              <span class="task-status">{{ statusLabel(t.status) }}</span>
+                :title="t('misc.console.lastUpdated', { time: tk.updatedAt ?? '' })"
+              >{{ formatShortDateTime(tk.updatedAt) }}</span>
+              <span class="task-status">{{ statusLabel(tk.status) }}</span>
             </div>
-            <p v-if="whatOf(t.id)" class="card-sub" title="这个任务要干什么 (AI 自包含摘要)">
-              <span class="sub-tag">干啥</span>{{ whatOf(t.id) }}
+            <p v-if="whatOf(tk.id)" class="card-sub" :title="t('misc.console.subWhatTitle')">
+              <span class="sub-tag">{{ t('misc.console.tagWhat') }}</span>{{ whatOf(tk.id) }}
             </p>
-            <p v-if="gainOf(t.id)" class="card-sub" title="做成了有什么用 (AI 摘要 / 派发登记)">
-              <span class="sub-tag sub-gain">有啥用</span>{{ gainOf(t.id) }}
+            <p v-if="gainOf(tk.id)" class="card-sub" :title="t('misc.console.subGainTitle')">
+              <span class="sub-tag sub-gain">{{ t('misc.console.tagGain') }}</span>{{ gainOf(tk.id) }}
             </p>
-            <p v-if="detailOf(t.id)?.next" class="card-sub" title="最新 checkpoint (下一步)">
-              <span class="sub-tag">下一步</span>{{ clip(detailOf(t.id)?.next ?? '', 120) }}
+            <p v-if="detailOf(tk.id)?.next" class="card-sub" :title="t('misc.console.subNextTitle')">
+              <span class="sub-tag">{{ t('misc.console.tagNext') }}</span>{{ clip(detailOf(tk.id)?.next ?? '', 120) }}
             </p>
           </li>
         </ul>
@@ -990,7 +993,7 @@ async function dispatchControl(): Promise<void> {
 
       <!-- 中: 四象限 (F3) -->
       <section class="zone zone-quadrant">
-        <h2>🎯 紧急 × 重要</h2>
+        <h2>🎯 {{ t('misc.console.zoneQuadrant') }}</h2>
         <div class="quadrant-grid">
           <div
             v-for="q in quadrantGroups"
@@ -1008,10 +1011,10 @@ async function dispatchControl(): Promise<void> {
                 :key="n.id"
                 class="node"
                 :class="n.kind === 'requirement' ? 'node-req' : 'node-task'"
-                :title="`${n.kind === 'requirement' ? '需求点' : '任务'} · ${statusLabel(n.status)}${n.updatedAt ? ` · 最后更新 ${n.updatedAt}` : ''}`"
+                :title="`${n.kind === 'requirement' ? t('misc.console.nodeKindReq') : t('misc.console.nodeKindTask')} · ${statusLabel(n.status)}${n.updatedAt ? ` · ${t('misc.console.lastUpdated', { time: n.updatedAt })}` : ''}`"
                 @click="openNode(n)"
               >
-                <span class="node-tag">{{ n.kind === 'requirement' ? '需' : '务' }}</span>
+                <span class="node-tag">{{ n.kind === 'requirement' ? t('misc.console.tagReq') : t('misc.console.tagTask') }}</span>
                 <span class="node-title">{{ n.title }}</span>
                 <!-- R199: 象限节点补可见时间 (R191 只做了 tooltip, 漏了可见层;
                      僵尸任务无时间显示 = 看不出多老, 像"插队到最前面") -->
@@ -1029,64 +1032,64 @@ async function dispatchControl(): Promise<void> {
 
       <!-- 右: 等我处理 (F2) -->
       <section class="zone zone-waiting">
-        <h2>🔔 等我处理</h2>
+        <h2>🔔 {{ t('misc.console.zoneWaiting') }}</h2>
         <p
           v-if="!model.waitingTasks.length && !model.waitingRequirements.length"
           class="empty"
         >
-          没有等你的
+          {{ t('misc.console.waitingEmpty') }}
         </p>
         <ul v-if="model.waitingTasks.length" class="task-flow">
           <li
-            v-for="t in model.waitingTasks.slice(0, 10)"
-            :key="t.id"
+            v-for="tk in model.waitingTasks.slice(0, 10)"
+            :key="tk.id"
             class="task-card anim-bell"
-            @click="openTask(t.id, $event)"
+            @click="openTask(tk.id, $event)"
           >
             <div class="card-main">
-              <span class="dot" :class="taskStatusClass(t.status)" />
-              <span class="task-title">{{ t.title }}</span>
+              <span class="dot" :class="taskStatusClass(tk.status)" />
+              <span class="task-title">{{ tk.title }}</span>
               <!-- R191: 任务时间上卡片 — 最后更新 (短格式, title 全量) -->
               <span
-                v-if="formatShortDateTime(t.updatedAt)"
+                v-if="formatShortDateTime(tk.updatedAt)"
                 class="task-time"
-                :title="`最后更新 ${t.updatedAt ?? ''}`"
-              >{{ formatShortDateTime(t.updatedAt) }}</span>
-              <span class="task-status">{{ statusLabel(t.status) }}</span>
+                :title="t('misc.console.lastUpdated', { time: tk.updatedAt ?? '' })"
+              >{{ formatShortDateTime(tk.updatedAt) }}</span>
+              <span class="task-status">{{ statusLabel(tk.status) }}</span>
               <!-- 快捷操作: reviewing=验收; 其余等待态=回复转达 (stop 冒泡防触发跳详情) -->
               <button
-                v-if="t.status === 'reviewing'"
+                v-if="tk.status === 'reviewing'"
                 class="card-act"
-                :disabled="acting.has(t.id)"
-                title="验收 (reviewing → completed)"
-                @click.stop="approveFromCard(t)"
-              >{{ acting.has(t.id) ? '…' : '✓ 验收' }}</button>
+                :disabled="acting.has(tk.id)"
+                :title="t('misc.console.actApproveTitle')"
+                @click.stop="approveFromCard(tk)"
+              >{{ acting.has(tk.id) ? '…' : t('misc.console.actApprove') }}</button>
               <button
                 v-else
                 class="card-act"
-                title="回复一句话, 自动转达并唤醒该任务"
-                @click.stop="toggleReply(t.id)"
-              >✎ 回复</button>
+                :title="t('misc.console.actReplyTitle')"
+                @click.stop="toggleReply(tk.id)"
+              >✎ {{ t('misc.console.actReply') }}</button>
             </div>
-            <p v-if="whatOf(t.id)" class="card-sub" title="这个任务要干什么 (AI 自包含摘要)">
-              <span class="sub-tag">干啥</span>{{ whatOf(t.id) }}
+            <p v-if="whatOf(tk.id)" class="card-sub" :title="t('misc.console.subWhatTitle')">
+              <span class="sub-tag">{{ t('misc.console.tagWhat') }}</span>{{ whatOf(tk.id) }}
             </p>
-            <p v-if="gainOf(t.id)" class="card-sub" title="做成了有什么用 (AI 摘要 / 派发登记)">
-              <span class="sub-tag sub-gain">有啥用</span>{{ gainOf(t.id) }}
+            <p v-if="gainOf(tk.id)" class="card-sub" :title="t('misc.console.subGainTitle')">
+              <span class="sub-tag sub-gain">{{ t('misc.console.tagGain') }}</span>{{ gainOf(tk.id) }}
             </p>
             <!-- 迭代8 撤下卡片 / 迭代9 整行撤: 「为什么」语义由「有啥用」覆盖 -->
             <!-- 回复输入框: sendUserMessage 按状态自动路由 (paused 入队 / reviewing·await_user 唤醒 / running 直投) -->
-            <div v-if="replyFor === t.id" class="card-reply" @click.stop>
+            <div v-if="replyFor === tk.id" class="card-reply" @click.stop>
               <input
                 v-model="replyText"
                 class="reply-input"
                 type="text"
-                placeholder="回复一句话, Enter 转达…"
+                :placeholder="t('misc.console.replyPlaceholder')"
                 :disabled="sending"
                 @keydown.enter.exact.prevent="sendReply"
               />
               <button class="card-act card-act-send" :disabled="sending || !replyText.trim()" @click="sendReply">
-                {{ sending ? '发送中' : '转达 ▶' }}
+                {{ sending ? t('misc.console.sending') : t('misc.console.relay') }}
               </button>
             </div>
           </li>
@@ -1103,30 +1106,30 @@ async function dispatchControl(): Promise<void> {
             <span
               v-if="formatShortDateTime(r.updatedAt)"
               class="task-time"
-              :title="`最后更新 ${r.updatedAt ?? ''}`"
+              :title="t('misc.console.lastUpdated', { time: r.updatedAt ?? '' })"
             >{{ formatShortDateTime(r.updatedAt) }}</span>
-            <span class="task-status">需求</span>
+            <span class="task-status">{{ t('misc.console.chipOpen') }}</span>
           </li>
         </ul>
       </section>
 
       <!-- 底: 排队区 (F2) -->
       <section class="zone zone-queued">
-        <h2>🧊 排队中 <span class="zone-count">{{ model.queuedTasks.length }}</span></h2>
-        <p v-if="!model.queuedTasks.length" class="empty">队列为空</p>
+        <h2>🧊 {{ t('misc.console.zoneQueued') }} <span class="zone-count">{{ model.queuedTasks.length }}</span></h2>
+        <p v-if="!model.queuedTasks.length" class="empty">{{ t('misc.console.queuedEmpty') }}</p>
         <div v-else class="queued-strip">
           <button
-            v-for="t in model.queuedTasks.slice(0, 14)"
-            :key="t.id"
+            v-for="tk in model.queuedTasks.slice(0, 14)"
+            :key="tk.id"
             class="queued-chip anim-shimmer"
-            :title="`${statusLabel(t.status)}${t.updatedAt ? ` · 最后更新 ${t.updatedAt}` : ''}`"
-            @click="openTask(t.id, $event)"
+            :title="`${statusLabel(tk.status)}${tk.updatedAt ? ` · ${t('misc.console.lastUpdated', { time: tk.updatedAt })}` : ''}`"
+            @click="openTask(tk.id, $event)"
           >
-            <span class="queued-chip-title">{{ t.title }}</span>
+            <span class="queued-chip-title">{{ tk.title }}</span>
             <span
-              v-if="formatShortDateTime(t.updatedAt)"
+              v-if="formatShortDateTime(tk.updatedAt)"
               class="task-time"
-            >{{ formatShortDateTime(t.updatedAt) }}</span>
+            >{{ formatShortDateTime(tk.updatedAt) }}</span>
           </button>
           <span v-if="model.queuedTasks.length > 14" class="zone-count">
             +{{ model.queuedTasks.length - 14 }}
@@ -1135,35 +1138,35 @@ async function dispatchControl(): Promise<void> {
       </section>
     </div>
 
-    <div v-else class="console-loading">画布加载中…</div>
+    <div v-else class="console-loading">{{ t('misc.console.canvasLoading') }}</div>
 
     <!-- AI 派活 / 智能控制入口 (F6 + 迭代4) -->
-    <button class="ai-fab" title="AI 派活 / 智能控制" @click="aiOpen = !aiOpen">✦ 派活</button>
+    <button class="ai-fab" :title="t('misc.console.fabTitle')" @click="aiOpen = !aiOpen">✦ {{ t('misc.console.fabLabel') }}</button>
     <div v-if="aiOpen" class="ai-panel">
       <div class="ai-panel-head">
-        <b>说一句, 派活或控局</b>
+        <b>{{ t('misc.console.panelTitle') }}</b>
         <button class="ai-close" @click="aiOpen = false">✕</button>
       </div>
       <textarea
         v-model="aiText"
         class="ai-input"
         rows="4"
-        placeholder="派活: 给 GDM 加个导出按钮, 注意兼容旧数据&#10;控制: 把能 approve 的任务都自动验收推进, 需要我拍板的列出来"
+        :placeholder="t('misc.console.aiPlaceholder')"
         @keydown.ctrl.enter.exact.prevent="dispatchFromChat"
       />
       <div class="ai-panel-foot">
-        <span class="ai-hint">Ctrl+Enter 派活 · Shift+Enter 换行</span>
+        <span class="ai-hint">{{ t('misc.console.aiHint') }}</span>
         <div class="ai-actions">
           <button
             class="btn btn-secondary"
             :disabled="controlling || !aiText.trim()"
-            title="包成总控任务: 由 agent 代你批量验收/推进/汇总问题"
+            :title="t('misc.console.controlBtnTitle')"
             @click="dispatchControl"
           >
-            {{ controlling ? '下达中…' : '🎛 智能控制' }}
+            {{ controlling ? t('misc.console.controlling') : t('misc.console.controlBtn') }}
           </button>
           <button class="btn btn-primary" :disabled="dispatching || !aiText.trim()" @click="dispatchFromChat">
-            {{ dispatching ? '派发中…' : '派发 ▶' }}
+            {{ dispatching ? t('misc.console.dispatching') : t('misc.console.dispatchBtn') }}
           </button>
         </div>
       </div>
@@ -1180,31 +1183,31 @@ async function dispatchControl(): Promise<void> {
             <span
               v-if="formatShortDateTime(detailModal.updatedAt)"
               class="task-time"
-              :title="`最后更新 ${detailModal.updatedAt ?? ''}`"
+              :title="t('misc.console.lastUpdated', { time: detailModal.updatedAt ?? '' })"
             >{{ formatShortDateTime(detailModal.updatedAt) }}</span>
             <span class="task-status">{{ statusLabel(detailModal.status) }}</span>
-            <button class="ai-close tm-close" title="关闭 (Esc)" @click="closeTaskModal">✕</button>
+            <button class="ai-close tm-close" :title="t('misc.console.closeTip')" @click="closeTaskModal">✕</button>
           </div>
           <div class="tm-body">
             <p v-if="whatOf(detailModal.id)" class="tm-line">
-              <span class="sub-tag">干啥</span>{{ whatOf(detailModal.id) }}
+              <span class="sub-tag">{{ t('misc.console.tagWhat') }}</span>{{ whatOf(detailModal.id) }}
             </p>
             <p v-if="gainOf(detailModal.id)" class="tm-line">
-              <span class="sub-tag sub-gain">有啥用</span>{{ gainOf(detailModal.id) }}
+              <span class="sub-tag sub-gain">{{ t('misc.console.tagGain') }}</span>{{ gainOf(detailModal.id) }}
             </p>
             <p v-if="modalNext" class="tm-line">
-              <span class="sub-tag">下一步</span>{{ modalNext }}
+              <span class="sub-tag">{{ t('misc.console.tagNext') }}</span>{{ modalNext }}
             </p>
-            <p v-if="modalBody.prompt" class="tm-line" title="派发要求">
-              <span class="sub-tag">要求</span>{{ modalBody.prompt }}
+            <p v-if="modalBody.prompt" class="tm-line" :title="t('misc.console.tagPromptTitle')">
+              <span class="sub-tag">{{ t('misc.console.tagPrompt') }}</span>{{ modalBody.prompt }}
             </p>
             <!-- R190 正文 3 层钻取: 概览 → 核心细节 → 完整处理, 每层是下一层的总结.
                  result 过短 (<200 字) 不分层, 直接单层显示原文. -->
             <div v-if="modalResultFull.length >= LAYERS_SKIP_CHARS" class="tm-layers">
               <div class="layer" :class="{ open: layerOpen.brief }">
                 <button class="layer-head" @click="toggleLayer('brief')">
-                  <span class="layer-tag">概览</span>
-                  <span class="layer-hint">几句话讲干了啥</span>
+                  <span class="layer-tag">{{ t('misc.console.layerBrief') }}</span>
+                  <span class="layer-hint">{{ t('misc.console.layerBriefHint') }}</span>
                   <span class="layer-caret">{{ layerOpen.brief ? '▾' : '▸' }}</span>
                 </button>
                 <div v-if="layerOpen.brief" class="layer-body">
@@ -1212,15 +1215,15 @@ async function dispatchControl(): Promise<void> {
                     <p class="layer-brief">{{ layersOf(detailModal.id)?.brief }}</p>
                   </template>
                   <p v-else-if="layersStateOf(detailModal.id) === 'loading'" class="layer-pending">
-                    ✦ 正在生成总结（首次约半分钟，之后秒开）…
+                    {{ t('misc.console.layerPending') }}
                   </p>
                   <p v-else class="layer-brief layer-fallback">{{ modalBody.result }}</p>
                 </div>
               </div>
               <div class="layer" :class="{ open: layerOpen.details }">
                 <button class="layer-head" @click="toggleLayer('details')">
-                  <span class="layer-tag layer-tag-2">核心细节</span>
-                  <span class="layer-hint">处理流程图解</span>
+                  <span class="layer-tag layer-tag-2">{{ t('misc.console.layerDetails') }}</span>
+                  <span class="layer-hint">{{ t('misc.console.layerDetailsHint') }}</span>
                   <span class="layer-caret">{{ layerOpen.details ? '▾' : '▸' }}</span>
                 </button>
                 <!-- damo 1005 R 列拍板: 细节不要一堆文字, 画处理流程图 —— 竖向步骤图,
@@ -1233,15 +1236,15 @@ async function dispatchControl(): Promise<void> {
                     </li>
                   </template>
                   <li v-else-if="layersStateOf(detailModal.id) === 'loading'" class="layer-pending">
-                    ✦ 正在生成总结（首次约半分钟，之后秒开）…
+                    {{ t('misc.console.layerPending') }}
                   </li>
-                  <li v-else class="layer-pending">没有可用的细节总结</li>
+                  <li v-else class="layer-pending">{{ t('misc.console.noDetails') }}</li>
                 </ol>
               </div>
               <div class="layer" :class="{ open: layerOpen.full }">
                 <button class="layer-head" @click="toggleLayer('full')">
-                  <span class="layer-tag layer-tag-3">完整处理</span>
-                  <span class="layer-hint">原始汇报全文</span>
+                  <span class="layer-tag layer-tag-3">{{ t('misc.console.layerFull') }}</span>
+                  <span class="layer-hint">{{ t('misc.console.layerFullHint') }}</span>
                   <span class="layer-caret">{{ layerOpen.full ? '▾' : '▸' }}</span>
                 </button>
                 <pre v-if="layerOpen.full" class="layer-body tm-result tm-result-full">{{ modalResultFull }}</pre>
@@ -1251,7 +1254,7 @@ async function dispatchControl(): Promise<void> {
           </div>
           <div class="tm-foot">
             <button class="btn btn-secondary" @click="router.push(`/tasks/${detailModal.id}`)">
-              打开完整任务页 →
+              {{ t('misc.console.openFullTask') }}
             </button>
             <button
               v-if="detailModal.status === 'reviewing'"
@@ -1259,7 +1262,7 @@ async function dispatchControl(): Promise<void> {
               :disabled="acting.has(detailModal.id)"
               @click="approveFromModal"
             >
-              {{ acting.has(detailModal.id) ? '验收中…' : '✓ 验收' }}
+              {{ acting.has(detailModal.id) ? t('misc.console.approving') : t('misc.console.actApprove') }}
             </button>
           </div>
         </div>

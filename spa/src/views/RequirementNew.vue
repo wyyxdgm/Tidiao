@@ -31,6 +31,7 @@
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { listVersions, type Version } from '@/api/projects';
 import { listProjects, type Project } from '@/api/projects';
 import { getMyProfile } from '@/api/user';
@@ -54,6 +55,10 @@ import FileInput from '@/components/FileInput.vue';
 
 const route = useRoute();
 const router = useRouter();
+
+// i18n (W3c): 用户可见字符串走 t('requirements.*'), 文案源
+//   spa/src/i18n/locales/{zh-CN,en-US}/requirements.json.
+const { t } = useI18n();
 
 /** 入口 URL 上的 ?project_id= + ?version_id= (R107 R 列跟进). */
 const presetProjectId = computed<string>(() => {
@@ -131,14 +136,18 @@ const projectVersions = computed<Version[]>(() =>
 );
 
 const versionOptions = computed<{ value: string; label: string }[]>(() => [
-  { value: '__none__', label: '(不挂版本)' },
+  { value: '__none__', label: t('requirements.new.versionNoneOption') },
   ...projectVersions.value.map((v) => ({
     value: v.id,
     label:
-      v.name + (v.id === selectedProject.value?.current_version_id ? '  · 当前' : ''),
+      v.name +
+      (v.id === selectedProject.value?.current_version_id
+        ? t('requirements.new.versionCurrentSuffix')
+        : ''),
   })),
 ]);
 
+/** 优先级选项 — '--' 占位与 P1-P5 协议标识非用户文案, 不走 i18n. */
 const priorityOptions: { value: string; label: string }[] = [
   { value: '', label: '--' },
   { value: '1', label: 'P1' },
@@ -169,11 +178,11 @@ async function loadAll(): Promise<void> {
     if (me?.id) currentUserId.value = me.id;
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      loadError.value = e.message || `加载失败 (HTTP ${e.status})`;
+      loadError.value = e.message || t('requirements.new.errHttp', { status: e.status });
     } else if (e instanceof Error) {
-      loadError.value = `网络异常: ${e.message}`;
+      loadError.value = t('requirements.new.errNetwork', { msg: e.message });
     } else {
-      loadError.value = '加载失败';
+      loadError.value = t('requirements.new.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -268,8 +277,8 @@ const toast = useToast();
 async function onSubmit(): Promise<void> {
   error.value = null;
   if (!projectId.value || !title.value.trim()) {
-    error.value = '项目和标题必填';
-    toast.error('项目和标题必填');
+    error.value = t('requirements.new.errProjectTitleRequired');
+    toast.error(error.value);
     return;
   }
   submitting.value = true;
@@ -306,18 +315,18 @@ async function onSubmit(): Promise<void> {
     } else if (versionId.value) {
       detailQs.set('version_id', versionId.value);
     }
-    toast.success(`已创建: ${created.title}`);
+    toast.success(t('requirements.new.createdToast', { title: created.title }));
     await router.push(`/requirements?${detailQs.toString()}`);
   } catch (e: unknown) {
     if (isHttpError(e)) {
       const he = e as HttpError;
-      error.value = he.message || `创建失败 (HTTP ${he.status})`;
+      error.value = he.message || t('requirements.new.createErrHttp', { status: he.status });
       toast.error(error.value);
     } else if (e instanceof Error) {
-      error.value = `创建失败: ${e.message}`;
+      error.value = t('requirements.new.createErrNetwork', { msg: e.message });
       toast.error(error.value);
     } else {
-      error.value = '创建失败';
+      error.value = t('requirements.new.createErrGeneric');
       toast.error(error.value);
     }
     submitting.value = false;
@@ -332,17 +341,17 @@ function onCancel(): void {
 <template>
   <div class="req-new-page">
     <div class="req-new-back">
-      <router-link :to="backHref" class="req-new-back-link">← 需求点列表</router-link>
+      <router-link :to="backHref" class="req-new-back-link">{{ t('requirements.new.backLink') }}</router-link>
     </div>
 
-    <h1 class="req-new-title">新建需求点</h1>
+    <h1 class="req-new-title">{{ t('requirements.new.title') }}</h1>
 
     <Loading v-if="loading" />
 
     <ErrorView
       v-else-if="loadError"
       variant="error"
-      title="加载失败"
+      :title="t('requirements.new.loadFailedTitle')"
       :description="loadError"
       @retry="onLoadRetry"
     />
@@ -351,42 +360,42 @@ function onCancel(): void {
       <div v-if="error" class="req-new-error">{{ error }}</div>
 
       <div class="req-new-field">
-        <label class="req-new-label" for="rn-project">项目 *</label>
+        <label class="req-new-label" for="rn-project">{{ t('requirements.new.labelProject') }}</label>
         <Select
           :model-value="projectId"
           @update:model-value="(v: string | null) => (projectId = v ?? '')"
           :options="projectOptions"
           :disabled="loading"
-          :placeholder="loading ? '加载中…' : '-- 选择项目 --'"
+          :placeholder="loading ? t('requirements.new.loading') : t('requirements.new.placeholderProject')"
           class-name="req-new-select"
         />
         <p
           v-if="!loading && visibleProjects.length === 0"
           class="req-new-hint req-new-hint-error"
         >
-          当前账号名下没有项目，先去
-          <router-link to="/" class="req-new-inline-link">首页</router-link>
-          创建一个。
+          {{ t('requirements.new.noProjectsPrefix') }}
+          <router-link to="/" class="req-new-inline-link">{{ t('requirements.new.homeLink') }}</router-link>
+          {{ t('requirements.new.noProjectsSuffix') }}
         </p>
       </div>
 
       <div class="req-new-field">
-        <label class="req-new-label" for="rn-version">版本 (可选)</label>
+        <label class="req-new-label" for="rn-version">{{ t('requirements.new.labelVersion') }}</label>
         <Select
           :model-value="versionId || null"
           @update:model-value="(v: string | null) => (versionId = v ?? '')"
           :options="versionOptions"
           :disabled="!projectId"
-          :placeholder="projectId ? '-- (自动 = 项目当前版本) --' : '先选项目'"
+          :placeholder="projectId ? t('requirements.new.placeholderVersionAuto') : t('requirements.new.placeholderPickProject')"
           class-name="req-new-select"
         />
         <p class="req-new-hint">
-          默认 = 项目的「当前版本」. 允许跨版本迁移 (v1 → v2, 跟进迭代).
+          {{ t('requirements.new.versionHint') }}
         </p>
       </div>
 
       <div class="req-new-field">
-        <label class="req-new-label" for="rn-title">标题 *</label>
+        <label class="req-new-label" for="rn-title">{{ t('requirements.new.labelTitle') }}</label>
         <Input
           id="rn-title"
           v-model="title"
@@ -396,7 +405,7 @@ function onCancel(): void {
       </div>
 
       <div class="req-new-field">
-        <label class="req-new-label" for="rn-description">描述</label>
+        <label class="req-new-label" for="rn-description">{{ t('requirements.new.labelDescription') }}</label>
         <Textarea
           id="rn-description"
           v-model="description"
@@ -407,7 +416,7 @@ function onCancel(): void {
 
       <div class="req-new-grid">
         <div class="req-new-field">
-          <label class="req-new-label" for="rn-priority">优先级 (1-5)</label>
+          <label class="req-new-label" for="rn-priority">{{ t('requirements.new.labelPriority') }}</label>
           <Select
             :model-value="priority || null"
             @update:model-value="(v: string | null) => (priority = v ?? '')"
@@ -418,7 +427,7 @@ function onCancel(): void {
         </div>
 
         <div class="req-new-field">
-          <label class="req-new-label" for="rn-tags">标签 (逗号分隔)</label>
+          <label class="req-new-label" for="rn-tags">{{ t('requirements.new.labelTags') }}</label>
           <Input
             id="rn-tags"
             v-model="tags"
@@ -428,14 +437,14 @@ function onCancel(): void {
       </div>
 
       <div class="req-new-field">
-        <label class="req-new-label">附件</label>
+        <label class="req-new-label">{{ t('requirements.new.labelAttachments') }}</label>
         <div
           class="req-new-drop"
           @dragover.prevent
           @drop.prevent="onDropFiles($event.dataTransfer?.files ?? null)"
           @click="fileInputRef?.open()"
         >
-          拖拽文件到此处，或点击选择（创建需求点后自动上传，单文件 ≤10MB）
+          {{ t('requirements.new.dropHint') }}
           <FileInput
             ref="fileInputRef"
             multiple
@@ -469,10 +478,10 @@ function onCancel(): void {
           :loading="submitting"
           :disabled="submitting"
         >
-          {{ submitting ? '创建中…' : '创建' }}
+          {{ submitting ? t('requirements.new.creating') : t('requirements.new.createBtn') }}
         </Button>
         <Button type="button" variant="secondary" :disabled="submitting" @click="onCancel">
-          取消
+          {{ t('requirements.new.cancelBtn') }}
         </Button>
       </div>
     </form>

@@ -31,6 +31,7 @@
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   listRequirements,
   createRequirement,
@@ -68,40 +69,47 @@ import AggregatesChips from '@/components/RequirementAggregates.vue';
 
 /* ------------------------------------------------------------------ */
 /*  常量 — 1:1 对齐 master RequirementsListView                       */
+/*  i18n (W3c A2): 含中文的 label 常量改 computed 走 t() (非响应式常量   */
+/*  语言切换不会更新); 状态枚举值 / actor 类型 / field 名 = 协议常量保留. */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABEL: Record<RequirementStatus, string> = {
-  pending: '未开始',
-  done: '已完成',
-  awaiting_reply: '等回复',
-  has_suggestion: '有建议',
-  blocked: '需拍板',
-  closed: '已关闭',
-};
+const { t, locale } = useI18n();
 
-const STATUS_FILTER_OPTIONS: { value: '' | RequirementStatus; label: string }[] = [
-  { value: '', label: '全部' },
-  ...REQUIREMENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] })),
-];
+/** 状态 label — 复用公共 key requirements.status.*. */
+const STATUS_LABEL = computed<Record<RequirementStatus, string>>(() => ({
+  pending: t('requirements.status.pending'),
+  done: t('requirements.status.done'),
+  awaiting_reply: t('requirements.status.awaiting_reply'),
+  has_suggestion: t('requirements.status.has_suggestion'),
+  blocked: t('requirements.status.blocked'),
+  closed: t('requirements.status.closed'),
+}));
+
+const STATUS_FILTER_OPTIONS = computed<{ value: '' | RequirementStatus; label: string }[]>(() => [
+  { value: '', label: t('requirements.version.reqs.filterAll') },
+  ...REQUIREMENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL.value[s] })),
+]);
 
 const ACTOR_COLOR: Record<ActorType, { bg: string; color: string; border: string }> = {
   agent: { bg: 'var(--tw-purple-50)', color: 'var(--tw-purple-700)', border: 'var(--tw-purple-200)' },
   user: { bg: 'var(--tw-blue-50)', color: 'var(--tw-blue-700)', border: 'var(--tw-blue-200)' },
   system: { bg: 'var(--tw-gray-50)', color: 'var(--tw-gray-600)', border: 'var(--tw-gray-200)' },
 };
-const ACTOR_LABEL: Record<ActorType, string> = {
-  agent: 'AI',
-  user: '人',
-  system: '系统',
-};
-const FIELD_LABEL: Record<string, string> = {
-  title: '标题',
-  description: '描述',
-  status: '状态',
-  priority: '优先级',
-  tags: '标签',
-  version_id: '版本',
-};
+/** actor label — 复用公共 key requirements.actor.*. */
+const ACTOR_LABEL = computed<Record<ActorType, string>>(() => ({
+  agent: t('requirements.actor.agent'),
+  user: t('requirements.actor.user'),
+  system: t('requirements.actor.system'),
+}));
+/** field label — 复用公共 key requirements.field.*. */
+const FIELD_LABEL = computed<Record<string, string>>(() => ({
+  title: t('requirements.field.title'),
+  description: t('requirements.field.description'),
+  status: t('requirements.field.status'),
+  priority: t('requirements.field.priority'),
+  tags: t('requirements.field.tags'),
+  version_id: t('requirements.field.version_id'),
+}));
 
 /* ------------------------------------------------------------------ */
 /*  类型                                                                */
@@ -178,7 +186,9 @@ const versionMeta = ref<VersionMeta | null>(null);
 
 /** 当前视图文案 — 与 master "· 当前视图 = xxx" 1:1. */
 const viewModeLabel = computed<string>(() =>
-  isCleared.value ? '项目全量' : '当前版本',
+  isCleared.value
+    ? t('requirements.version.reqs.viewAllProjects')
+    : t('requirements.version.reqs.viewCurrentVersion'),
 );
 
 /** 项目链接 — 跳 SPA 项目根. R24 拍板 :projectId 路由是 redirect-only, 跳到 SPA
@@ -254,14 +264,14 @@ const projectOptions = computed<{ value: string; label: string }[]>(() =>
   projects.projects.map((p) => ({ value: p.id, label: p.name })),
 );
 
-const priorityOptions: { value: string; label: string }[] = [
-  { value: '', label: '无' },
+const priorityOptions = computed<{ value: string; label: string }[]>(() => [
+  { value: '', label: t('requirements.version.reqs.priorityNone') },
   { value: '1', label: 'P1' },
   { value: '2', label: 'P2' },
   { value: '3', label: 'P3' },
   { value: '4', label: 'P4' },
   { value: '5', label: 'P5' },
-];
+]);
 
 /* ------------------------------------------------------------------ */
 /*  数据加载                                                            */
@@ -285,11 +295,11 @@ async function refresh(): Promise<void> {
     void refreshAggregatesFor(out.items);
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('requirements.version.reqs.errHttp', { n: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('requirements.version.reqs.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('requirements.version.reqs.errGeneric');
     }
   } finally {
     loading.value = false;
@@ -435,7 +445,7 @@ function parsePriorityInput(raw: string): number | null {
 async function submitModal(): Promise<void> {
   const title = modal.form.title.trim();
   if (!title) {
-    toast.error('请填写标题');
+    toast.error(t('requirements.version.reqs.errTitleRequired'));
     return;
   }
   const priorityNum = parsePriorityInput(modal.form.priority);
@@ -443,7 +453,7 @@ async function submitModal(): Promise<void> {
     modal.form.priority.trim() &&
     (priorityNum === null || priorityNum < 1 || priorityNum > 5)
   ) {
-    toast.error('优先级必须是 1-5 的整数');
+    toast.error(t('requirements.version.reqs.errPriorityRange'));
     return;
   }
 
@@ -463,7 +473,7 @@ async function submitModal(): Promise<void> {
       if (idx >= 0) items.value[idx] = updated;
       delete latestRevisionById[updated.id];
       void refreshRevisionsFor([updated]);
-      toast.success('已保存');
+      toast.success(t('requirements.version.reqs.saved'));
       closeModal();
     } else {
       const tagsArray = parseTagsInput(modal.form.tags);
@@ -482,16 +492,16 @@ async function submitModal(): Promise<void> {
         items.value = [created, ...items.value];
         total.value += 1;
       }
-      toast.success('已创建');
+      toast.success(t('requirements.version.reqs.created'));
       closeModal();
     }
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `保存失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('requirements.version.reqs.saveErrHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('requirements.version.reqs.errNetwork', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('requirements.version.reqs.saveFailed'));
     }
   } finally {
     modal.submitting = false;
@@ -513,14 +523,14 @@ async function confirmDelete(): Promise<void> {
   try {
     await deleteRequirement(target.id);
     await refresh();
-    toast.success('已关闭');
+    toast.success(t('requirements.version.reqs.closedToast'));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('requirements.version.reqs.deleteErrHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('requirements.version.reqs.errNetwork', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('requirements.version.reqs.deleteFailed'));
     }
   }
 }
@@ -533,14 +543,15 @@ function fmt(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
     // R205: parseDbTime 当 UTC 处理, 旧 new Date(iso) 在 CST 偏早 8h.
-    return parseDbTime(iso)?.toLocaleString('zh-CN', { hour12: false }) ?? iso;
+    // i18n: 本地化格式随当前 locale (zh-CN / en-US).
+    return parseDbTime(iso)?.toLocaleString(locale.value, { hour12: false }) ?? iso;
   } catch {
     return iso;
   }
 }
 
 function statusLabel(s: RequirementStatus): string {
-  return STATUS_LABEL[s];
+  return STATUS_LABEL.value[s];
 }
 
 function projectDisplay(r: Requirement): string {
@@ -548,10 +559,10 @@ function projectDisplay(r: Requirement): string {
 }
 
 function versionDisplay(r: Requirement): { text: string; cls: string } {
-  if (!r.version_id) return { text: '未挂版本', cls: 'badge-version-none' };
+  if (!r.version_id) return { text: t('requirements.version.reqs.noVersion'), cls: 'badge-version-none' };
   const name = versionNameById.value[r.version_id];
   if (name) return { text: `v·${name}`, cls: 'badge-version-set' };
-  return { text: '已挂版本', cls: 'badge-version-set' };
+  return { text: t('requirements.version.reqs.hasVersion'), cls: 'badge-version-set' };
 }
 
 function rowLatestRevision(r: Requirement): RequirementRevision | null {
@@ -559,7 +570,16 @@ function rowLatestRevision(r: Requirement): RequirementRevision | null {
 }
 
 function revisionChipText(rev: RequirementRevision): string {
-  return `${ACTOR_LABEL[rev.actor_type]}·${FIELD_LABEL[rev.field] ?? rev.field}`;
+  return `${ACTOR_LABEL.value[rev.actor_type]}·${FIELD_LABEL.value[rev.field] ?? rev.field}`;
+}
+
+/** 时间胶囊 hover title (i18n 插值, 替代模板内模板字符串拼中文). */
+function revisionChipTitle(rev: RequirementRevision): string {
+  return t('requirements.version.reqs.revChipTitle', {
+    actor: ACTOR_LABEL.value[rev.actor_type],
+    field: FIELD_LABEL.value[rev.field] ?? rev.field,
+    time: fmt(rev.created_at),
+  });
 }
 
 function revisionChipStyle(rev: RequirementRevision): Record<string, string> {
@@ -602,38 +622,38 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
         </a>
         <span class="sep">/</span>
         <span class="version-name" :title="versionName">{{ versionName }}</span>
-        <span class="view-mode">· 当前视图 = {{ viewModeLabel }}</span>
+        <span class="view-mode">· {{ t('requirements.version.reqs.currentView', { mode: viewModeLabel }) }}</span>
       </div>
       <div class="actions">
         <a
           v-if="!isCleared"
           :href="clearToggleHref"
           class="action-btn action-btn-action"
-          title="清空 version 过滤, 看该 project 全量需求"
+          :title="t('requirements.version.reqs.clearVersionTitle')"
         >
-          清空版本
+          {{ t('requirements.version.reqs.clearVersion') }}
         </a>
         <a
           v-else
           :href="clearToggleHref"
           class="action-btn action-btn-primary"
-          title="回到默认: 只看当前版本"
+          :title="t('requirements.version.reqs.restoreVersionTitle')"
         >
-          恢复版本
+          {{ t('requirements.version.reqs.restoreVersion') }}
         </a>
         <a
           :href="resetHref"
           class="action-btn action-btn-action"
-          title="重置 = 清掉所有 query, 回到默认带当前版本的状态"
+          :title="t('requirements.version.reqs.resetTitle')"
         >
-          重置
+          {{ t('requirements.version.reqs.reset') }}
         </a>
         <a
           :href="totalEntryHref"
           class="action-btn action-btn-action"
-          title="总入口: 全局需求列表, 不带项目绑定"
+          :title="t('requirements.version.reqs.totalEntryTitle')"
         >
-          总入口
+          {{ t('requirements.version.reqs.totalEntry') }}
         </a>
       </div>
     </div>
@@ -641,16 +661,16 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">需求点</h1>
+        <h1 class="page-title">{{ t('requirements.version.reqs.title') }}</h1>
         <p class="page-subtitle">
           {{ isCleared
-            ? `${projectName} 项目全量需求 (跨所有版本聚合).`
-            : `${projectName} / ${versionName} 版本下的需求点.` }}
+            ? t('requirements.version.reqs.subtitleCleared', { name: projectName })
+            : t('requirements.version.reqs.subtitleVersion', { p: projectName, v: versionName }) }}
         </p>
       </div>
       <div class="header-actions">
         <Button variant="primary" size="sm" @click="openCreate">
-          + 新建需求
+          + {{ t('requirements.version.reqs.newBtn') }}
         </Button>
       </div>
     </header>
@@ -672,12 +692,12 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <div class="page-body">
       <div v-if="loading && items.length === 0" class="loading-block">
         <Loading size="lg" />
-        <p class="loading-text">加载中…</p>
+        <p class="loading-text">{{ t('requirements.version.reqs.loading') }}</p>
       </div>
 
       <ErrorView
         v-else-if="error"
-        title="加载失败"
+        :title="t('requirements.version.reqs.loadFailedTitle')"
         :description="error"
         variant="error"
         :retrying="retrying"
@@ -686,10 +706,12 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
 
       <Empty
         v-else-if="items.length === 0"
-        :title="statusFilter ? '该状态下暂无需求点' : (isCleared ? '该项目暂无需求点' : '当前版本暂无需求点')"
+        :title="statusFilter
+          ? t('requirements.version.reqs.emptyStatus')
+          : (isCleared ? t('requirements.version.reqs.emptyProject') : t('requirements.version.reqs.emptyVersion'))"
         :description="statusFilter
-          ? '切换到「全部」或新建需求试试'
-          : '点击右上角「+ 新建需求」添加'"
+          ? t('requirements.version.reqs.emptyStatusDesc')
+          : t('requirements.version.reqs.emptyDesc')"
         illustration="inbox"
       />
 
@@ -729,7 +751,7 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
                   v-if="rowLatestRevision(r)"
                   class="rev-chip"
                   :style="revisionChipStyle(rowLatestRevision(r)!)"
-                  :title="`${ACTOR_LABEL[rowLatestRevision(r)!.actor_type]}改 ${FIELD_LABEL[rowLatestRevision(r)!.field] ?? rowLatestRevision(r)!.field} · ${fmt(rowLatestRevision(r)!.created_at)}`"
+                  :title="revisionChipTitle(rowLatestRevision(r)!)"
                 >
                   <span>{{ ACTOR_LABEL[rowLatestRevision(r)!.actor_type] }}</span>
                   <span class="rev-dot">·</span>
@@ -748,8 +770,8 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
             <button
               type="button"
               class="row-delete"
-              title="删除 (软删 → closed)"
-              aria-label="删除需求"
+              :title="t('requirements.version.reqs.deleteTitle')"
+              :aria-label="t('requirements.version.reqs.deleteAria')"
               @click.stop="askDelete(r)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
@@ -771,57 +793,57 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Create / Edit Modal -->
     <Modal
       :model-value="modal.open"
-      :title="modal.isEditing ? '编辑需求点' : '新建需求点'"
+      :title="modal.isEditing ? t('requirements.version.reqs.editTitle') : t('requirements.version.reqs.createTitle')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeModal(); }"
     >
       <div class="form">
         <div v-if="!modal.isEditing" class="form-row">
-          <label class="form-label">归属</label>
+          <label class="form-label">{{ t('requirements.version.reqs.fieldOwnership') }}</label>
           <div class="locked-context">
             <span class="badge badge-project">{{ projectName }}</span>
             <span class="badge badge-version-set">v·{{ versionName }}</span>
           </div>
           <p class="form-hint">
-            该需求点将挂在「{{ projectName }} / {{ versionName }}」下 (路径上下文).
+            {{ t('requirements.version.reqs.ownershipHint', { p: projectName, v: versionName }) }}
           </p>
         </div>
 
         <div class="form-row">
           <label class="form-label">
-            标题 <span class="required">*</span>
+            {{ t('requirements.field.title') }} <span class="required">*</span>
           </label>
           <Input
             v-model="modal.form.title"
-            placeholder="例如: 接入 LLM 配置下拉"
+            :placeholder="t('requirements.version.reqs.titlePlaceholder')"
             :disabled="modal.submitting"
           />
         </div>
 
         <div class="form-row">
-          <label class="form-label">描述</label>
+          <label class="form-label">{{ t('requirements.field.description') }}</label>
           <Textarea
             v-model="modal.form.description"
             :rows="3"
-            placeholder="需求说明 (可选)"
+            :placeholder="t('requirements.version.reqs.descPlaceholder')"
             :disabled="modal.submitting"
           />
         </div>
 
         <div class="form-grid">
           <div class="form-row">
-            <label class="form-label">状态</label>
+            <label class="form-label">{{ t('requirements.field.status') }}</label>
             <Select
               v-model="modal.form.status"
               :options="REQUIREMENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))"
               :disabled="modal.submitting"
             />
             <p class="form-hint">
-              改为「已完成」需要至少一个 dev/test/deploy 任务 completed (后端校验).
+              {{ t('requirements.version.reqs.statusHint') }}
             </p>
           </div>
           <div class="form-row">
-            <label class="form-label">优先级</label>
+            <label class="form-label">{{ t('requirements.field.priority') }}</label>
             <Select
               v-model="modal.form.priority"
               :options="priorityOptions"
@@ -831,10 +853,10 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
         </div>
 
         <div class="form-row">
-          <label class="form-label">标签</label>
+          <label class="form-label">{{ t('requirements.field.tags') }}</label>
           <Input
             v-model="modal.form.tags"
-            placeholder="review, urgent (逗号分隔)"
+            :placeholder="t('requirements.version.reqs.tagsPlaceholder')"
             :disabled="modal.submitting"
           />
         </div>
@@ -842,10 +864,10 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
 
       <template #footer>
         <Button variant="secondary" :disabled="modal.submitting" @click="closeModal">
-          取消
+          {{ t('requirements.version.reqs.cancel') }}
         </Button>
         <Button :loading="modal.submitting" :disabled="modal.submitting" @click="submitModal">
-          {{ modal.isEditing ? '保存修改' : '创建需求' }}
+          {{ modal.isEditing ? t('requirements.version.reqs.saveChanges') : t('requirements.version.reqs.createBtn') }}
         </Button>
       </template>
     </Modal>
@@ -853,12 +875,12 @@ function statusChipStyle(s: RequirementStatus): Record<string, string> {
     <!-- Delete confirm -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="关闭需求点?"
+      :title="t('requirements.version.reqs.confirmTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.title}」将被软删除 (status → 已关闭), 可在「全部 / 已关闭」状态下恢复编辑.`
+        ? t('requirements.version.reqs.confirmMessage', { title: pendingDelete.title })
         : ''"
-      confirm-text="关闭"
-      cancel-text="取消"
+      :confirm-text="t('requirements.version.reqs.confirmClose')"
+      :cancel-text="t('requirements.version.reqs.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"

@@ -20,6 +20,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import * as pc from 'playcanvas';
 import {
   listIdeas,
@@ -56,6 +57,7 @@ import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
 const toast = useToast();
+const { t } = useI18n();
 
 // ---- 数据 ----
 const ideas = ref<IdeaWithCounts[]>([]);
@@ -123,7 +125,7 @@ function onDragMove(e: MouseEvent) {
 function onDragUp() {
   if (!draggingList.value) return;
   draggingList.value = null;
-  saveBlocks().catch(() => toast.error('布局保存失败'));
+  saveBlocks().catch(() => toast.error(t('misc.ideas.layoutSaveFailed')));
 }
 function toggleFreeMode() {
   freeMode.value = !freeMode.value;
@@ -154,9 +156,18 @@ const createForm = reactive({ title: '', hypothesis: '', success_criteria: '', d
 const newNodeTitle = ref('');
 const newSignal = reactive({ kind: 'inquiry', value: '' as string | number, note: '', ref: '' });
 const signalKinds = ['inquiry', 'signup', 'payment', 'review', 'usage', 'other'];
-const SIGNAL_LABELS: Record<string, string> = {
-  inquiry: '咨询', signup: '注册', payment: '收入', review: '平台审核', usage: '使用', other: '其他',
-};
+/** 信号类型文案 — i18n 走 t() (函数; 模块级常量非响应式, 语言切换不会更新). */
+function signalLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    inquiry: t('misc.ideas.signalInquiry'),
+    signup: t('misc.ideas.signalSignup'),
+    payment: t('misc.ideas.signalPayment'),
+    review: t('misc.ideas.signalReview'),
+    usage: t('misc.ideas.signalUsage'),
+    other: t('misc.ideas.signalOther'),
+  };
+  return labels[kind] ?? kind;
+}
 
 async function refresh() {
   loading.value = true;
@@ -520,11 +531,11 @@ async function putIdeaIntoList(listId: string) {
   if (!selectedId.value) return;
   try {
     await addPinListItem(listId, { ref_type: 'idea', ref_id: selectedId.value, added_by: 'damo' });
-    toast.success('已放入列表');
+    toast.success(t('misc.ideas.putInList'));
     const l = await listPinLists();
     lists.value = l.lists;
   } catch (err: any) {
-    toast.error(err?.message ?? '放入失败（可能已在列表里）');
+    toast.error(err?.message ?? t('misc.ideas.putFailed'));
   }
 }
 async function removeItem(list: PinListWithItems, itemId: string) {
@@ -552,15 +563,19 @@ async function setStatus(idea: Idea, status: IdeaStatus) {
   if (src) src.status = u.status;
 }
 const conclusionText = ref('');
-const CONCLUDE_HINT: Record<string, string> = {
-  rejected: '证伪结论（🔴 必须挂一手证据，如「2 周零询问 task 3de8」）',
-  decided: '定案结论（含证据指针）',
-  shelved: '搁置原因',
-  landed: '落地说明（升格到哪个 project/需求）',
-};
+/** 结论 placeholder — i18n 走 t() (函数; 模块级常量非响应式). */
+function concludeHintFor(status: string): string {
+  const hints: Record<string, string> = {
+    rejected: t('misc.ideas.hintRejected'),
+    decided: t('misc.ideas.hintDecided'),
+    shelved: t('misc.ideas.hintShelved'),
+    landed: t('misc.ideas.hintLanded'),
+  };
+  return hints[status] ?? t('misc.ideas.hintDefault');
+}
 async function conclude(idea: Idea, status: 'decided' | 'rejected' | 'shelved' | 'landed') {
   const c = conclusionText.value.trim();
-  if (!c) { toast.error('先写结论（含证据指针）'); return; }
+  if (!c) { toast.error(t('misc.ideas.errConcludeEmpty')); return; }
   await updateIdea(idea.id, { conclusion: c, status });
   conclusionText.value = '';
   await refreshDetail(); await refresh();
@@ -586,7 +601,8 @@ async function dispatchFromNode(node: IdeaNode) {
   const title = dispatchTitle.value.trim();
   dispatchNodeId.value = null;
   if (!title || !detail.value) return;
-  const t = await createTask({
+  // 改名 task: 原 const t 会遮蔽 i18n 的 t(), 调 t('...') 会炸 (i18n W3c B2 迁移时修)
+  const task = await createTask({
     title,
     prompt: `【构思节点任务】构思「${detail.value.idea.title}」/ 节点「${node.title}」。\n${node.detail ?? ''}\n\n完成后把结果与该节点的验证判据关联起来汇报。`,
     project_id: detail.value.idea.project_id ?? '',
@@ -595,10 +611,10 @@ async function dispatchFromNode(node: IdeaNode) {
     work_class: 'plan',
     autoApprove: true,
   });
-  await startTask(t.id);
-  toast.success('任务已派发并启动');
+  await startTask(task.id);
+  toast.success(t('misc.ideas.taskDispatched'));
   await refreshDetail(); await refresh();
-  router.push(`/tasks/${t.id}`);
+  router.push(`/tasks/${task.id}`);
 }
 // ---- 节点 DAG 画布 (docs/plans/idea-node-dag.md ①→Dify 式重构 1014) ----
 // 画布接管中间主区 (3D v-show 隐藏保实例); Dify 式: 节点卡(状态色条+摘要+桩) /
@@ -827,7 +843,7 @@ async function onStageUp() {
       try {
         await updateIdeaNode(id, { pos_x: Math.round(box.x), pos_y: Math.round(box.y) });
         await refreshDetail();
-      } catch (err: any) { toast.error(err?.message ?? '位置保存失败'); }
+      } catch (err: any) { toast.error(err?.message ?? t('misc.ideas.posSaveFailed')); }
     } else if (!moved) {
       const n = detail.value?.nodes.find((x) => x.id === id);
       if (n) selectNode(n);
@@ -838,13 +854,13 @@ async function onStageUp() {
 async function addDep(fromId: string, toId: string) {
   const n = detail.value?.nodes.find((x) => x.id === toId);
   if (!n) return;
-  if (n.depends_on.includes(fromId)) { toast.error('依赖已存在'); return; }
+  if (n.depends_on.includes(fromId)) { toast.error(t('misc.ideas.depExists')); return; }
   try {
     await updateIdeaNode(toId, { deps: [...n.depends_on, fromId] });
-    toast.success('依赖已建立');
+    toast.success(t('misc.ideas.depAdded'));
     await refreshDetail(); await refresh();
   } catch (err: any) {
-    toast.error(err?.message?.includes('cycle') ? '建不了：会成环' : (err?.message ?? '依赖建立失败'));
+    toast.error(err?.message?.includes('cycle') ? t('misc.ideas.depCycle') : (err?.message ?? t('misc.ideas.depFailed')));
   }
 }
 async function removeDep(toId: string, depId: string) {
@@ -942,7 +958,7 @@ watch(viewMode, (m) => {
 });
 watch(ideas, () => { initLayout(); if (viewMode.value === 'timeline') applyTimelineLayout(); }, { deep: false });
 
-const concludeHint = computed(() => CONCLUDE_HINT[detail.value?.idea.status ?? ''] ?? '结论（含证据指针）');
+const concludeHint = computed(() => concludeHintFor(detail.value?.idea.status ?? ''));
 function openExport(id: string) {
   window.open(`/api/ideas/${id}/export`, '_blank');
 }
@@ -953,19 +969,19 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
   <div class="ideas-page">
     <div class="ideas-toolbar">
       <div class="mode-switch">
-        <button :class="{ on: viewMode === 'force' }" @click="viewMode = 'force'" title="按关联度排布">🕸 关联度</button>
-        <button :class="{ on: viewMode === 'timeline' }" @click="viewMode = 'timeline'" title="按创建时间排布">📅 时间线</button>
+        <button :class="{ on: viewMode === 'force' }" @click="viewMode = 'force'" :title="t('misc.ideas.modeForceTitle')">🕸 {{ t('misc.ideas.modeForce') }}</button>
+        <button :class="{ on: viewMode === 'timeline' }" @click="viewMode = 'timeline'" :title="t('misc.ideas.modeTimelineTitle')">📅 {{ t('misc.ideas.modeTimeline') }}</button>
       </div>
       <div class="toolbar-right">
-        <button class="primary" @click="showCreate = true">＋ 新构思</button>
+        <button class="primary" @click="showCreate = true">{{ t('misc.ideas.newIdea') }}</button>
       </div>
     </div>
 
     <div class="ideas-body">
       <!-- 左栏: 人工分拣列表 (P1); P3 自由摆模式下收起, 列表浮到画布上 -->
       <aside v-if="!freeMode" class="lists-rail">
-        <div class="rail-head">分拣列表
-          <button class="rail-toggle" title="自由摆: 列表浮到画布上随意拖" @click="toggleFreeMode">⇄ 自由摆</button>
+        <div class="rail-head">{{ t('misc.ideas.listsTitle') }}
+          <button class="rail-toggle" :title="t('misc.ideas.freeModeTitle')" @click="toggleFreeMode">⇄ {{ t('misc.ideas.freeMode') }}</button>
         </div>
         <div class="rail-scroll">
           <div v-for="l in lists" :key="l.id" class="pin-list">
@@ -976,30 +992,30 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
               />
               <span v-else class="pl-title">{{ l.title }}</span>
               <span class="pl-ops">
-                <button title="上移" @click="moveList(l, -1)">↑</button>
-                <button title="下移" @click="moveList(l, 1)">↓</button>
-                <button title="改名" @click="startRenameList(l)">✏</button>
-                <button :title="removingListId === l.id ? '再点一次确认删除' : '删列表'" :class="{ confirm: removingListId === l.id }" @click="confirmRemoveList(l)">🗑</button>
+                <button :title="t('misc.ideas.moveUp')" @click="moveList(l, -1)">↑</button>
+                <button :title="t('misc.ideas.moveDown')" @click="moveList(l, 1)">↓</button>
+                <button :title="t('misc.ideas.rename')" @click="startRenameList(l)">✏</button>
+                <button :title="removingListId === l.id ? t('misc.ideas.confirmDeleteAgain') : t('misc.ideas.deleteList')" :class="{ confirm: removingListId === l.id }" @click="confirmRemoveList(l)">🗑</button>
               </span>
             </div>
             <div v-for="(item, idx) in l.items" :key="item.id" class="pl-item" :class="{ missing: item.missing }">
               <span class="pl-ref" :class="'rt-' + item.ref_type" @click="!item.missing && openRef(item.ref_type, item.ref_id)">{{ item.title }}</span>
               <span class="pl-item-ops">
-                <button title="上移" @click="reorderItem(l, idx, -1)">↑</button>
-                <button title="下移" @click="reorderItem(l, idx, 1)">↓</button>
-                <button title="摘除" @click="removeItem(l, item.id)">✕</button>
+                <button :title="t('misc.ideas.moveUp')" @click="reorderItem(l, idx, -1)">↑</button>
+                <button :title="t('misc.ideas.moveDown')" @click="reorderItem(l, idx, 1)">↓</button>
+                <button :title="t('misc.ideas.removeItem')" @click="removeItem(l, item.id)">✕</button>
               </span>
             </div>
-            <button v-if="selectedId" class="pl-put" @click="putIdeaIntoList(l.id)">＋ 放入当前构思</button>
+            <button v-if="selectedId" class="pl-put" @click="putIdeaIntoList(l.id)">{{ t('misc.ideas.putCurrent') }}</button>
           </div>
         </div>
         <div class="rail-new">
-          <input v-model="newListTitle" placeholder="新列表标题…" @keydown.enter="addList" />
-          <button @click="addList">建</button>
+          <input v-model="newListTitle" :placeholder="t('misc.ideas.phNewList')" @keydown.enter="addList" />
+          <button @click="addList">{{ t('misc.ideas.createListBtn') }}</button>
         </div>
       </aside>
       <div v-else class="lists-mini">
-        <button class="rail-toggle" @click="toggleFreeMode">⇅ 收回列表</button>
+        <button class="rail-toggle" @click="toggleFreeMode">⇅ {{ t('misc.ideas.collapseLists') }}</button>
       </div>
 
       <!-- 中: 3D 画布 (点球下钻后隐藏, workbench 接管; v-show 保 playcanvas 实例) -->
@@ -1033,7 +1049,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             @click="openDetail(idea.id)"
           >
             <span class="sl-title">{{ idea.title }}</span>
-            <span class="sl-meta">{{ IDEA_STATUS_LABELS[idea.status] }} · {{ idea.task_count }}任务</span>
+            <span class="sl-meta">{{ IDEA_STATUS_LABELS[idea.status] }} · {{ t('misc.ideas.sphereTasks', { n: idea.task_count }) }}</span>
           </div>
         </div>
         <!-- P3 自由摆: 列表浮卡 (拖头部移动, 位置持久化 dashboard_blocks) -->
@@ -1050,27 +1066,27 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
           <div class="pl-head card-head" @mousedown="startDragList(l, $event)">
             <span class="pl-title">{{ l.title }}</span>
             <span class="pl-ops">
-              <button title="改名" @click.stop="startRenameList(l)">✏</button>
-              <button title="删列表" @click.stop="confirmRemoveList(l)">🗑</button>
+              <button :title="t('misc.ideas.rename')" @click.stop="startRenameList(l)">✏</button>
+              <button :title="t('misc.ideas.deleteList')" @click.stop="confirmRemoveList(l)">🗑</button>
             </span>
           </div>
           <div v-for="(item, idx) in l.items" :key="item.id" class="pl-item" :class="{ missing: item.missing }">
             <span class="pl-ref" :class="'rt-' + item.ref_type" @click="!item.missing && openRef(item.ref_type, item.ref_id)">{{ item.title }}</span>
             <button class="pl-item-ops" @click="removeItem(l, item.id)">✕</button>
           </div>
-          <button v-if="selectedId" class="pl-put" @click="putIdeaIntoList(l.id)">＋ 放入当前构思</button>
+          <button v-if="selectedId" class="pl-put" @click="putIdeaIntoList(l.id)">{{ t('misc.ideas.putCurrent') }}</button>
         </div>
-        <div v-if="loading" class="canvas-loading">加载中…</div>
+        <div v-if="loading" class="canvas-loading">{{ t('misc.ideas.loading') }}</div>
         <div v-if="!loading && ideas.length === 0" class="canvas-empty">
-          <p>还没有构思。点「＋ 新构思」把想法变成一个球。</p>
-          <p class="hint">球的大小 = 关联任务/节点数 · 颜色 = 状态 · 连线 = 关联</p>
+          <p>{{ t('misc.ideas.emptyTitle') }}</p>
+          <p class="hint">{{ t('misc.ideas.emptyHint') }}</p>
         </div>
       </div>
 
       <!-- 中下钻: 节点 DAG 画布主区 (idea-node-dag ① Dify 式, ≥1/4 页面; 3D 隐藏保实例) -->
       <section v-if="selectedIdea" class="idea-workbench">
         <header class="wb-bar">
-          <button class="wb-back" title="返回构思球" @click="selectedId = null; detail = null">←</button>
+          <button class="wb-back" :title="t('misc.ideas.backTitle')" @click="selectedId = null; detail = null">←</button>
           <h2 class="wb-title">{{ detail?.idea.title }}</h2>
           <select
             v-if="detail" :value="detail.idea.status"
@@ -1079,10 +1095,10 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             <option v-for="(label, key) in IDEA_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
           </select>
           <span v-if="detail?.roi" class="wb-roi">
-            投入 ${{ detail.roi.cost_usd.toFixed(2) }} · {{ detail.roi.task_count }} 任务 · 收入 ¥{{ detail.roi.payment_total }}
-            <b v-if="detail.roi.overdue" class="wb-overdue">过窗未复盘 🔴</b>
+            {{ t('misc.ideas.wbRoi', { cost: detail.roi.cost_usd.toFixed(2), n: detail.roi.task_count, pay: detail.roi.payment_total }) }}
+            <b v-if="detail.roi.overdue" class="wb-overdue">{{ t('misc.ideas.overdue') }}</b>
           </span>
-          <button class="sm wb-export" @click="openExport(detail!.idea.id)">导出 md</button>
+          <button class="sm wb-export" @click="openExport(detail!.idea.id)">{{ t('misc.ideas.exportMd') }}</button>
         </header>
         <div
           ref="dagStageRef" class="dag-stage"
@@ -1114,12 +1130,12 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
                   <div v-if="b.node.status === 'running'" class="dag-cursor"></div>
                   <div class="dag-card-head">
                     <span class="dag-card-title" :title="b.node.title">{{ shortTitle(b.node.title) }}</span>
-                    <span v-if="b.node.task_count" class="dag-badge">{{ b.node.task_count }}任务</span>
+                    <span v-if="b.node.task_count" class="dag-badge">{{ t('misc.ideas.dagBadge', { n: b.node.task_count }) }}</span>
                   </div>
                   <div v-if="b.node.detail" class="dag-card-detail">{{ shortDetail(b.node.detail) }}</div>
                   <div class="dag-card-foot">
                     <span class="dag-chip">{{ NODE_STATUS_LABELS[b.node.status] ?? b.node.status }}</span>
-                    <span class="dag-deps">{{ b.node.depends_on.length ? '上游 ' + b.node.depends_on.length : '起点' }}</span>
+                    <span class="dag-deps">{{ b.node.depends_on.length ? t('misc.ideas.depsUp', { n: b.node.depends_on.length }) : t('misc.ideas.depsStart') }}</span>
                   </div>
                   <span
                     class="dag-handle dag-handle-in" :class="{ hit: b.node.id === dropTargetId }"
@@ -1127,7 +1143,7 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
                   ></span>
                   <span
                     class="dag-handle dag-handle-out"
-                    title="拖到目标节点建立依赖"
+                    :title="t('misc.ideas.handleTitle')"
                     @pointerdown.stop.prevent="onHandleDown(b.node, $event)"
                   ></span>
                 </div>
@@ -1135,20 +1151,20 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             </g>
           </svg>
           <div v-if="!detailLoading && (detail?.nodes.length ?? 0) === 0" class="dag-empty">
-            还没有节点。右侧「加节点」拆第一步。
+            {{ t('misc.ideas.dagEmpty') }}
           </div>
           <div class="dag-add">
-            <input v-model="newNodeTitle" placeholder="新节点标题…" @keydown.enter="addNode" />
-            <button class="sm" @click="addNode">＋ 节点</button>
+            <input v-model="newNodeTitle" :placeholder="t('misc.ideas.phNewNode')" @keydown.enter="addNode" />
+            <button class="sm" @click="addNode">{{ t('misc.ideas.addNode') }}</button>
           </div>
           <div class="dag-toolbar">
-            <button title="缩小" @click="view.k = Math.max(0.25, view.k / 1.2)">−</button>
+            <button :title="t('misc.ideas.zoomOut')" @click="view.k = Math.max(0.25, view.k / 1.2)">−</button>
             <span class="dag-zoom">{{ Math.round(view.k * 100) }}%</span>
-            <button title="放大" @click="view.k = Math.min(2.5, view.k * 1.2)">＋</button>
-            <button title="适配视图（双击画布同效）" @click="fitView">⤢</button>
-            <button title="清手摆位置，回到自动分层" @click="autoLayout">⟲ 自动布局</button>
+            <button :title="t('misc.ideas.zoomIn')" @click="view.k = Math.min(2.5, view.k * 1.2)">＋</button>
+            <button :title="t('misc.ideas.fitView')" @click="fitView">⤢</button>
+            <button :title="t('misc.ideas.autoLayoutTitle')" @click="autoLayout">{{ t('misc.ideas.autoLayout') }}</button>
           </div>
-          <div class="dag-hint">拖空白平移 · 滚轮缩放 · 拖卡片摆位 · 拖右桩→目标卡建依赖</div>
+          <div class="dag-hint">{{ t('misc.ideas.dagHint') }}</div>
         </div>
       </section>
 
@@ -1168,64 +1184,64 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
             <select :value="selectedNode.status" @change="setNodeStatus(selectedNode!, ($event.target as HTMLSelectElement).value)">
               <option v-for="(label, key) in NODE_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
             </select>
-            <div class="np-meta">上游（拖出桩可加）：</div>
+            <div class="np-meta">{{ t('misc.ideas.upstreamLabel') }}</div>
             <div v-if="depTitles(selectedNode).length" class="np-deps">
               <span v-for="d in depTitles(selectedNode)" :key="d.id" class="np-dep">
-                {{ d.title }}<button title="移除依赖" @click="removeDep(selectedNode!.id, d.id)">×</button>
+                {{ d.title }}<button :title="t('misc.ideas.removeDep')" @click="removeDep(selectedNode!.id, d.id)">×</button>
               </span>
             </div>
-            <div v-else class="np-meta">无（起点节点）</div>
+            <div v-else class="np-meta">{{ t('misc.ideas.noDeps') }}</div>
             <div v-if="selectedNode.detail" class="np-detail">{{ selectedNode.detail }}</div>
             <div class="np-ops">
-              <button class="sm" @click="dispatchFromNode(selectedNode!)">{{ dispatchNodeId === selectedNode.id ? '确认派' : '派任务' }}</button>
+              <button class="sm" @click="dispatchFromNode(selectedNode!)">{{ dispatchNodeId === selectedNode.id ? t('misc.ideas.confirmDispatch') : t('misc.ideas.dispatchTask') }}</button>
             </div>
             <input
               v-if="dispatchNodeId === selectedNode.id" v-model="dispatchTitle" class="node-dispatch-title"
-              placeholder="任务标题（回车确认派发）" @keydown.enter="dispatchFromNode(selectedNode!)"
+              :placeholder="t('misc.ideas.phDispatchTitle')" @keydown.enter="dispatchFromNode(selectedNode!)"
             />
           </div>
 
           <div v-if="detail.idea.hypothesis" class="d-block">
-            <div class="d-label">假设</div>
+            <div class="d-label">{{ t('misc.ideas.hypothesisLabel') }}</div>
             <div class="d-text">{{ detail.idea.hypothesis }}</div>
           </div>
           <div v-if="detail.idea.success_criteria" class="d-block">
-            <div class="d-label">验证判据</div>
+            <div class="d-label">{{ t('misc.ideas.criteriaLabel') }}</div>
             <div class="d-text">{{ detail.idea.success_criteria }}</div>
           </div>
 
           <div v-if="detail.roi" class="d-block roi" :class="{ overdue: detail.roi.overdue }">
-            <div class="d-label">收益面板</div>
+            <div class="d-label">{{ t('misc.ideas.roiLabel') }}</div>
             <div class="roi-grid">
-              <span>投入 ${{ detail.roi.cost_usd.toFixed(2) }}</span>
-              <span>{{ detail.roi.task_count }} 任务</span>
-              <span>咨询 {{ detail.roi.inquiry_count }}</span>
-              <span>注册 {{ detail.roi.signup_count }}</span>
-              <span class="roi-pay">收入 ¥{{ detail.roi.payment_total }}</span>
-              <span v-if="detail.roi.window_left_days !== null">窗口剩 {{ detail.roi.window_left_days }} 天{{ detail.roi.overdue ? ' 🔴' : '' }}</span>
+              <span>{{ t('misc.ideas.roiCost', { cost: detail.roi.cost_usd.toFixed(2) }) }}</span>
+              <span>{{ t('misc.ideas.roiTasks', { n: detail.roi.task_count }) }}</span>
+              <span>{{ t('misc.ideas.roiInquiry', { n: detail.roi.inquiry_count }) }}</span>
+              <span>{{ t('misc.ideas.roiSignup', { n: detail.roi.signup_count }) }}</span>
+              <span class="roi-pay">{{ t('misc.ideas.roiPay', { pay: detail.roi.payment_total }) }}</span>
+              <span v-if="detail.roi.window_left_days !== null">{{ t('misc.ideas.roiWindow', { n: detail.roi.window_left_days, flag: detail.roi.overdue ? ' 🔴' : '' }) }}</span>
             </div>
           </div>
 
           <div class="d-block">
-            <div class="d-label">反馈信号（{{ detail.signals.length }}）</div>
+            <div class="d-label">{{ t('misc.ideas.signalsLabel', { n: detail.signals.length }) }}</div>
             <div v-for="s in detail.signals" :key="s.id" class="sig-row">
-              <span class="sig-kind">{{ SIGNAL_LABELS[s.kind] ?? s.kind }}</span>
+              <span class="sig-kind">{{ signalLabel(s.kind) }}</span>
               <span v-if="s.value !== null" class="sig-val">{{ s.value }}</span>
               <span class="sig-note">{{ s.note }}</span>
               <button class="sm" @click="removeSignal(s.id)">✕</button>
             </div>
             <div class="sig-add">
               <select v-model="newSignal.kind">
-                <option v-for="(label, key) in SIGNAL_LABELS" :key="key" :value="key">{{ label }}</option>
+                <option v-for="kind in signalKinds" :key="kind" :value="kind">{{ signalLabel(kind) }}</option>
               </select>
-              <input v-model="newSignal.value" placeholder="数值" class="w60" />
-              <input v-model="newSignal.note" placeholder="说明" />
+              <input v-model="newSignal.value" :placeholder="t('misc.ideas.phValue')" class="w60" />
+              <input v-model="newSignal.note" :placeholder="t('misc.ideas.phNote')" />
               <button @click="addSignal">＋</button>
             </div>
           </div>
 
           <div class="d-block">
-            <div class="d-label">挂的任务（{{ detail.tasks.length }}）</div>
+            <div class="d-label">{{ t('misc.ideas.tasksLabel', { n: detail.tasks.length }) }}</div>
             <div v-for="t in detail.tasks" :key="t.id" class="task-row" @click="router.push(`/tasks/${t.id}`)">
               <span class="t-status">{{ t.status }}</span>
               <span class="t-title">{{ t.title }}</span>
@@ -1234,17 +1250,17 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
           </div>
 
           <div class="d-block">
-            <div class="d-label">结论</div>
+            <div class="d-label">{{ t('misc.ideas.conclusionLabel') }}</div>
             <div v-if="detail.idea.conclusion" class="d-text">{{ detail.idea.conclusion }}</div>
             <textarea v-model="conclusionText" class="conclude-input" rows="2" :placeholder="concludeHint" />
             <div class="conclude-btns">
-              <button @click="conclude(detail.idea, 'decided')">定案</button>
-              <button class="danger" @click="conclude(detail.idea, 'rejected')">证伪</button>
-              <button @click="conclude(detail.idea, 'shelved')">搁置</button>
-              <button @click="conclude(detail.idea, 'landed')">落地</button>
+              <button @click="conclude(detail.idea, 'decided')">{{ t('misc.ideas.concludeDecided') }}</button>
+              <button class="danger" @click="conclude(detail.idea, 'rejected')">{{ t('misc.ideas.concludeRejected') }}</button>
+              <button @click="conclude(detail.idea, 'shelved')">{{ t('misc.ideas.concludeShelved') }}</button>
+              <button @click="conclude(detail.idea, 'landed')">{{ t('misc.ideas.concludeLanded') }}</button>
             </div>
           </div>
-          <button class="sm export-btn" @click="openExport(detail.idea.id)">导出 md 冷启动源</button>
+          <button class="sm export-btn" @click="openExport(detail.idea.id)">{{ t('misc.ideas.exportMdFull') }}</button>
         </template>
       </aside>
     </div>
@@ -1252,14 +1268,14 @@ const selectedIdea = computed(() => ideas.value.find((i) => i.id === selectedId.
     <!-- 新建构思弹窗 -->
     <div v-if="showCreate" class="modal-mask" @click.self="showCreate = false">
       <div class="modal-card">
-        <h3>新构思</h3>
-        <label>标题 *<input v-model="createForm.title" placeholder="一句话说清这个想法" /></label>
-        <label>假设（相信【做什么】会让【谁】产生【什么可观测行为】）<textarea v-model="createForm.hypothesis" rows="2" /></label>
-        <label>验证判据（数字+时限）<input v-model="createForm.success_criteria" placeholder="如：2 周内 ≥3 真实询问" /></label>
-        <label>验证窗口<input v-model="createForm.deadline" type="date" /></label>
+        <h3>{{ t('misc.ideas.createTitle') }}</h3>
+        <label>{{ t('misc.ideas.labelTitle') }}<input v-model="createForm.title" :placeholder="t('misc.ideas.phTitle')" /></label>
+        <label>{{ t('misc.ideas.labelHypothesis') }}<textarea v-model="createForm.hypothesis" rows="2" /></label>
+        <label>{{ t('misc.ideas.labelCriteria') }}<input v-model="createForm.success_criteria" :placeholder="t('misc.ideas.phCriteria')" /></label>
+        <label>{{ t('misc.ideas.labelDeadline') }}<input v-model="createForm.deadline" type="date" /></label>
         <div class="modal-ops">
-          <button @click="showCreate = false">取消</button>
-          <button class="primary" :disabled="!createForm.title.trim()" @click="createNewIdea">创建</button>
+          <button @click="showCreate = false">{{ t('misc.ideas.cancel') }}</button>
+          <button class="primary" :disabled="!createForm.title.trim()" @click="createNewIdea">{{ t('misc.ideas.createBtn') }}</button>
         </div>
       </div>
     </div>

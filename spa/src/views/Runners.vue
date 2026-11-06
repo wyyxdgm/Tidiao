@@ -25,6 +25,7 @@
      走 toast.error. */
 import { computed, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { useI18n } from 'vue-i18n';
 import {
   listRunners,
   createRunner,
@@ -52,6 +53,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 
 const auth = useAuthStore();
 const toast = useToast();
+const { t } = useI18n();
 
 const isAdmin = computed<boolean>(() => auth.user?.role === 'admin');
 
@@ -95,11 +97,15 @@ const STATUS_COLORS: Record<Runner['status'], string> = {
   dead: 'chip-dead',
 };
 
-const STATUS_LABELS: Record<Runner['status'], string> = {
-  online: '在线',
-  offline: '离线',
-  dead: '失联',
-};
+/** 状态文案 — i18n 走 t() (函数, 语言切换即更新; 模块级常量非响应式). */
+function statusLabel(status: Runner['status']): string {
+  const labels: Record<Runner['status'], string> = {
+    online: t('misc.runners.statusOnline'),
+    offline: t('misc.runners.statusOffline'),
+    dead: t('misc.runners.statusDead'),
+  };
+  return labels[status];
+}
 
 /* ------------------------------------------------------------------ */
 /*  数据加载                                                            */
@@ -117,14 +123,14 @@ async function refresh(): Promise<void> {
       if (e.status === 401) {
         // admin gating: 后端拒绝非 admin. UI 层友好提示而非通用 "加载失败".
         adminOnly.value = true;
-        error.value = e.message || '需要 admin 权限';
+        error.value = e.message || t('misc.runners.needAdmin');
       } else {
-        error.value = e.message || `加载失败 (HTTP ${e.status})`;
+        error.value = e.message || t('misc.runners.loadFailedHttp', { n: e.status });
       }
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('misc.runners.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.runners.loadFailed');
     }
     runners.value = [];
   } finally {
@@ -158,15 +164,15 @@ async function handleRegister(): Promise<void> {
   const host = formHost.value.trim();
   const portNum = Number(formPort.value);
   if (!name) {
-    toast.error('name 必填');
+    toast.error(t('misc.runners.errNameRequired'));
     return;
   }
   if (!host) {
-    toast.error('host 必填');
+    toast.error(t('misc.runners.errHostRequired'));
     return;
   }
   if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
-    toast.error('port 必须是 1-65535 整数');
+    toast.error(t('misc.runners.errPortRange'));
     return;
   }
   creating.value = true;
@@ -188,16 +194,16 @@ async function handleRegister(): Promise<void> {
     if (isHttpError(e)) {
       if (e.status === 409) {
         // 后端 code=DUPLICATE_HOST_PORT → 直接给后端 message ("已注册同 host:port").
-        toast.error(e.message || `已注册同 host:port (${host}:${portNum})`);
+        toast.error(e.message || t('misc.runners.errDupHostPort', { host, port: portNum }));
       } else if (e.status === 401) {
-        toast.error('需要 admin 权限');
+        toast.error(t('misc.runners.needAdmin'));
       } else {
-        toast.error(e.message || `注册失败 (HTTP ${e.status})`);
+        toast.error(e.message || t('misc.runners.registerFailedHttp', { n: e.status }));
       }
     } else if (e instanceof Error) {
-      toast.error(`注册失败: ${e.message}`);
+      toast.error(t('misc.runners.registerFailedMsg', { msg: e.message }));
     } else {
-      toast.error('注册失败');
+      toast.error(t('misc.runners.registerFailed'));
     }
   } finally {
     creating.value = false;
@@ -221,9 +227,9 @@ async function copyToken(): Promise<void> {
   try {
     await navigator.clipboard.writeText(tokenValue.value);
     tokenCopied.value = true;
-    toast.success('Token 已复制到剪贴板');
+    toast.success(t('misc.runners.tokenCopied'));
   } catch {
-    toast.error('复制失败，请手动选中复制');
+    toast.error(t('misc.runners.copyFailed'));
   }
 }
 
@@ -242,14 +248,14 @@ async function confirmDelete(): Promise<void> {
   try {
     await deleteRunner(target.id);
     runners.value = runners.value.filter((r) => r.id !== target.id);
-    toast.success(`已删除 runner「${target.name}」`);
+    toast.success(t('misc.runners.deleted', { name: target.name }));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.runners.deleteFailedHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`删除失败: ${e.message}`);
+      toast.error(t('misc.runners.deleteFailedMsg', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('misc.runners.deleteFailed'));
     }
   }
 }
@@ -267,18 +273,18 @@ async function handleHealthCheck(r: Runner): Promise<void> {
       try {
         return JSON.stringify(JSON.parse(resp.health), null, 2);
       } catch {
-        return resp.health || '(空)';
+        return resp.health || t('misc.runners.emptyHealth');
       }
     })();
-    toast.info(`「${r.name}」健康检查\n${formatted}`);
+    toast.info(t('misc.runners.healthOk', { name: r.name, health: formatted }));
     await refresh();
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `健康检查失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.runners.healthFailedHttp', { n: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`健康检查失败: ${e.message}`);
+      toast.error(t('misc.runners.healthFailedMsg', { msg: e.message }));
     } else {
-      toast.error('健康检查失败');
+      toast.error(t('misc.runners.healthFailed'));
     }
   } finally {
     healthLoadingId.value = null;
@@ -323,12 +329,12 @@ function parseCapabilities(raw: string | null): string {
       <div class="header-text">
         <h1 class="page-title">Runners</h1>
         <p class="page-subtitle">
-          跨机器白名单命令的远程执行 daemon。每条 runner = 一台目标机上一个独立的
+          {{ t('misc.runners.pageSubtitle1') }}
           <code class="inline-code">agent-orch-runner</code>
-          进程, 用 256-bit token 鉴权心跳。MVP 手动起 (不进 launchd / Windows service)。
+          {{ t('misc.runners.pageSubtitle2') }}
         </p>
         <p v-if="!isAdmin" class="role-hint">
-          ⚠️ 当前账号不是 admin，注册/删除/健康检查会被后端拒绝 (HTTP 401)。
+          {{ t('misc.runners.roleHint') }}
         </p>
       </div>
     </header>
@@ -337,7 +343,7 @@ function parseCapabilities(raw: string | null): string {
     <main class="page-body">
       <!-- 注册表单 -->
       <section class="card">
-        <div class="section-title">注册 Runner</div>
+        <div class="section-title">{{ t('misc.runners.registerTitle') }}</div>
         <div class="register-grid">
           <label class="form-field">
             <span class="form-label">name</span>
@@ -348,7 +354,7 @@ function parseCapabilities(raw: string | null): string {
             />
           </label>
           <label class="form-field">
-            <span class="form-label">host (IP 或域名)</span>
+            <span class="form-label">{{ t('misc.runners.hostLabel') }}</span>
             <Input
               v-model="formHost"
               placeholder="192.168.3.243"
@@ -381,36 +387,35 @@ function parseCapabilities(raw: string | null): string {
               :disabled="creating || !isAdmin"
               @click="handleRegister"
             >
-              注册
+              {{ t('misc.runners.registerBtn') }}
             </Button>
           </div>
         </div>
         <p class="form-warning">
-          🔴 注册成功后弹窗一次性显示 token, 关掉就没了, 请立刻拷给运维在目标机上配
-          <code class="inline-code">~/.agent-orch-runner/config.json</code>。
-          port 不要暴露到公网; agent 跑的是白名单命令, 但 token 是 shared secret,
-          一旦泄露 = 这台机器被任意执行白名单命令。
+          {{ t('misc.runners.formWarning1') }}
+          <code class="inline-code">~/.agent-orch-runner/config.json</code>
+          {{ t('misc.runners.formWarning2') }}
         </p>
       </section>
 
       <!-- 列表 -->
       <section class="card">
         <div class="section-head">
-          <div class="section-title">已注册 Runner</div>
+          <div class="section-title">{{ t('misc.runners.listTitle') }}</div>
           <Button size="sm" variant="ghost" :disabled="loading" @click="refresh">
-            刷新
+            {{ t('misc.runners.refresh') }}
           </Button>
         </div>
 
         <div v-if="loading && runners.length === 0" class="loading-block">
           <Loading size="md" />
-          <p class="loading-text">加载中…</p>
+          <p class="loading-text">{{ t('misc.runners.loading') }}</p>
         </div>
 
         <ErrorView
           v-else-if="adminOnly"
-          title="需要 admin 权限"
-          description="Runners 页只对 admin 开放 — 注册/删除/健康检查都是跨用户基础设施动作。请用 admin 账号登录后访问。"
+          :title="t('misc.runners.needAdmin')"
+          :description="t('misc.runners.adminOnlyDesc')"
           variant="warning"
           :retrying="retrying"
           @retry="onRetry"
@@ -418,7 +423,7 @@ function parseCapabilities(raw: string | null): string {
 
         <ErrorView
           v-else-if="error"
-          title="加载失败"
+          :title="t('misc.runners.loadFailed')"
           :description="error"
           variant="error"
           :retrying="retrying"
@@ -427,8 +432,8 @@ function parseCapabilities(raw: string | null): string {
 
         <Empty
           v-else-if="runners.length === 0"
-          title="还没有注册任何 runner"
-          description="填一下上方表单, 注册一台目标机的 daemon。"
+          :title="t('misc.runners.emptyTitle')"
+          :description="t('misc.runners.emptyDesc')"
           illustration="inbox"
         />
 
@@ -439,10 +444,10 @@ function parseCapabilities(raw: string | null): string {
                 <th class="col-name">name</th>
                 <th class="col-hostport">host:port</th>
                 <th class="col-os">os</th>
-                <th class="col-status">状态</th>
+                <th class="col-status">{{ t('misc.runners.thStatus') }}</th>
                 <th class="col-heartbeat">last_heartbeat</th>
                 <th class="col-cap">capabilities</th>
-                <th class="col-actions">操作</th>
+                <th class="col-actions">{{ t('misc.runners.thActions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -452,7 +457,7 @@ function parseCapabilities(raw: string | null): string {
                 <td class="col-os"><span class="cell-muted">{{ r.os_type }}</span></td>
                 <td class="col-status">
                   <span :class="['status-chip', STATUS_COLORS[r.status]]">
-                    {{ STATUS_LABELS[r.status] }}
+                    {{ statusLabel(r.status) }}
                   </span>
                 </td>
                 <td class="col-heartbeat"><span class="cell-mono cell-muted">{{ formatTime(r.last_heartbeat_at) }}</span></td>
@@ -471,7 +476,7 @@ function parseCapabilities(raw: string | null): string {
                       :disabled="!!healthLoadingId || !isAdmin"
                       @click="handleHealthCheck(r)"
                     >
-                      健康检查
+                      {{ t('misc.runners.healthCheck') }}
                     </Button>
                     <Button
                       size="sm"
@@ -479,7 +484,7 @@ function parseCapabilities(raw: string | null): string {
                       :disabled="!isAdmin"
                       @click="askDelete(r)"
                     >
-                      删除
+                      {{ t('misc.runners.delete') }}
                     </Button>
                   </div>
                 </td>
@@ -493,30 +498,28 @@ function parseCapabilities(raw: string | null): string {
     <!-- token modal (R5) — 一次性显示, 关掉清空. -->
     <Modal
       :model-value="tokenModalOpen"
-      title="🔑 Runner 注册成功"
+      :title="t('misc.runners.tokenTitle')"
       size="md"
       @update:model-value="(v: boolean) => { if (!v) closeTokenModal(); }"
     >
       <div class="token-body">
         <p class="token-intro">
-          Runner <strong>「{{ tokenRunnerName }}」</strong> 的
-          <strong>一次性 token</strong>, 关掉这个弹窗 token 就看不到了。
-          把它写到目标机的
+          {{ t('misc.runners.tokenIntro1', { name: tokenRunnerName }) }}
           <code class="inline-code">~/.agent-orch-runner/config.json</code>
-          (文件权限 <code class="inline-code">0600</code>) 里, 然后
-          <code class="inline-code">./runner --daemon</code> 起。
+          {{ t('misc.runners.tokenIntro3') }} <code class="inline-code">0600</code>{{ t('misc.runners.tokenIntro4') }}
+          <code class="inline-code">./runner --daemon</code> {{ t('misc.runners.tokenIntro5') }}
         </p>
         <div class="token-display">
           <code class="token-text">{{ tokenValue }}</code>
         </div>
         <p class="token-tip">
-          🔴 关掉弹窗 = token 永远丢失，需重新注册。
+          {{ t('misc.runners.tokenTip') }}
         </p>
       </div>
       <template #footer>
-        <Button variant="secondary" @click="closeTokenModal">关闭 (token 不再可见)</Button>
+        <Button variant="secondary" @click="closeTokenModal">{{ t('misc.runners.closeBtn') }}</Button>
         <Button variant="primary" :disabled="!tokenValue" @click="copyToken">
-          {{ tokenCopied ? '已复制 ✓' : '复制 token' }}
+          {{ tokenCopied ? t('misc.runners.copied') : t('misc.runners.copyBtn') }}
         </Button>
       </template>
     </Modal>
@@ -524,12 +527,12 @@ function parseCapabilities(raw: string | null): string {
     <!-- 删除二次确认 (R6) -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      :title="`删除 runner「${pendingDelete?.name ?? ''}」`"
+      :title="t('misc.runners.deleteConfirmTitle', { name: pendingDelete?.name ?? '' })"
       :message="pendingDelete
-        ? `确定要删除吗？同时会撤销它的 token, 已配置的 daemon 下次心跳会 401。host:port (${pendingDelete.host}:${pendingDelete.port}) 之后可以重新注册。`
+        ? t('misc.runners.deleteConfirmMsg', { host: pendingDelete.host, port: pendingDelete.port })
         : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :confirm-text="t('misc.runners.delete')"
+      :cancel-text="t('misc.runners.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"
@@ -539,7 +542,7 @@ function parseCapabilities(raw: string | null): string {
     <div v-if="healthLoadingId" class="health-overlay">
       <div class="health-overlay-card">
         <Loading size="sm" />
-        <span>正在调用 /v1/health …</span>
+        <span>{{ t('misc.runners.healthChecking') }}</span>
       </div>
     </div>
   </div>

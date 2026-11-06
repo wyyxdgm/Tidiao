@@ -23,6 +23,7 @@
      走 toast.error, 不引入 R3 formErrors 字段级红框 (列表页 + 一次性创建, 用 toast 更轻量). */
 
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   listWebhooks,
   createWebhook,
@@ -50,6 +51,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 /* ------------------------------------------------------------------ */
 
 const toast = useToast();
+const { t } = useI18n();
 
 const webhooks = ref<Webhook[]>([]);
 const loading = ref<boolean>(false);
@@ -106,11 +108,11 @@ async function refresh(): Promise<void> {
     webhooks.value = Array.isArray(list) ? list : [];
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      error.value = e.message || `加载失败 (HTTP ${e.status})`;
+      error.value = e.message || t('misc.webhooks.loadFailedHttp', { status: e.status });
     } else if (e instanceof Error) {
-      error.value = `网络异常: ${e.message}`;
+      error.value = t('misc.webhooks.errNetwork', { msg: e.message });
     } else {
-      error.value = '加载失败';
+      error.value = t('misc.webhooks.loadFailed');
     }
   } finally {
     loading.value = false;
@@ -159,7 +161,7 @@ function toggleEditEvent(ev: string): void {
 async function saveEdit(): Promise<void> {
   if (!editingId.value) return;
   if (editForm.events.length === 0) {
-    toast.error('至少订阅一个事件');
+    toast.error(t('misc.webhooks.errEventRequired'));
     return;
   }
   editForm.saving = true;
@@ -173,14 +175,14 @@ async function saveEdit(): Promise<void> {
     const idx = webhooks.value.findIndex((w) => w.id === targetId);
     if (idx >= 0) webhooks.value[idx] = updated;
     editingId.value = null;
-    toast.success('已保存');
+    toast.success(t('misc.webhooks.saved'));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `保存失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.webhooks.saveFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('misc.webhooks.errNetwork', { msg: e.message }));
     } else {
-      toast.error('保存失败');
+      toast.error(t('misc.webhooks.saveFailed'));
     }
   } finally {
     editForm.saving = false;
@@ -216,23 +218,23 @@ async function submitCreate(): Promise<void> {
   const url = createForm.url.trim();
   const secret = createForm.secret.trim();
   if (!name) {
-    toast.error('请填写名称');
+    toast.error(t('misc.webhooks.errNameRequired'));
     return;
   }
   if (!url) {
-    toast.error('请填写 URL');
+    toast.error(t('misc.webhooks.errUrlRequired'));
     return;
   }
   if (!/^https?:\/\//.test(url)) {
-    toast.error('URL 必须以 http:// 或 https:// 开头');
+    toast.error(t('misc.webhooks.errUrlProtocol'));
     return;
   }
   if (!secret) {
-    toast.error('请填写 Secret');
+    toast.error(t('misc.webhooks.errSecretRequired'));
     return;
   }
   if (createForm.events.length === 0) {
-    toast.error('至少订阅一个事件');
+    toast.error(t('misc.webhooks.errEventRequired'));
     return;
   }
   createSaving.value = true;
@@ -246,16 +248,16 @@ async function submitCreate(): Promise<void> {
     });
     webhooks.value = [created, ...webhooks.value];
     createOpen.value = false;
-    toast.success('已创建');
+    toast.success(t('misc.webhooks.created'));
     // 自动选中新创建的 webhook, 方便立即看投递历史入口.
     selectedId.value = created.id;
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `创建失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.webhooks.createFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('misc.webhooks.errNetwork', { msg: e.message }));
     } else {
-      toast.error('创建失败');
+      toast.error(t('misc.webhooks.createFailed'));
     }
   } finally {
     createSaving.value = false;
@@ -279,14 +281,14 @@ async function confirmDelete(): Promise<void> {
     webhooks.value = webhooks.value.filter((w) => w.id !== target.id);
     if (selectedId.value === target.id) selectedId.value = null;
     if (editingId.value === target.id) editingId.value = null;
-    toast.success('已删除');
+    toast.success(t('misc.webhooks.deleted'));
   } catch (e: unknown) {
     if (isHttpError(e)) {
-      toast.error(e.message || `删除失败 (HTTP ${e.status})`);
+      toast.error(e.message || t('misc.webhooks.deleteFailedHttp', { status: e.status }));
     } else if (e instanceof Error) {
-      toast.error(`网络异常: ${e.message}`);
+      toast.error(t('misc.webhooks.errNetwork', { msg: e.message }));
     } else {
-      toast.error('删除失败');
+      toast.error(t('misc.webhooks.deleteFailed'));
     }
   }
 }
@@ -327,15 +329,16 @@ function fmt(iso: string): string {
     <!-- Header -->
     <header class="page-header">
       <div class="header-text">
-        <h1 class="page-title">Webhook 管理</h1>
+        <h1 class="page-title">{{ t('misc.webhooks.title') }}</h1>
         <p class="page-subtitle">
-          监听 task lifecycle 事件, HMAC-SHA256 签名在
-          <code class="inline-code">X-Signature</code> 头.
+          {{ t('misc.webhooks.subtitleA') }}
+          <code class="inline-code">X-Signature</code>
+          {{ t('misc.webhooks.subtitleB') }}
         </p>
       </div>
       <div class="header-meta">
-        <span class="meta-count">启用 {{ enabledCount }} / {{ webhooks.length }}</span>
-        <Button variant="primary" @click="openCreate">+ 新建 Webhook</Button>
+        <span class="meta-count">{{ t('misc.webhooks.enabledCount', { n: enabledCount, total: webhooks.length }) }}</span>
+        <Button variant="primary" @click="openCreate">{{ t('misc.webhooks.newBtn') }}</Button>
       </div>
     </header>
 
@@ -344,12 +347,12 @@ function fmt(iso: string): string {
         <div class="list-column">
             <div v-if="loading && webhooks.length === 0" class="loading-block">
               <Loading size="lg" />
-              <p class="loading-text">加载中…</p>
+              <p class="loading-text">{{ t('misc.webhooks.loading') }}</p>
             </div>
 
             <ErrorView
               v-else-if="error"
-              title="加载失败"
+              :title="t('misc.webhooks.loadFailed')"
               :description="error"
               variant="error"
               :retrying="retrying"
@@ -358,12 +361,12 @@ function fmt(iso: string): string {
 
             <Empty
               v-else-if="webhooks.length === 0"
-              title="还没有 webhook"
-              description="新建 webhook 后会出现在这里, 监听 task 事件自动 POST 给你."
+              :title="t('misc.webhooks.emptyTitle')"
+              :description="t('misc.webhooks.emptyDesc')"
               illustration="inbox"
             >
               <template #cta>
-                <Button variant="primary" size="sm" @click="openCreate">+ 新建 Webhook</Button>
+                <Button variant="primary" size="sm" @click="openCreate">{{ t('misc.webhooks.newBtn') }}</Button>
               </template>
             </Empty>
 
@@ -378,10 +381,10 @@ function fmt(iso: string): string {
                   <div class="card-title-row">
                     <h3 class="card-title">{{ w.name }}</h3>
                     <span :class="['chip', w.active ? 'chip-active' : 'chip-inactive']">
-                      {{ w.active ? '启用' : '禁用' }}
+                      {{ w.active ? t('misc.webhooks.statusActive') : t('misc.webhooks.statusDisabled') }}
                     </span>
-                    <span v-if="!w.has_secret" class="chip chip-warn" title="未配置 Secret, 签名校验会失败">
-                      无 Secret
+                    <span v-if="!w.has_secret" class="chip chip-warn" :title="t('misc.webhooks.noSecretTitle')">
+                      {{ t('misc.webhooks.noSecret') }}
                     </span>
                   </div>
                   <div class="card-actions" @click.stop>
@@ -393,7 +396,7 @@ function fmt(iso: string): string {
                       :to="`/webhooks/${w.id}`"
                       class="link-btn small"
                     >
-                      详情 & 投递历史
+                      {{ t('misc.webhooks.detailLink') }}
                     </router-link>
                     <Button
                       v-if="editingId !== w.id"
@@ -401,7 +404,7 @@ function fmt(iso: string): string {
                       variant="secondary"
                       @click="startEdit(w)"
                     >
-                      编辑
+                      {{ t('misc.webhooks.edit') }}
                     </Button>
                     <Button
                       v-else
@@ -409,7 +412,7 @@ function fmt(iso: string): string {
                       variant="ghost"
                       @click="cancelEdit"
                     >
-                      取消
+                      {{ t('misc.webhooks.cancel') }}
                     </Button>
                     <Button
                       size="sm"
@@ -417,7 +420,7 @@ function fmt(iso: string): string {
                       :disabled="editingId === w.id"
                       @click="askDelete(w)"
                     >
-                      删除
+                      {{ t('misc.webhooks.delete') }}
                     </Button>
                   </div>
                 </div>
@@ -425,7 +428,7 @@ function fmt(iso: string): string {
                 <code class="card-url">{{ w.url }}</code>
 
                 <div class="card-events">
-                  <span v-if="w.events.length === 0" class="muted small">未订阅事件</span>
+                  <span v-if="w.events.length === 0" class="muted small">{{ t('misc.webhooks.noEvents') }}</span>
                   <span
                     v-for="ev in w.events"
                     :key="ev"
@@ -435,13 +438,13 @@ function fmt(iso: string): string {
 
                 <div class="card-meta">
                   <span class="meta-item">
-                    创建于: <span class="meta-value">{{ fmt(w.created_at) }}</span>
+                    {{ t('misc.webhooks.createdAt') }} <span class="meta-value">{{ fmt(w.created_at) }}</span>
                   </span>
                 </div>
 
                 <!-- 内联编辑面板 (events + active) -->
                 <div v-if="editingId === w.id" class="edit-panel" @click.stop>
-                  <div class="edit-label">事件订阅</div>
+                  <div class="edit-label">{{ t('misc.webhooks.eventSubscription') }}</div>
                   <div class="event-grid">
                     <label
                       v-for="ev in WEBHOOK_EVENTS"
@@ -457,7 +460,7 @@ function fmt(iso: string): string {
                   </div>
                   <label class="active-toggle">
                     <Checkbox v-model="editForm.active" />
-                    <span>启用</span>
+                    <span>{{ t('misc.webhooks.statusActive') }}</span>
                   </label>
                   <div class="edit-actions">
                     <Button
@@ -467,7 +470,7 @@ function fmt(iso: string): string {
                       :disabled="editForm.saving"
                       @click="saveEdit"
                     >
-                      保存
+                      {{ t('misc.webhooks.save') }}
                     </Button>
                     <Button
                       variant="ghost"
@@ -475,11 +478,11 @@ function fmt(iso: string): string {
                       :disabled="editForm.saving"
                       @click="cancelEdit"
                     >
-                      取消
+                      {{ t('misc.webhooks.cancel') }}
                     </Button>
                   </div>
                   <p class="edit-info">
-                    ℹ️ 仅可修改事件订阅和启用状态. 名称/URL/Secret 创建后不可修改 — 需变更请删除重建.
+                    {{ t('misc.webhooks.editInfo') }}
                   </p>
                 </div>
               </article>
@@ -490,8 +493,8 @@ function fmt(iso: string): string {
           <aside class="sidebar-column">
             <div v-if="!selected" class="sidebar-empty">
               <Empty
-                title="未选中 webhook"
-                description="从左侧列表点选一个 webhook, 这里显示元信息和投递历史入口."
+                :title="t('misc.webhooks.sidebarEmptyTitle')"
+                :description="t('misc.webhooks.sidebarEmptyDesc')"
                 illustration="doc"
                 size="sm"
               />
@@ -500,7 +503,7 @@ function fmt(iso: string): string {
               <div class="sidebar-head">
                 <h3 class="sidebar-title">{{ selected.name }}</h3>
                 <span :class="['chip', selected.active ? 'chip-active' : 'chip-inactive']">
-                  {{ selected.active ? '启用' : '禁用' }}
+                  {{ selected.active ? t('misc.webhooks.statusActive') : t('misc.webhooks.statusDisabled') }}
                 </span>
               </div>
 
@@ -509,26 +512,26 @@ function fmt(iso: string): string {
                 <dd><code class="mono break-all">{{ selected.url }}</code></dd>
                 <dt>Secret</dt>
                 <dd>
-                  <span v-if="selected.has_secret" class="badge-ok">已配置</span>
-                  <span v-else class="badge-warn">未配置</span>
+                  <span v-if="selected.has_secret" class="badge-ok">{{ t('misc.webhooks.secretConfigured') }}</span>
+                  <span v-else class="badge-warn">{{ t('misc.webhooks.secretMissing') }}</span>
                 </dd>
-                <dt>订阅事件</dt>
+                <dt>{{ t('misc.webhooks.eventSubscription') }}</dt>
                 <dd>
-                  <div v-if="selected.events.length === 0" class="muted small">未订阅</div>
+                  <div v-if="selected.events.length === 0" class="muted small">{{ t('misc.webhooks.noSubscription') }}</div>
                   <div v-else class="event-list">
                     <span v-for="ev in selected.events" :key="ev" class="event-chip">{{ ev }}</span>
                   </div>
                 </dd>
-                <dt>创建于</dt>
+                <dt>{{ t('misc.webhooks.createdAtShort') }}</dt>
                 <dd class="mono">{{ fmt(selected.created_at) }}</dd>
               </dl>
 
               <div class="sidebar-section">
-                <h4 class="sidebar-subtitle">投递历史</h4>
+                <h4 class="sidebar-subtitle">{{ t('misc.webhooks.deliveryHistory') }}</h4>
                 <p class="sidebar-help">
-                  master 后端当前未暴露
-                  <code class="inline-code">/api/webhooks/[id]/deliveries</code> 端点 —
-                  点击下方按钮在新窗口打开 Next 详情页查看最近 100 条投递记录.
+                  {{ t('misc.webhooks.historyHelpA') }}
+                  <code class="inline-code">/api/webhooks/[id]/deliveries</code>
+                  {{ t('misc.webhooks.historyHelpB') }}
                 </p>
                 <Button
                   variant="secondary"
@@ -536,7 +539,7 @@ function fmt(iso: string): string {
                   :disabled="!canOpenHistory()"
                   @click="openHistory"
                 >
-                  在新窗口打开投递历史 ↗
+                  {{ t('misc.webhooks.openHistoryBtn') }}
                 </Button>
               </div>
             </div>
@@ -547,14 +550,14 @@ function fmt(iso: string): string {
     <!-- 创建 modal (R5) -->
     <Modal
       :model-value="createOpen"
-      title="新建 Webhook"
+      :title="t('misc.webhooks.createTitle')"
       size="lg"
       @update:model-value="(v: boolean) => { if (!v) closeCreate(); }"
     >
       <div class="create-form">
         <div class="form-row">
-          <label class="form-label">名称 <span class="required">*</span></label>
-          <Input v-model="createForm.name" placeholder="例如: CI 监听" />
+          <label class="form-label">{{ t('misc.webhooks.labelName') }} <span class="required">*</span></label>
+          <Input v-model="createForm.name" :placeholder="t('misc.webhooks.placeholderName')" />
         </div>
         <div class="form-row">
           <label class="form-label">URL <span class="required">*</span></label>
@@ -563,19 +566,19 @@ function fmt(iso: string): string {
             placeholder="https://example.com/hook"
             class-name="form-mono"
           />
-          <p class="form-hint">必须以 http:// 或 https:// 开头.</p>
+          <p class="form-hint">{{ t('misc.webhooks.hintUrl') }}</p>
         </div>
         <div class="form-row">
           <label class="form-label">Secret <span class="required">*</span></label>
           <Input
             v-model="createForm.secret"
-            placeholder="用于 HMAC-SHA256 签名的密钥"
+            :placeholder="t('misc.webhooks.placeholderSecret')"
             class-name="form-mono"
           />
-          <p class="form-hint">创建后不提供修改入口 — 需变更请删除重建.</p>
+          <p class="form-hint">{{ t('misc.webhooks.hintImmutable') }}</p>
         </div>
         <div class="form-row">
-          <label class="form-label">订阅事件 <span class="required">*</span> (至少 1 个)</label>
+          <label class="form-label">{{ t('misc.webhooks.labelEvents') }} <span class="required">*</span> {{ t('misc.webhooks.labelEventsMin') }}</label>
           <div class="event-grid event-grid-modal">
             <label
               v-for="ev in WEBHOOK_EVENTS"
@@ -592,24 +595,24 @@ function fmt(iso: string): string {
         </div>
         <div class="form-row form-row-inline">
           <Checkbox v-model="createForm.active" />
-          <span>立即启用</span>
+          <span>{{ t('misc.webhooks.enableNow') }}</span>
         </div>
       </div>
       <template #footer>
-        <Button variant="secondary" :disabled="createSaving" @click="closeCreate">取消</Button>
-        <Button :loading="createSaving" :disabled="createSaving" @click="submitCreate">创建</Button>
+        <Button variant="secondary" :disabled="createSaving" @click="closeCreate">{{ t('misc.webhooks.cancel') }}</Button>
+        <Button :loading="createSaving" :disabled="createSaving" @click="submitCreate">{{ t('misc.webhooks.create') }}</Button>
       </template>
     </Modal>
 
     <!-- 删除二次确认 (R6) -->
     <ConfirmDialog
       :open="!!pendingDelete"
-      title="删除 Webhook?"
+      :title="t('misc.webhooks.deleteTitle')"
       :message="pendingDelete
-        ? `「${pendingDelete.name}」将立即删除, 且不可恢复. 之后该 webhook 不会再投递任何事件.`
+        ? t('misc.webhooks.deleteConfirmMsg', { name: pendingDelete.name })
         : ''"
-      confirm-text="删除"
-      cancel-text="取消"
+      :confirm-text="t('misc.webhooks.delete')"
+      :cancel-text="t('misc.webhooks.cancel')"
       type="danger"
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"
