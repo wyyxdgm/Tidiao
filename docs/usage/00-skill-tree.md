@@ -61,9 +61,9 @@
 | quickstart | [01-快速上手](./01-getting-started.md) |
 | query | [03-任务管理](./03-tasks.md) / [04-任务详情页](./04-task-detail.md) / [12-统计与监控](./12-stats-monitoring.md) |
 | manage | [02-项目与版本](./02-projects.md) / [03-任务管理](./03-tasks.md) / [04-任务详情页](./04-task-detail.md) |
-| dispatch | [11-CLI 工具](./11-cli.md) + [playbook: 无人值守派发](../playbooks/unattended-dispatch-playbook.md) |
+| dispatch | [11-CLI 工具](./11-cli.md) |
 | advanced | [06-Webhook](./06-webhooks.md) / [08-批量导入与飞书同步](./08-import-sync.md) / [14-需求点管理](./14-requirement-management.md) |
-| ops | [10-设置](./10-settings.md) / [11-CLI 工具](./11-cli.md) / [deploy.md](../deploy.md) |
+| ops | [10-设置](./10-settings.md) / [11-CLI 工具](./11-cli.md) |
 | stuck | 本文件「卡住怎么办」段 + [05-定时任务](./05-scheduling.md) §「cron stuck 排查」 |
 
 ## 5 个核心场景（决策路径）
@@ -72,7 +72,7 @@
 
 - 拿 7 天 session cookie：`POST /api/auth/login`，见 [01-快速上手 §登录](./01-getting-started.md)
 - 拿不过期 `ao_` bearer token：`bash scripts/user.sh token --name "my-cli"`，见 [11-CLI 工具 §login](./11-cli.md)
-- Mac 上 WSL 公网入口：`export AO_BASE_URL=http://192.0.2.50:13000`
+- 远程自托管实例：`export AO_BASE_URL=https://your-host`
 
 ### 场景 2：我想建第一个项目
 
@@ -84,7 +84,7 @@
 
 - 简单 fix（< 5 行）→ 直接派 `ao dispatch`，用 7 段 prompt 模板（[orchestrator-dispatch](../../.claude/skills/orchestrator-dispatch/SKILL.md)）
 - 复杂任务 / 多文件 → 派 `ao dispatch` + `effort=high` + `maxTurns=150-200`
-- 不知道派到哪个仓库 → 看 [../task-dispatch.md](../task-dispatch.md) §派发路由
+- 不知道派到哪个项目 → 看平台 Projects 列表 + 各项目 CLAUDE.md 的能力声明
 
 ### 场景 4：我想查任务状态 / 看结果
 
@@ -96,10 +96,10 @@
 ### 场景 5：任务卡住了怎么办
 
 - 立刻诊断 → [orchestrator-stuck](../../.claude/skills/orchestrator-stuck/SKILL.md)（首选）
-- cron 失语 / paused 僵尸 → [orchestrator-ops](../../.claude/skills/orchestrator-ops/SKILL.md) §「cron stuck 排查」+ `bash scripts/ao stuck --fix`
+- cron 失语 / paused 僵尸 → [orchestrator-ops](../../.claude/skills/orchestrator-ops/SKILL.md) §「cron stuck 排查」
 - SSE 中断 / 流断了 → [orchestrator-stuck](../../.claude/skills/orchestrator-stuck/SKILL.md) §「SSE 中断」段
 - 飞书协作没回 → [orchestrator-stuck](../../.claude/skills/orchestrator-stuck/SKILL.md) §「飞书没回」段
-- 真没招了 → 升级到 damo 拍板（用 [notify](../../.claude/skills/notify/SKILL.md) 通知，附 task_id + 卡死现象 + 已尝试命令）
+- 真没招了 → 升级给用户拍板（通知用户，附 task_id + 卡死现象 + 已尝试命令）
 
 ## 完整度图（实际 vs 计划）
 
@@ -109,7 +109,6 @@
 | 阶段 1 P1 | login / session / recall / feishu / requirement / wiki | 🟡 下一波 |
 | 阶段 2 | UI 顶部「帮助」菜单渲染 skill 树 + 「从 skill 创建项目」反向 | ⚪ 远期 |
 
-详细阶段清单 + 风险 + 决策 → [../plans/skill-first-standardization.md](../plans/skill-first-standardization.md)
 
 ## 注意
 

@@ -33,6 +33,19 @@ Requirements: Node ≥ 20, a Claude Code installation (or Anthropic-compatible A
 
 **BYOK**: the orchestrator carries no inference cost of its own — you plug in your own API keys; they are encrypted (AES) in SQLite.
 
+## Driving it with Claude Code skills
+
+Besides the web UI, the repo ships a set of **Claude Code skills** (`.claude/skills/orchestrator-*`) and a unified CLI (`scripts/ao`) so Claude Code can operate the platform directly — dispatch tasks, query status, act on the task lifecycle, monitor, diagnose stuck tasks:
+
+```bash
+bash scripts/ao help        # unified CLI: dispatch / chat / query / act / monitor / recall ...
+bash scripts/ao doctor      # self-check
+```
+
+Skills are picked up automatically when you run `claude` from the repo root (`orchestrator-quickstart` = 5-min end-to-end demo, `orchestrator-dispatch` = dispatch tasks with battle-tested prompt templates, `orchestrator-stuck` = diagnose stuck tasks). Start with `orchestrator-onboarding` — see the full map in [`docs/usage/00-skill-tree.md`](docs/usage/00-skill-tree.md).
+
+Auth for the CLI: `export AO_TOKEN=<bearer from Settings → API Token>` (never expires), or `AO_EMAIL` + `AO_PASSWORD`. Default target is `http://localhost:13000`; point `AO_BASE_URL` at a remote instance.
+
 ## Docs
 
 | Doc | Content |

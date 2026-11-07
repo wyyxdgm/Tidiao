@@ -3,6 +3,12 @@
 Self-hosted task orchestrator for Claude Code agents: Web UI + Agent SDK + SQLite, auth + multi-tenant, BYOK.
 Public repo (Apache-2.0), single-maintainer. Quick start → [README](README.md).
 
+## 用 skill / CLI 操控本平台（agent 优先走这条）
+
+- 本仓自带 8 个 orchestrator-* skill（`.claude/skills/`）+ 统一 CLI `scripts/ao`（dispatch / chat / query / act / monitor / recall / cron / user ...，`ao help` 全览，`ao doctor` 自检）。
+- 新会话不知道从哪开始 → 读 `.claude/skills/orchestrator-onboarding/SKILL.md`；全景图 → [`docs/usage/00-skill-tree.md`](docs/usage/00-skill-tree.md)。
+- CLI 鉴权：`AO_TOKEN`（不过期 bearer）或 `AO_EMAIL` + `AO_PASSWORD`，默认打 `http://localhost:13000`，远程实例用 `AO_BASE_URL`。**CLI 不内置凭据**。
+
 ## 派发到本仓的 agent 必读
 
 - **界面双语**（zh-CN / en-US）：所有用户可见字符串走 vue-i18n，**代码注释保持中文**。迁移模式 + 波次计划 → [`docs/i18n.md`](docs/i18n.md)，样板 = `spa/src/views/LoginView.vue`（W1）。新文案 zh/en 两份都要写，漏写会被 `spa/src/i18n/i18n.test.ts` 的 key 一致性测试拦住

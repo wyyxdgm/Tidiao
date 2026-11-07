@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# 功能: 编排平台统一 CLI 入口 -- `ao <子命令> [参数...]` 路由到 scripts/ 下的具体脚本.
+#       各项目 CLAUDE.md / skill 里写的 `scripts/ao dispatch -p <项目名>` 等指令由本文件兑现;
+#       `ao help` 同时充当 AI 的平台能力索引（一屏看全能干啥）.
+# 关注点:
+#   - 自定位: 本文件可被复制/软链到任意位置（如 $ORCHESTRATOR_HOME/claude-config/bin/ao），
+#     仓库根按 $AO_REPO_ROOT > 自身父目录 > 候选路径 依次探测, 探不到直接报错不静默降级.
+#   - 纯路由: 不解析子命令参数, 原样 exec 给目标脚本 -- 目标脚本的 --help / 退出码即本命令的.
+#   - 新增子命令只改 COMMANDS 表一行, 不改路由逻辑.
+set -euo pipefail
+
+# ---------- 定位仓库根 ----------
+resolve_repo_root() {
+  if [ -n "${AO_REPO_ROOT:-}" ] && [ -f "$AO_REPO_ROOT/scripts/ao-dispatch.sh" ]; then
+    echo "$AO_REPO_ROOT"; return 0
+  fi
+  local self="${BASH_SOURCE[0]}"
+  # 跟随软链
+  while [ -L "$self" ]; do
+    local target; target="$(readlink "$self")"
+    case "$target" in
+      /*) self="$target" ;;
+      *)  self="$(cd "$(dirname "$self")" && pwd)/$target" ;;
+    esac
+  done
+  local here; here="$(cd "$(dirname "$self")" && pwd)"
+  if [ -f "$here/ao-dispatch.sh" ]; then
+    echo "$(cd "$here/.." && pwd)"; return 0
+  fi
+  return 1
+}
+
+REPO_ROOT="$(resolve_repo_root)" || {
+  echo "ao: 找不到 agent-orchestrator 仓库根（试过 \$AO_REPO_ROOT / 自身父目录 / 候选路径）" >&2
+  echo "    显式指定: AO_REPO_ROOT=/path/to/agent-orchestrator ao <cmd>" >&2
+  exit 1
+}
+S="$REPO_ROOT/scripts"
+
+# ---------- 子命令表: 名称|目标|一句话说明 ----------
+# 目标以 "ts:" 开头表示走 jiti 跑 TypeScript.
+COMMANDS=(
+  "dispatch|ao-dispatch.sh|派发任务给任意项目（-p 项目名 -t 标题 -m prompt）"
+  "feedback|ao-feedback.sh|工具问题反馈：一条命令派给开发项目（ao-feedback \"现象\"）"
+  "chat|ao-chat.sh|与在跑的 agent 实时对话 / 投消息"
+  "monitor|ao-monitor.sh|监控任务状态（轮询 / 等待完成）"
+  "session|ao-session.sh|会话导出 / 导入 / 跨机搬运（export|import|transfer）"
+  "act|ao-task-act.sh|对任务执行动作（approve / refine / await / unawait / pause / resume / cancel 等）"
+  "tags|ao-task-tags.sh|任务标签读写"
+  "config|ao-config.sh|平台全局设置（并发 / 超时等）"
+  "cron|cron.sh|定时任务 CRUD（list/create/update/enable/disable/trigger/runs）"
+  "user|user.sh|用户与 LLM 配置管理"
+  "login|login.sh|共享鉴权（取 token / cookie）"
+  "idea|ao-idea.sh|构思层 CLI（add/ls/show/node/signal/conclude/export/link）"
+  "pinlist|ao-pinlist.sh|人工分拣列表 CLI（ls/add/put/rm/rename）"
+  "overview|ao-overview.sh|项目概览单文件 md 看板 (show/edit/append/clear/url)"
+  "recall|ao-recall.sh|跨源知识检索（任务 / 需求点 / 项目文档）"
+  "query|ao-query.sh|自动登录 + 缓存 + GET/POST/PUT/DELETE（无需手摆 token）"
+)
+
+target_of() {
+  local name="$1" row
+  for row in "${COMMANDS[@]}"; do
+    [ "${row%%|*}" = "$name" ] || continue
+    row="${row#*|}"; echo "${row%%|*}"; return 0
+  done
+  return 1
+}
+
+usage() {
+  cat <<EOF
+ao — 编排平台统一 CLI 入口（仓库根: ${REPO_ROOT}）
+
+用法:
+  ao <子命令> [参数...]      # 参数原样透传给目标脚本
+  ao <子命令> --help         # 看目标脚本的完整帮助
+  ao help | ao list          # 本帮助（= 平台能力索引）
+  ao doctor                  # 自检：目标脚本是否齐全
+
+子命令:
+EOF
+  local row name rest
+  for row in "${COMMANDS[@]}"; do
+    name="${row%%|*}"; rest="${row#*|}"
+    printf "  %-12s %s\n" "$name" "${rest#*|}"
+  done
+  cat <<'EOF'
+
+常用示例:
+  ao dispatch -p my-project -t "调研 X" -m "帮我查一下 ..."
+  ao dispatch -p my-project -t "fix: xxx" -m "..." --auto-approve
+  ao query GET /api/projects
+  ao cron list
+  ao monitor --wait <taskId>
+
+从任意 cwd 调用（其他项目的 agent）:
+  bash /path/to/repo/scripts/ao dispatch -p my-project ...
+  # 或先 export AO_REPO_ROOT=/path/to/repo
+EOF
+}
+
+doctor() {
+  local row name tgt path missing=0
+  for row in "${COMMANDS[@]}"; do
+    name="${row%%|*}"; tgt="${row#*|}"; tgt="${tgt%%|*}"
+    path="$S/${tgt#ts:}"
+    if [ -f "$path" ]; then
+      printf "  ✅ %-12s %s\n" "$name" "$path"
+    else
+      printf "  ❌ %-12s 缺失: %s\n" "$name" "$path"; missing=$((missing + 1))
+    fi
+  done
+  if [ "$missing" -gt 0 ]; then
+    echo "ao doctor: $missing 个目标脚本缺失" >&2; return 1
+  fi
+  echo "🎉 ao doctor 全过（${#COMMANDS[@]} 个子命令）"
+}
+
+# ---------- 路由 ----------
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  help|--help|-h|list) usage; exit 0 ;;
+  doctor|--selfcheck) doctor; exit $? ;;
+esac
+
+tgt="$(target_of "$cmd")" || {
+  echo "ao: 未知子命令 '$cmd'" >&2
+  echo "可用: $(printf '%s ' "${COMMANDS[@]%%|*}")" >&2
+  echo "看全部说明: ao help" >&2
+  exit 2
+}
+
+if [ "${tgt#ts:}" != "$tgt" ]; then
+  exec npx --no-install jiti "$S/${tgt#ts:}" "$@"
+fi
+exec bash "$S/$tgt" "$@"
