@@ -6,6 +6,8 @@
 
 本章节带你在本地启动提调（Hufu，原 Agent Orchestrator），完成注册登录、配置 API Key，并创建第一个任务。适用于首次使用本平台的用户。
 
+> 除了 Web UI，还可以用 **Claude Code skill / CLI** 操控平台：仓内自带 8 个 `orchestrator-*` skill（在仓根跑 `claude` 自动可用，从 `orchestrator-quickstart` 或 `orchestrator-onboarding` 开始）+ 统一 CLI `bash scripts/ao help`。全景图 → [00-Skill 树总览](./00-skill-tree.md)；鉴权配置 → [11-CLI 工具](./11-cli.md)。
+
 ### 功能点：环境要求与启动
 
 - **是什么**：在本地机器上运行编排平台开发服务
@@ -41,7 +43,7 @@
   - 生产环境务必设置 `JWT_SECRET` 环境变量，否则使用不安全的默认密钥
   - admin 拥有额外能力：平台 LLM 配置、用户授权管理、用户并发上限设置
   - **登录失败次数限制**：15 分钟内 5 次失败 → 该账号会被限流 15 分钟，提示「错误次数过多，请 N 分钟后再试」（与「邮箱或密码错误」明确区分，便于 AI 自动化场景区分重试 vs 改密码）
-  - 被锁定的账号只能等窗口过去，或由 admin 跑 `scripts/reset-password.js` 重置密码后自动解锁（成功登录会清空失败计数；见 [docs/reset-password.md](../reset-password.md)）
+  - 被锁定的账号只能等窗口过去（15 分钟）自动解锁；admin 可用 `sqlite3` 直接更新该账号的密码字段（成功登录会清空失败计数）
 
 ### 功能点：API Key 配置
 
@@ -165,7 +167,7 @@
 A: 设置环境变量 `ANTHROPIC_API_KEY` 后重启服务，或在设置页配置个人 LLM。
 
 **Q: 忘记密码怎么办？**
-A: 管理员可通过密码重置脚本操作，详见 [docs/reset-password.md](../reset-password.md)。
+A: admin 用 `sqlite3` 直接更新该账号的密码字段即可（密码是 bcrypt hash，可用平台上任意一个已知密码的 hash 复制后让该用户登录后再改）。
 
 **Q: 第一个用户注册后角色是什么？**
 A: 首个注册用户自动成为 admin，拥有平台管理权限。后续注册用户为普通 user。
