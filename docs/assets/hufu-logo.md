@@ -1,6 +1,6 @@
 # 提调 Logo 设计说明
 
-> 品牌：提调（Tidiao）— 平台产品名（前名虎符，2026-11 因商标撞车切换）；合符意象保留为功能术语层。
+> 品牌：提调（Tidiao）— 平台产品名；虎纹/合符意象保留为功能术语层（dispatch = 授符，verify = 合符）。
 > 母版：`docs/assets/hufu-logo.svg`（本目录）；SPA 副本：`spa/public/hufu-logo.svg` + `spa/public/favicon.svg`。
 
 ## 意象

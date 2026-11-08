@@ -2,7 +2,7 @@
 
 ## v0.1.0 — First public release (2026-11-06)
 
-Initial public snapshot of 提调 (Tidiao, formerly "Hufu"), a self-hosted AI agent task orchestrator for Claude Code.
+Initial public snapshot of 提调 (Tidiao), a self-hosted AI agent task orchestrator for Claude Code.
 
 Core capabilities in this release:
 

@@ -14,7 +14,7 @@
 
 ### 1.1 这是什么项目
 
-提调（Tidiao，原 Agent Orchestrator）：多 Claude Code Agent 任务调度平台（Web UI + Agent SDK + SQLite + 飞书同步）。
+提调（Tidiao）：多 Claude Code Agent 任务调度平台（Web UI + Agent SDK + SQLite + 飞书同步）。
 核心能力：创建 task -> 调度器排队 -> `@anthropic-ai/claude-agent-sdk` 的 `query()` 驱动 Claude Code 子进程执行 -> SSE 流式输出 -> canUseTool 审批 -> fork/checkpoint 续做。
 
 详细架构见 [`architecture.md`](architecture.md)，任务生命周期见 [`workflow.md`](workflow.md)。

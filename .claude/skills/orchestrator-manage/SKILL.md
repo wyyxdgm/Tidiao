@@ -5,7 +5,7 @@ description: Operate the agent-orchestrator system (running at ${AO_BASE_URL:-ht
 
 # orchestrator-manage
 
-虎符（Hufu，原 Agent Task Orchestrator）的增删改 + 状态机操作。系统跑在本机 `${AO_BASE_URL:-http://localhost:13000}`（production，pm2 托管，名为 `agent-orchestrator`）。
+提调（Tidiao）的增删改 + 状态机操作。系统跑在本机 `${AO_BASE_URL:-http://localhost:13000}`（production，pm2 托管，名为 `agent-orchestrator`）。
 
 ## 调用约定
 

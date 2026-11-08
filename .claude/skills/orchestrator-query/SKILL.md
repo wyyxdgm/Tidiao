@@ -5,7 +5,7 @@ description: Query/read the agent-orchestrator system (running at ${AO_BASE_URL:
 
 # orchestrator-query
 
-虎符（Hufu，原 Agent Task Orchestrator）的只查询操作。系统在 `${AO_BASE_URL:-http://localhost:13000}`。所有 GET，不改状态。
+提调（Tidiao）的只查询操作。系统在 `${AO_BASE_URL:-http://localhost:13000}`。所有 GET，不改状态。
 
 ## 调用约定
 - `export BASE=${AO_BASE_URL:-http://localhost:13000}`

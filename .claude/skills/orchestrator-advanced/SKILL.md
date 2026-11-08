@@ -5,7 +5,7 @@ description: Advanced/integration operations on agent-orchestrator (running at $
 
 # orchestrator-advanced
 
-虎符（Hufu，原 Agent Task Orchestrator）的集成与高级操作。系统在 `${AO_BASE_URL:-http://localhost:13000}`。
+提调（Tidiao）的集成与高级操作。系统在 `${AO_BASE_URL:-http://localhost:13000}`。
 
 ## 调用约定
 - `export BASE=${AO_BASE_URL:-http://localhost:13000}`，JSON body。

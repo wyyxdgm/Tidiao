@@ -4,7 +4,7 @@
 
 ## 概述
 
-本章节带你在本地启动提调（Hufu，原 Agent Orchestrator），完成注册登录、配置 API Key，并创建第一个任务。适用于首次使用本平台的用户。
+本章节带你在本地启动提调（Tidiao），完成注册登录、配置 API Key，并创建第一个任务。适用于首次使用本平台的用户。
 
 > 除了 Web UI，还可以用 **Claude Code skill / CLI** 操控平台：仓内自带 8 个 `orchestrator-*` skill（在仓根跑 `claude` 自动可用，从 `orchestrator-quickstart` 或 `orchestrator-onboarding` 开始）+ 统一 CLI `bash scripts/ao help`。全景图 → [00-Skill 树总览](./00-skill-tree.md)；鉴权配置 → [11-CLI 工具](./11-cli.md)。
 
