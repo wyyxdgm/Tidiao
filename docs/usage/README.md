@@ -24,7 +24,6 @@
 | 11 | [CLI 工具](./11-cli.md) | ao-dispatch · ao-chat · ao-session（会话导出/导入）· cron · user · backup-db · login |
 | 12 | [统计与监控](./12-stats-monitoring.md) | 任务统计 · 全局看板 · 花费追踪 |
 | 13 | [甲方 Intake Bot](./13-intake-bot.md) | 企微微信客服 · 甲方直连 AI · 双通道 · 48h 窗口 · 排查 |
-| 13.5 | [习惯沉淀](./13-habits.md) | 项目特有习惯一条命令写入 · §5 三层放置约定 · 跨项目 `ao recall` 检索（R158）|
 | 14 | [需求点管理](./14-requirement-management.md) | Requirement 实体 · 飞书同步（弱/强）· 迭代视图 · 派新迭代 · 打回 · 归档 |
 | 15 | [通用通知](./15-notifications.md) | 通知渠道配置（email + 飞书）· CLI `scripts/notify.sh` · HTTP `/api/notify` · AI 对话触发 · 飞书 webhook 配置速查 |
 | 16 | [资源池](./16-assets-pool.md) | 跨任务附件汇总 · 类型 tab + 来源下拉 + 项目/版本/搜索 · 批量删 |

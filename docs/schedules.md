@@ -37,7 +37,7 @@
 
 平台只能挡住「自己知道是谁派的」task。shell 脚本自己走 `POST /api/tasks` 建 task 时**必须带 `schedule_id`**（只能填自己 owner 的 schedule，否则 404），否则 `tasks.schedule_id` 为 null → 平台看不见 → 防重派闸门对它完全无效。
 
-不传的代价有实测: `v2-p0-loop` 5 天重派同一件事 604 次、烧 $206（判据把 `reviewing` 当成"没派过"）—— 事故与三个平台缺口见 [`plans/schedule-runaway-shell-gap.md`](plans/schedule-runaway-shell-gap.md)。
+不传的代价有实测: `v2-p0-loop` 5 天重派同一件事 604 次、烧 $206（判据把 `reviewing` 当成"没派过"）—— 事故教训：判据必须把 `reviewing` 算作「已派过」。
 
 反过来，**闸门口径宽也有代价**：一个干完停在 `reviewing` 等人验收的任务会挡住后续所有触发。要「无条件每次都派」的 schedule 把 `skip_if_running` 关掉（`cron.sh update <id> --no-skip`）；要解开被僵尸任务卡住的 schedule，把那些 task 软删除即可（软删除的不算在飞）。跳过会打日志 `[ScheduleRunner] Skip <name>: task <id> still <status>`，「到点没触发」先查这行。
 
@@ -56,7 +56,7 @@ ao stuck          # 列出所有「enabled + 过期 >5min + 被非终态任务�
 ao stuck --fix    # 只 cancel 其中 paused 僵尸（reviewing/running/queued 只报告，交人判断）
 ```
 
-修完 60s 内（runner 下一 tick）自动补触发，复跑 `ao stuck` 应为 ✅。脚本 = `scripts/check-stuck-schedules.sh`。
+修完 60s 内（runner 下一 tick）自动补触发，复跑 `ao stuck` 应为 ✅。脚本 = `scripts/check-stuck-schedules.sh`（`bash scripts/ao stuck`）。
 
 **巡检启示**：「到点没触发」不要记成「观察中」——`paused` 类卡死没有自愈路径，每轮 `ao stuck` 一次即可定性。
 
@@ -116,7 +116,6 @@ curl -X POST http://localhost:13000/api/schedules \
 
 - **服务端**：`createSchedule` / `updateSchedule`（`src/lib/db/schedules.ts`）在 description 为空/null 时 `console.warn`（不 throw），4 个创建入口（API POST/PATCH + `scripts/cron.sh` + UI 新建/编辑）同享。
 - **前端**：`src/app/schedules/schedules-client.tsx` 的 `submitCreate` / `submitEdit` 在 description 为空时弹 `toast.warning`。
-- **历史 / 跨仓兜底**：`bash scripts/check-schedules-missing-description.sh` 扫 DB 列出现存 description 缺失的 schedule，partner 巡检每轮跑一次（exit 0 = 有缺漏，1 = 全有）。
 
 不要写 P 列。
 
@@ -153,4 +152,4 @@ curl -H "Authorization: Bearer $MAC_ADMIN_TOKEN" \
 | `src/app/schedules/` | 列表页（只读 + 启停开关） |
 | `instrumentation.ts` | `register()` 启动 schedule runner |
 
-API 完整说明见 [`docs/api-routes.md`](api-routes.md) 的 Schedules 段；部署变更见 [`docs/deploy/2026-08-05.md`](deploy/2026-08-05.md)。
+API 完整说明见 [`docs/api-routes.md`](api-routes.md) 的 Schedules 段。

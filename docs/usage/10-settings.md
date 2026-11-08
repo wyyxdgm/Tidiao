@@ -189,8 +189,8 @@
   - 状态存在数据库里 —— **重启服务后仍处于维护模式**，必须显式点「恢复运行」才放行。
   - 关停会打断当前那一轮工作，可能留下半改的文件；agent 恢复后从 transcript 继续。
 - **CLI / 自动化**：
-  - 手动：`scripts/maintenance.sh enter|exit|status`
-  - 部署时自动包住：`./scripts/deploy.sh -- --drain`（需 admin token）
+  - 走维护 API：`POST /api/maintenance`（enter / exit / status，需 admin 鉴权）
+  - 部署时先 enter 关停、部署完 exit 恢复（内部部署脚本已内置此顺序；自建部署请照做）
 
 ### 功能点：提示音设置
 

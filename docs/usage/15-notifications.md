@@ -133,7 +133,7 @@ A：不一定。`none` = 两渠道都失败或都没配。常见原因：没配�
 A：可以，但前提是 mac-init 机器能网络到达 agent-orchestrator 平台（默认 `localhost:13000`，跨机器需要改 `BASE_URL`）。脚本只依赖 `curl` + `jq` 或 `python3`，**不需要**把 webhook URL 或 SMTP 凭据搬到 mac-init 那台机器——所有凭据走 agent-orchestrator 平台。
 
 **Q：agent 怎么知道有这个工具？**
-A：`.claude/skills/notify/SKILL.md` 在主仓 git 跟踪，deploy 时通过 `scripts/sync-standards.sh` 推到 `$ORCHESTRATOR_HOME/claude-config/skills/notify/`，所有 cwd 下的 agent 启动时自动加载。agent 看到触发词（"通知我" / "notify me" 等）就会用这个 skill。
+A：`notify` skill 在仓内 `.claude/skills/`（git 跟踪）。把仓 clone 到 agent 工作目录（或复制该 skill 到你的全局 skills 目录）后，agent 看到触发词（"通知我" / "notify me" 等）就会用这个 skill。
 
 **Q：飞书机器人能 @ 人 / 发图片 / 发卡片吗？**
 A：v47 只支持纯文本 + 简单 markdown。@人 / 富卡片 / 图片是另一个体系（tenant access token + 应用机器人），见 `docs/plans/notify-v47-handoff.md` §4 的扩展候选。

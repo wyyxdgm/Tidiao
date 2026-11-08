@@ -336,10 +336,6 @@ interval 简写格式：`Nm`（分钟 1-59）/ `Nh`（小时 1-23）/ `Nd`（v1 
 
 ## 相关文档
 
-- **设计拍板**：[`docs/plans/goal-loop.md`](../plans/goal-loop.md) §2 D1-D4 + §6 D5-D21
-- **部署变更记录**：[`docs/deploy/2026-09-14.md`](../deploy/2026-09-14.md)（goal loop 上线）
-- **DAG verification 关系**：[`docs/plans/dag-verification.md`](../plans/dag-verification.md)
-- **跨项目共享标准**：[`docs/shared-standards/agent-sdk-standards.md`](../shared-standards/agent-sdk-standards.md) §8
 - **派发 CLI**：[`scripts/ao-dispatch.sh`](../../scripts/ao-dispatch.sh)（用法提示在头部 / 早期校验）
 - **定时任务 CLI**：[`scripts/cron.sh`](../../scripts/cron.sh)（头部含 goal-loop 注释）
 - **任务管理章节**：[`03-tasks.md`](./03-tasks.md)（派发章节含 goal-loop 引用）
@@ -351,5 +347,5 @@ interval 简写格式：`Nm`（分钟 1-59）/ `Nh`（小时 1-23）/ `Nd`（v1 
 - **grader 模块**：`src/lib/runtime/goal-grader.ts` —— 调 runSingleTurnLlm + 解析 `{verdict, reason}` + 失败兜底
 - **集成点**：`src/lib/runtime/active-session.ts` —— 启动时解析 marker → success 拦截路径调 gradeGoal → 调 continueGoalLoop
 - **续跑 helper**：`src/lib/runtime/agent-runtime.ts:continueGoalLoop()` —— 决策树（giveUp / fork+compress / pushMessage）+ metadata 写回
-- **prompt 模板 + 三态边界**：[`docs/plans/goal-loop.md`](../plans/goal-loop.md) §9.1
+
 - **配置 helper**：`src/lib/db/settings.ts:getGoalGraderModel/getGoalResumeThreshold/getMaxGoalRounds()`

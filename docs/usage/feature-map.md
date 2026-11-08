@@ -81,7 +81,7 @@
 - 配置快照 —— 任务配置整包复用 → 📖 [07](./07-presets.md)
 - 批量导入 —— CSV / JSON / Markdown 三格式 → 📖 [08](./08-import-sync.md)
 - CLI 历史搬家 —— 本机 Claude Code 会话一键导入成任务，增量幂等 → 📖 [08](./08-import-sync.md) §CLI 历史
-  - ▲ 证据：`spa/src/views/Templates.vue` · `src/lib/import/parsers.ts` · `scripts/import-cli-history.ts`
+  - ▲ 证据：`spa/src/views/Templates.vue` · `src/lib/import/parsers.ts` · 平台端 `/api/cli-import`（CLI 端脚本未随开源版提供）
 
 ## 8️⃣ 统计 · 成本 · 监控
 
@@ -109,7 +109,6 @@
 
 - `ao` 统一入口 —— `ao help` / `ao doctor` 自检 / `ao query`（auto-login）/ `ao recall`（4 源并发关键词检索）/ `ao stuck` / `ao idea` → 📖 [11](./11-cli.md)
 - 派发/聊天 —— `ao-dispatch.sh`（派任务）/ `ao-chat.sh`（交互聊天）/ `ao-session.sh`（会话导出导入搬运）→ 📖 [11](./11-cli.md)
-- 习惯沉淀 —— 项目特有偏好一条命令写入，跨项目 `ao recall` 检索 → 📖 [13.5](./13-habits.md)
 - 会话真相源 —— 完整会话在 SDK jsonl 不在 DB；导出/备份以 jsonl 为准 → 📖 [04](./04-task-detail.md) §会话转录
   - ▲ 证据：`scripts/ao` · `scripts/ao-dispatch.sh` / `ao-chat.sh` / `ao-session.sh` · `docs/cli-tools.md`
 

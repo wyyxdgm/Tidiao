@@ -2,7 +2,7 @@
 
 > 甲方用**微信**直接给 AI 发需求，AI 做模块定位+拆解+测试用例，蒸馏成 1 条人话回复。把你从「甲方↔开发」的转述链里摘出来。
 >
-> **当前状态**：MVP 已上线（单客服账号 → 单项目）。规划与缺口见 [`docs/plans/projects/wecom-intake-phase2.md`](../plans/projects/wecom-intake-phase2.md)。
+> **当前状态**：MVP 已上线（单客服账号 → 单项目）。
 
 ---
 
@@ -97,8 +97,7 @@ AI 的详细分析**不会**发给甲方。甲方只收那条蒸馏消息。所�
 # 从 WSL 取凭证（不落盘）
 eval "$(ssh -p 2222 user@win 'grep -E "^(WECOM_CALLBACK_TOKEN|WECOM_ENCODING_AES_KEY|WECOM_CORP_ID|WECOM_KF_ID)=" ~/workspace/agent-orchestrator/.env.local | sed "s/^/export /"')"
 
-# GET + POST 双验（--dry 不消费甲方消息）
-node scripts/verify-intake-callback.mjs --dry
+# GET + POST 双验（回调自检脚本未随开源版提供；手动验证走平台日志 + 企微后台）
 ```
 
 ⚠️ **只验 GET 会漏 bug**：URL 验证的载荷短，会侥幸通过；真实事件 XML 长，曾因此炸过（详见 Phase 2 文档 §3.1）。脚本会自动构造长载荷。
@@ -127,8 +126,6 @@ ssh -p 2222 user@win "sqlite3 ~/.agent-orchestrator/orchestrator.db \
 
 ## 13.9 相关文档
 
-- [`docs/plans/projects/wecom-intake-phase2.md`](../plans/projects/wecom-intake-phase2.md) — 冷启动源：现状、踩坑实录、缺口、Phase 2 规划
-- [`docs/deploy/2026-08-08.md`](../deploy/2026-08-08.md) — 部署记录、企微侧配置步骤、凭证位置
 - [`docs/api-routes.md`](../api-routes.md) — intake 路由表
 
 ## 13.10 自动化测试覆盖（E2E + 边界）
@@ -176,7 +173,7 @@ npx vitest run src/lib/intake/ src/app/api/intake/
 
 ## 13.11 多渠道插件化（Telegram P0，飞书 R184）
 
-> 状态：**代码已合 master（P0），部署待派**。方案全景见 [`docs/plans/multi-channel-intake.md`](../plans/multi-channel-intake.md)。
+> 状态：**代码已合 master（P0）**。
 
 ### 已上线渠道矩阵
 
@@ -233,7 +230,7 @@ npx vitest run src/lib/intake/ src/app/api/intake/
 
 ## 13.12 wecom 凭据接入 channel_configs（2026-10-13 D1）
 
-> 方案：[`docs/plans/intake-channel-unify.md`](../plans/intake-channel-unify.md)。telegram 是「渠道实例注册」完整参照，wecom 本次收编为查表定位。
+> telegram 是「渠道实例注册」完整参照，wecom 本次收编为查表定位。
 
 ### 凭据定位顺序（route 每次回调现查）
 
@@ -246,7 +243,7 @@ npx vitest run src/lib/intake/ src/app/api/intake/
 ```bash
 # 实例 6 个 env（5 个 WECOM_* + INTAKE_PROJECT_ID）source 后跑
 # 幂等（按 name=wecom-客服主账号 跳过）；打印解密回读校验
-jiti scripts/migrate-wecom-channel.ts
+# （一次性迁移脚本未随开源版提供；新部署直接建表即可）
 # 回滚: sqlite3 <db> "DELETE FROM channel_configs WHERE channel='wecom' AND name='wecom-客服主账号';"
 ```
 
@@ -257,7 +254,7 @@ jiti scripts/migrate-wecom-channel.ts
 
 ## 13.13 飞书通道（2026-10-13 D2）
 
-> 方案：[`docs/plans/intake-channel-unify.md`](../plans/intake-channel-unify.md) §D2。甲方在**飞书**里对机器人发消息 → 平台建/续需求线程，同 wecom/telegram。
+> 甲方在**飞书**里对机器人发消息 → 平台建/续需求线程，同 wecom/telegram。
 
 ### 与 wecom / telegram 的差异
 
@@ -311,7 +308,7 @@ channel_configs 的 feishu 行 `secret` 字段只存打包 JSON `{"verificationT
 
 ## 13.15 微信个人号通道（iLink bot，2026-10-13 扫码绑定 D3）
 
-> 方案：[`docs/plans/channel-qr-bind.md`](../plans/channel-qr-bind.md) §3 D3。个人微信（非公众号/非企业微信），走**腾讯官方 iLink bot 开放平台**（`ilinkai.weixin.qq.com`），协议契约从 zai-org/ZCode 源码提取核实。
+> 个人微信（非公众号/非企业微信），走**腾讯官方 iLink bot 开放平台**（`ilinkai.weixin.qq.com`），协议契约从 zai-org/ZCode 源码提取核实。
 
 ### 怎么用（damo 视角，一次扫码全程无手填）
 

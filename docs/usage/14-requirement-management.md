@@ -432,7 +432,7 @@ POST   /api/tasks                           可带 requirement_id + type (design
 PATCH  /api/tasks/[id]                      ALLOWED_FIELDS 含 requirement_id (null=解绑) + progress/progress_note (R196 自报)
 ```
 
-**重要：跨 owner 一律 404**（不泄露存在性），全周期覆盖各端点。R78 W4 新增测试见 `src/app/api/requirements/[id]/{route.test,tasks/route.test,revisions/route.test}.ts` + `src/app/api/tasks/route.test.ts`。完整需求闭环契约见 [`docs/plans/r78-requirement-loop.md`](../plans/r78-requirement-loop.md)。
+**重要：跨 owner 一律 404**（不泄露存在性），全周期覆盖各端点。R78 W4 新增测试见 `src/app/api/requirements/[id]/{route.test,tasks/route.test,revisions/route.test}.ts` + `src/app/api/tasks/route.test.ts`。
 
 ---
 
@@ -472,4 +472,3 @@ A: 1-5 整数，P1 = 最高。纯展示 + 排序参考，**不**影响调度。
 - 前端 page：`src/app/requirements/{page,new,[id]/page}.tsx` + 3 个版本级重定向
 - 写回框架：`src/lib/feishu/write-back.ts`（T/W/Z 列）
 - 测试：`src/lib/db/requirements.test.ts`（35 cases）
-- 上位设计：[`docs/plans/requirement-as-entity.md`](../plans/requirement-as-entity.md)

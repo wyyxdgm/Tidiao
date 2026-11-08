@@ -212,7 +212,7 @@
     - **marker 声明（R113）**：agent 在输出里写 `<git commit-id="abc" desc="..." files="a.ts,b.ts"/>`，runtime 解析后写 `task_commits` 表（带文件清单，归属最精确）。
     - **自动收集（R158，2026-09-26）**：agent 退出时跑 `git log base..head --no-merges` 兜底收集未声明的 commit（`INSERT OR IGNORE`，不覆盖 marker 数据）。damo 已拍板推翻 R113「不主动跑 git log」原则（cwd 是用户项目目录，其他面板早就在跑）。
     - **R228 增量语义（2026-10-09）**：自动收集带 `--since` 时间下界（上次收集终点 = 旧 `head_commit` 的提交时刻，无则退 task 创建时刻），并把收集窗口压回本 task 会话增量；同一 commit 已被其他 task 认领时**先到先得跳过**——修掉共享仓库多任务并发时「区间互认」（实测一条 commit 曾被 9 个 task 认领、R87 面板显示 66 条其中 80+ 是别人的）。
-    - **存量清洗**：`jiti scripts/dedupe-task-commits.ts`（认领滞后判据：commit → collect 落库滞后分钟级 = 真实产出，小时/天级 = 区间旧货，删）。dry-run 默认，`--apply` 真删（自动备份 CSV，可回滚）。
+    - **存量清洗**：内部维护脚本，未随开源版提供（重复认领可手动核对 `tasks` 表 commit 记录）。
   - 派生 task 拓扑（fork 家族）放在面板头部一条**可折叠提示**里——主体是 commit log，fork 关系是元数据。
   - **agent 未声明 git 提交时**：面板显示提示文案 + base→head 区间（如 `base abc1234 → head def5678`），让用户知道「这个 task 改了哪些 commit 但 agent 没记录」。
   - `base_commit` 是任务启动时 cwd 的 git HEAD 快照；`head_commit` 是任务结束时的 git HEAD。
@@ -306,7 +306,7 @@
   - 模块底部常驻小按钮，强制重算两份总结（并行调两个 `?refresh=true` 路由，最长约 1 分钟）；成功即显，失败显示原因。
   - **有 result 但没总结时模块不再整体隐藏**（原来无缓存整段隐藏无补救），显示「未生成」+ 重算按钮。
 - **注意**：
-  - 没有缓存（存量任务在预热机制上线前完成 / LLM 生成失败）→ 模块显示「未生成」状态 + 重算按钮。批量回填跑 `scripts/warm-result-layers.ts`（支持 `--task` 单任务 / `--project` 按项目 / 无参全量，`--card-only` 只补卡片）。
+  - 没有缓存（存量任务在预热机制上线前完成 / LLM 生成失败）→ 模块显示「未生成」状态 + 重算按钮。批量回填工具未随开源版提供（单任务可在详情页点「重算」）。
   - 任务重跑（result 变了）→ 卡片摘要与分层总结都按 result 长度自动失效（1010 起 `card_summary_v6` 与 layers 同口径），重跑完成后重新预热生成。
   - result 过短（<200 字）不值得分层 → 只有卡片摘要，没有概览/流程图。
   - 同一份数据总控制台（Console）也在用：卡片「干啥/有啥用」两行 + 详情弹窗三层钻取，打开即秒显（缓存已预热）。
@@ -335,7 +335,7 @@
   - 已删除任务（`deleted_at` 非空）由平台数据层天然过滤，不会出现在关系图里。
   - **数据源**：`GET /api/tasks/{id}`（`src/app/api/tasks/[id]/route.ts`）。该接口同时返回 `depends_on_ids` 等 id 列表和 `depends_on_tasks` / `dependent_tasks` / `dispatcher_task` / `dispatched_tasks` / `parent_task` 等 hydrated 对象 —— SPA 是纯客户端 fetch，只能吃后者（SSR 版走 `src/app/tasks/[id]/page.tsx` 在 server 侧 hydrate）。
   - 回归测试 `src/app/api/tasks/[id]/relations-hydration.test.ts`（5 条：依赖 / 派发链 / 空关系 / 跨 owner 过滤 / 需求点关联）。
-  - 实现参考 [`docs/plans/dag-verification.md`](../plans/dag-verification.md) §4.4。
+
 
 ![关系图：上游 → 当前 → 下游 3 段式布局](screenshots/dag-p4-b-after-delete.png)
 
@@ -358,7 +358,7 @@
 在。页面加载时从 `GET /api/tasks/{id}/messages` 获取历史消息，包括 user/assistant 消息和工具调用。SSE 连接建立后还会重放历史事件（`history` 类型），补充可能遗漏的消息（如暂停期间排队的消息）。
 
 **Q: 每次打开任务详情都要拉全量会话历史吗？**
-不用（2026-10-08 起）。历史拉取走条件请求（`If-None-Match` / `ETag`）：服务端指纹 = `task.updated_at + session_id + MAX(events.id)`，没变就回 **304 空 body**——同一 SPA 会话内再次打开同一任务时零传输（该接口全量实测 ~282KB，是详情页最大响应；压测见 [部署变更 2026-10-08](../deploy/2026-10-08.md)）。agent 在跑时 events 表有新写入，指纹必变 → 自动回 200 全量，不会漏消息；硬刷新页面后 ETag 缓存重建，首次仍是全量。
+不用（2026-10-08 起）。历史拉取走条件请求（`If-None-Match` / `ETag`）：服务端指纹 = `task.updated_at + session_id + MAX(events.id)`，没变就回 **304 空 body**——同一 SPA 会话内再次打开同一任务时零传输（该接口全量实测 ~282KB，是详情页最大响应）。agent 在跑时 events 表有新写入，指纹必变 → 自动回 200 全量，不会漏消息；硬刷新页面后 ETag 缓存重建，首次仍是全量。
 
 **Q: Fork 出的新任务和原任务有关系吗？**
 有。新任务继承父任务的对话历史（到 fork 点为止），但拥有独立的 SDK session 和独立的任务行。新任务的 `forked_from_session_id` 记录了来源，`base_commit` 继承自父任务的 `head_commit`。在 Commits 面板可以看到整个 fork 家族的关系。

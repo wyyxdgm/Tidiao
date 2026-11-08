@@ -2,7 +2,7 @@
 
 > 给 admin / operator 的分步指南: **从 0 到能跑一次命令**。
 >
-> 全景: [../runners.md](../runners.md)（设计 / 协议 / 安全）/ [../plans/runners-rollout.md](../plans/runners-rollout.md)（端到端 + Phase 编排）/ [../plans/runners.md](../plans/runners.md)（权威设计文档）。
+> 设计 / 协议 / 安全细节见内部设计档（未随开源版发布）；本文件为使用视角说明。
 
 ---
 
@@ -16,7 +16,7 @@
 
 1. 平台上你是 **admin**（`/settings` 顶部能看到「平台管理」tab）—— 否则 `/runners` 直接 redirect 到 `/`
 2. 目标机能 SSH 出去（或你可以贴命令到那台机）—— daemon 自己起 HTTP server，无需 SSH
-3. 目标机装了对应 go 二进制（或 `agent-orch-runner` 仓已 clone + `make build`）—— 当前 R2 还在 P1 (建仓) 阶段, 没到位前走 [../plans/runners-rollout.md §5-P5 第 1 步](../plans/runners-rollout.md) 的临时冒烟路径
+3. 目标机装了对应 go 二进制（或 `agent-orch-runner` 仓已 clone + `make build`）—— 当前 R2 还在 P1 (建仓) 阶段, 没到位前用临时冒烟路径（目标机手工跑 echo 验证连通）
 4. 平台 → 目标机网络通（目标机 `:8081` 端口平台能 reach; LAN 即可, 不需要进路由器端口映射）
 
 > 🔴 **别把 daemon 暴露到公网**。只在 LAN bind（macOS 默认就 0.0.0.0, 改 config.json 里的 `host` 字段没用 — Go HTTP 用 `addr`, 只 listen 不绑地址。所有防火墙 / 路由器层要做限制）。
@@ -94,7 +94,7 @@ chmod 0600 ~/.agent-orch-runner/config.json
    - 例: 平台 cwd `/home/user/workspace/agent-orchestrator-dev` ↔ runner `/Users/user/workspace/agent-orch-runner`
 5. **command_patterns**: 一行一条白名单命令
    - 例: `cargo tauri build` / `npm run tauri build`
-   - 子串匹配（转义后 `.*`），不支持引号变体 / 路径前缀 —— 见 [../plans/runners.md §关键风险 3](../plans/runners.md)
+   - 子串匹配（转义后 `.*`），不支持引号变体 / 路径前缀 —— （关键风险：子串匹配可能过宽，白名单条目要带足够上下文）
 6. 点「+ 加入列表」 → 列表里多一条 entry
 7. 面板底部「保存」
 
@@ -102,7 +102,7 @@ chmod 0600 ~/.agent-orch-runner/config.json
 
 ### Step 6: 跑一条命令验证
 
-R3 落地后, 派一个测试任务, agent Bash 跑白名单里的命令（如 `echo hello-from-mac` —— 见 [rollout §1 终局图景](../plans/runners-rollout.md)）:
+R3 落地后, 派一个测试任务, agent Bash 跑白名单里的命令（如 `echo hello-from-mac`）:
 
 - 正常: tool_result 以 `[runner:mac-build (192.168.3.243:8081) req=xxxxxxxx]` 开头, 含 `hello-from-mac`
 - runner offline: tool_result body = "runner offline", deny（**不**静默本地执行）

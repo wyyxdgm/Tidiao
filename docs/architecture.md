@@ -46,7 +46,7 @@ AgentRuntime 在 `instrumentation.ts` 中作为单例初始化，API Route 通�
 | v36 | tasks 加 `resolved_model TEXT`（最近一次启动实际使用的模型快照，`resolveLlmConfig` 最终值）。与 `model`（用户偏好，null=跟随默认，会漂移）区分，UI 显示优先读此字段。ActiveSession 构造函数写入 |
 | v37 | `idx_tasks_schedule` on tasks(schedule_id) —— 定时任务防重派闸门每分钟按 schedule_id 反查在飞任务，无索引就是全表扫上万行 tasks |
 | v38 | projects 加 `parallel_limit INTEGER DEFAULT 1`（该项目共享同一 cwd 的任务可同时跑几个）。**只放宽 TaskScheduler 三层闸门的第二层**（per-cwd 互斥），全局并发与 per-owner 上限照旧 → 实际并行度三者取小。NULL 视作 1，存量项目零变化。判据在 `TaskScheduler.cwdLimit()`（**故意不缓存**，换改完即生效）；`busyCwds` 相应从 `Map<cwd,taskId>` 变 `Map<cwd,Set<taskId>>`。🔴 只该给「基本不写工作目录」的项目调高，否则 `git index.lock` + 同名文件互相覆盖 |
-| v51 | **Runners 子系统 (R1)**：加 `runners` 表（每条 = 一台目标机上一个 daemon 实例；256-bit shared secret 用 3 列 AES-256-GCM 存同 llm_configs/user_media_keys 模式）+ projects 加 `runners` JSON 字段（`[{runner_id, purpose, cwd_mapping, command_patterns[]}]`，每项目可绑多个 runner + 命令白名单；上限 32 pattern/entry 挡滥用）。`runners` 表 UNIQUE(host, port)；status 由 heartbeat 驱动（online/offline/dead 三段式）。R2 (Go daemon) + R3 (canUseTool 拦截) + R4 (UI) 见 [`docs/plans/runners.md`](plans/runners.md) 和 [`docs/plans/runners-rollout.md`](plans/runners-rollout.md)。UI 入口 [`/runners`](../src/app/runners/page.tsx)（admin only）|
+| v51 | **Runners 子系统 (R1)**：加 `runners` 表（每条 = 一台目标机上一个 daemon 实例；256-bit shared secret 用 3 列 AES-256-GCM 存同 llm_configs/user_media_keys 模式）+ projects 加 `runners` JSON 字段（`[{runner_id, purpose, cwd_mapping, command_patterns[]}]`，每项目可绑多个 runner + 命令白名单；上限 32 pattern/entry 挡滥用）。`runners` 表 UNIQUE(host, port)；status 由 heartbeat 驱动（online/offline/dead 三段式）。R2 (Go daemon) + R3 (canUseTool 拦截) + R4 (UI)。UI 入口 [`/runners`](../src/app/runners/page.tsx)（admin only）|
 | v511 | **project_configs (per-project KV, 加密存)**：复用 `src/lib/crypto.ts` AES-256-GCM 模式（同 `user_media_keys` v48 / `llm_configs` v41 三列拆存），存每 project 自己的敏感配置（卡号 / 密钥 / API key 等）。PK `(project_id, key)` + FK `projects(id) ON DELETE CASCADE`，项目删了配置自动清。**不复用 `app_settings`**：app_settings 全局 KV 没有 project_id，per-project 卡号跟全局混会出问题。`transactional=true`（一表 + 一索引必须原子）。reuse-pool 首批 4 key 命名: `bank_account_holder` / `bank_card_no` / `bank_branch` / `payee_phone`。API 4 个（list/get/put/delete）见 [api-routes.md §Project Configs](./api-routes.md#project-configsv511-4-个per-project-kvaes-256-gcm-加密存) |
 
 ### 表结构（13 张）
@@ -174,7 +174,5 @@ agent (WSL)                     platform (platform instance)                runn
 | **R4 UI+文档（本文档）**| ✅ `/runners` admin 页面 + `docs/runners.md` |
 | P5 端到端 | ⏳ 等 P2-P4 |
 
-详细协议 + 路由/匹配算法 + 9 项风险缓释见 [`docs/runners.md`](runners.md);
-端到端 Phase 编排 + 派发模板见 [`docs/plans/runners-rollout.md`](plans/runners-rollout.md);
-权威设计 + 任务分解见 [`docs/plans/runners.md`](plans/runners.md);
+详细协议见 `docs/usage/runners.md`;
 Operator 分步指南见 [`docs/usage/runners.md`](usage/runners.md)。

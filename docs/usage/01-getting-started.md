@@ -118,7 +118,7 @@
   - 不设置 `COOKIE_SECURE=0` 时，HTTP 部署下浏览器不会发送 cookie，导致登录后仍显示未登录
   - HTTPS 部署无需此设置，cookie 默认 `secure=true`
   - 也可显式设置 `COOKIE_SECURE=1` 强制开启（用于 HTTPS 反代场景）
-  - 详见 [docs/deploy.md](../deploy.md)
+  - 生产部署：仓库根 `docker-compose.yml`（或 `npm run build` + 自行守护进程），环境变量说明见下文
 
 ### 功能点：后台状态呼吸点
 

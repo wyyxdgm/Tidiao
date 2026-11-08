@@ -255,21 +255,6 @@
   - 当前 API 是「只读 + 展示」，没有 `PATCH deleted_at` 端点 —— 软删除动作由后台脚本直接 SQL 完成（如未来需要软删/恢复端点单独提需求）。
   - `skip_if_running` 「软删除的不算在飞」这条闸门判断仍生效（判断的是 `enabled`+ 任务状态，不看 `deleted_at`）。
 
-### 功能点：邮件路由管线（shell schedule 实战样例，2026-10-31）
-
-damo 的 163 邮箱（`you@example.com` = 平台 notify 收件箱）新邮件每 15 分钟自动抓取分流：**告警类直接派平台任务处理、纯信息类跳过不过 AI、未知类型派 AI 裁定并自动沉淀新规则**。规则越用越多，越少邮件需要过 AI。
-
-- **怎么用**：
-  - 管线本体在 `scripts/mail-router/`（fetch.mjs + rules.json + templates/ + run.sh），schedule `邮件路由-163邮箱抓取`（shell，`*/15 * * * *`）执行 `run.sh`。
-  - **加规则** = 编辑 `scripts/mail-router/rules.json`（match 支持 `subject_contains` / `from_contains` / `body_contains` 子串数组，`any`/`all` 组合；action = `skip` / `dispatch`），先命中先赢。AI 裁定任务也会自己往里追加新规则（带 `git pull --rebase` 后 commit）。
-  - **换邮箱 / 改凭据** = `scripts/mail-router/.env`（gitignored，模板见 `env.example`；163 用授权码非登录密码）。
-  - **手动触发 / 预演**：`bash scripts/mail-router/run.sh --dry-run`（零副作用，只打印将派什么）。
-- **注意**：
-  - 管线**只读邮箱**（不标记已读、不移动邮件），去重靠 `var/state.json` 水位（UIDNEXT 单调递增）；首次运行把现有邮件全部记为已处理（不回扫历史）。
-  - 每轮最多派 5 个任务防风暴；派发失败重试 3 次后放弃并落日志（`var/mail-router.log` JSON 行）。
-  - 🔴 AI 裁定/处理任务**禁用 email 通知通道**（会把消息发回 163 邮箱造成回流循环），统一走飞书通道。
-  - 凭据未配时每轮优雅退出 exit 0（schedule_runs 可见 skip 记录），配好自动生效，无需重启。
-
 ## 常见问题
 
 **Q: schedule 创建后 next_run 怎么算？**

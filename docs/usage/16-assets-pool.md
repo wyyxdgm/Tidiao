@@ -105,4 +105,3 @@ URL 参数 `sort`：`created_at:desc`（默认）/ `created_at:asc` / `size_byte
 - API：`src/app/api/assets/route.ts`（列表 + 6 维筛选）/ `filters/route.ts`（下拉候选）/ `delete-batch/route.ts`（批量删）
 - 测试：`src/app/api/assets/route.test.ts`（24 条，覆盖鉴权 / 跨 owner / 各维度筛选 / 排序 / 分页 / 时间窗）
 - 字段定义：`src/lib/db/attachments.ts`（`source` 枚举 `upload | fork | agent_generated`，R121 扩展 `agent_generated`）
-- 关联 plan：[`docs/plans/projects/asset-gallery-and-chat-media.md`](../plans/projects/asset-gallery-and-chat-media.md)（PR-2 = 资源池）

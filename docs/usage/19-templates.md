@@ -79,7 +79,7 @@
 7. 启动 → DAG 自动等 feat 跑完 → 跑 test
 8. test 任务**独立验证**（不信 agent 自述，自己跑 server.js + curl）
 
-**对应 skill**：[[orchestrator-dispatch]] + [[orchestrator-manage]] + [[orchestrator-recall]]（下一波 P1）
+**对应 skill**：[[orchestrator-dispatch]] + [[orchestrator-manage]]
 
 **坑**：
 - cwd 默认 `/tmp/long-running-demo/` —— 想改可换路径

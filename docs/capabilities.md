@@ -2,12 +2,11 @@
 
 ## 当前能力 (capabilities)
 
-- ✅ **多 Claude Code Agent 任务调度**: FQPF 调度 + SSE 流 + per-cwd/per-user 并发闸门 | [docs/architecture.md](docs/architecture.md) + 运行中 (13000/13001/ao.example.com)
-- ✅ **飞书 sheet 同步 (requirement/customer_summary)**: 平台侧双向 write-back | [docs/feishu-integration-standards.md](docs/feishu-integration-standards.md)
-- ✅ **Runner 远程 exec (R1 平台侧已上线)**: 白名单命令远程执行 + 心跳健康 + 401 结构化错误类型 | [docs/plans/runners-rollout.md](docs/plans/runners-rollout.md) §3 + commit `0b27000` / `25ae79f`
-- ✅ **M 模式 (主控审查 task) 多任务编排**: R107 通知驱动波次+审查循环，runners-rollout 完整闭环验证 | [docs/shared-standards/task-dispatch-standards.md §6](docs/shared-standards/task-dispatch-standards.md)
-- ✅ **能力声明规范**: 标准定稿, 待 wave 铺开 | [docs/shared-standards/capability-declaration.md](docs/shared-standards/capability-declaration.md)
-- 🟡 **甲方协作入口**: 规划中 (P1/P2/P4 定), 待开发 | [docs/plans/projects/client-portal-h5.md](docs/plans/projects/client-portal-h5.md)
+- ✅ **多 Claude Code Agent 任务调度**: FQPF 调度 + SSE 流 + per-cwd/per-user 并发闸门 | [docs/architecture.md](architecture.md)
+- ✅ **飞书 sheet 同步 (requirement/customer_summary)**: 平台侧双向 write-back 
+- ✅ **Runner 远程 exec (R1 平台侧已上线)**: 白名单命令远程执行 + 心跳健康 + 401 结构化错误类型 
+- ✅ **M 模式 (主控审查 task) 多任务编排**: R107 通知驱动波次+审查循环，
+- ✅ **能力声明规范**: 标准定稿, 待 wave 铺开 
 
 ## 未来方向 (roadmap)
 

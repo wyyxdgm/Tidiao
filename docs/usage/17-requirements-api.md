@@ -325,7 +325,7 @@ curl "$BASE/api/requirements/revisions?since=2026-09-03T00:00:00Z&actor_type=age
   - `src/app/api/requirements/[id]/auto-dispatch/route.ts`（POST）
 - **关联 task 创建**：`POST /api/tasks`（`src/app/api/tasks/route.ts`）+ `POST /api/requirements/[id]/auto-dispatch`（W2 cron 接缝）
 - **前端 page**：`src/app/requirements/{page,new,[id]/page}.tsx`
-- **上位设计**：[`docs/plans/requirement-as-entity.md`](../plans/requirement-as-entity.md) / [`docs/plans/r78-requirement-loop.md`](../plans/r78-requirement-loop.md) / [`docs/usage/14-requirement-management.md`](./14-requirement-management.md)
+- **上位设计**：[`docs/usage/14-requirement-management.md`](./14-requirement-management.md)
 - **飞书写回（独立体系）**：`src/lib/feishu/write-back.ts`（任务完成 → 飞书 T/W/Z 列）
 
 ---

@@ -201,7 +201,7 @@ PATCH 只写 `!== undefined` 的字段：未传的跳过，传 `false`/`0` 正�
 🔴 **未知字段 → 400，不静默丢弃**（2026-08-13 修）。修之前 `updateSchedule` 只认前 10 个，
 其余（`max_turns`/`effort`/`model`/`tags`...）既不写库也不报错，且 `fields` 为空时原样返回旧对象
 = HTTP 200 + 完整 JSON，调用方分不清「改成功」和「整个请求被忽略」。`cron.sh` 的这批 flag
-因此空转还每次打 ✅。根因与形状见 [`docs/fixes/2026-08-13-schedule-patch-silent-drop.md`](fixes/2026-08-13-schedule-patch-silent-drop.md)。
+因此空转还每次打 ✅。根因：PATCH 对未变更字段的处理曾静默吞参（已修）。
 
 🔴 **`null` ≠ 键不存在**：键不存在/`undefined` = 不改；显式 `null` = 置空。
 `{"max_turns": null}` = 不限轮次（运行时回落默认 200）。`0`/`false`/`""` 是正常值不是「没传」。
@@ -412,5 +412,3 @@ curl -X DELETE -H "Authorization: Bearer $MAC_ADMIN_TOKEN" \
 
 - 功能说明: [`docs/schedules.md`](schedules.md)
 - 路由总表: [`docs/api-routes.md`](api-routes.md)
-- 部署记录: [`docs/deploy/2026-08-05.md`](deploy/2026-08-05.md)
-- 测试 Token: [`docs/testing-tokens.md`](testing-tokens.md)

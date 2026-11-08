@@ -302,7 +302,7 @@
 
 ### 功能点：机械验收门（v72 — DAG P3，damo 2026-09-06 B5 拍板）
 
-- **是什么**：项目级 `verification_command`，agent 报完成 → 平台跑命令 → 成功翻 `completed` / 失败回退 `running` + 注入反馈（重试 N 次）。设计稿：[`docs/plans/dag-verification.md`](../plans/dag-verification.md) §4.3。
+- **是什么**：项目级 `verification_command`，agent 报完成 → 平台跑命令 → 成功翻 `completed` / 失败回退 `running` + 注入反馈（重试 N 次）。
 - **三层字段**（项目级，PATCH `/api/projects/[id]`）：
   - `verification_command` (string | null)：要跑的命令。null = 关（默认）。
   - `verification_timeout_seconds` (10-3600，默认 600)：单次命令超时。

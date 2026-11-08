@@ -103,7 +103,6 @@ updateTask(taskId, { metadata: JSON.stringify(meta) });
 接着被 `maybeDrainStrandedMessages` 当成「还有留言」再投一遍。
 
 ⚠️ 仍**无事务**：`mutateTaskMetadata` 只把 read-modify-write 的窗口收窄到函数内，并发写覆盖没有消除。
-相关设计讨论见 [`plans/knowledge-broadcast.md`](plans/knowledge-broadcast.md)。
 
 ---
 

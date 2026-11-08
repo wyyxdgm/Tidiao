@@ -98,7 +98,7 @@
 - **是什么**：在项目 A 的 wiki 文档里写一段链接，直接跳到项目 B 的 wiki 某篇文档。用于多仓协作时把分散的文档串起来（如 yidao 主仓报告里引用 yidao-webiste 的首页）。
 - **怎么用**：markdown 里写带 `project:` 前缀的链接：
   ```markdown
-  详见 [yidao-webiste 首页](project:3fa2ad29-8669-4cbb-876c-fc65c4f57a49?path=INDEX.md)
+  详见 [另一个项目的首页](project:<目标项目UUID>?path=INDEX.md)
 
   也可指定目标版本：
   [v1.0 架构](project:3fa2ad29-8669-4cbb-876c-fc65c4f57a49?path=docs/architecture.md&version=v1.0)
@@ -162,7 +162,7 @@
 ### 功能点：生成对外可点的 wiki 链接（wiki-link.sh）
 
 - **是什么**：把一条文档路径变成带 project_id + version_id 的完整 wiki URL（贴到飞书 / 消息里，对方点开直接定位到渲染页）。
-- **怎么用**：`bash scripts/wiki-link.sh <文档路径>` → 输出 `https://dao.example.com/#/<pid>/wiki?path=...&version=<vid>`（hash 路由：URL 必须带 `/#/` 前缀，缺了会落到旧 Next 壳页面）。入参支持 4 类形态：相对路径 / cwd 相对 / `~` / 绝对路径 / 项目别名+空格。
+- **怎么用**：拼 URL 模板 `https://<host>/#/<projectId>/wiki?path=<url-encoded>&version=<vid>`（hash 路由：URL 必须带 `/#/` 前缀）。`path` 段必须 URL-encode（`/` → `%2F`）。CLI 辅助脚本未随开源版提供。
 - **注意**：
   - `--env=dao`（默认）/ `wsl` / `wsl-ip` 切 host（公网 / 本机 / 内网 IP）
   - 跨项目跳转语法的实现（`project:{UUID}?path={relpath}`）在 `src/lib/wiki-links.ts`（详见上方「跨项目 Wiki 链接」功能点）

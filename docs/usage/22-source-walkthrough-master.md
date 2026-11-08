@@ -1279,7 +1279,7 @@
 - **LOC**: 小.
 
 #### 逻辑单元: `GET(req)`
-- **目的**: 拉状态分布直方图 + non-terminal 任务列表 + promoter exit_code. 巡检 30 min 跑 (`scripts/survey-r6-state.cjs`).
+- **目的**: 拉状态分布直方图 + non-terminal 任务列表 + promoter exit_code. 巡检脚本未随开源版提供（可直接调 `/api/tasks/page` 轮询）.
 
 #### 3.23.3 `src/app/api/stats/route.ts`
 - **LOC**: 中.
@@ -2030,7 +2030,7 @@
 
 #### 5.3.11 `src/lib/feishu/lark-cli.ts` (51 行)
 #### 逻辑单元
-- **lark-cli shim 包装** (line 1-51) — 调外部 `lark-cli` 二进制 (平台用 `scripts/lark-cli.sh`). 鉴权 + 重试.
+- **lark-cli shim 包装** (line 1-51) — 调外部 `lark-cli` 二进制 (平台侧 shim 未随开源版提供; 表操作可用 `scripts/feishu.sh`). 鉴权 + 重试.
 
 #### 5.3.12 `src/lib/feishu/requirement-cache.ts` (30 行)
 #### 逻辑单元

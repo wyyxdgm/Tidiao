@@ -214,7 +214,7 @@ role = { system_prompt, memory_doc, context_budget, model, allowed_tools }
 - meta-agent（§8 远期）/ rule engine（v1 落地）本身也是一个 role。
 
 - **现状** ✅ (`roles` 表 + `tasks.role_id` 于 2026-07-25 落地)：migration v10 建 `roles` 表（id/name/description/system_prompt/model/allowed_tools/effort/max_turns/memory_doc）+ `tasks.role_id` FK。`createTask` 在 `role_id` 存在时自动继承 system_prompt（拼到 prompt 头部作 `[role: ...]` 前缀）+ model/allowed_tools/effort/max_turns defaults；task 级字段覆盖 role defaults。`/api/roles` CRUD 完成（GET/POST/GET[id]/PATCH/DELETE）。
-  - 🆕 **Role 场景化四件套（2026-10-13 落地，[role-scoped-roles.md](plans/role-scoped-roles.md) P1-P5）**：v525 `roles.project_id` 项目绑定（NULL=全局，`getRolesForProject` 全局+项目专属合并，createTask 校验 `ROLE_SCOPE_MISMATCH`）+ API/CLI 接线（POST /api/tasks 透传 role_id，`ao-dispatch.sh --role`）+ v526 `channel_configs.role_id` 渠道默认角色（telegram bind 挂载，见 P3 入口实况）+ v527 `roles.feishu_writeback` 回写开关（rule-engine skip + runtime 注入 + 手动回写 403）+ **SPA 管理**（设置 → 角色 tab：新建/编辑/删除 + 项目绑定 + 回写开关；派发表单「角色预设」下拉）。
+  - 🆕 **Role 场景化四件套（2026-10-13 落地）**：v525 `roles.project_id` 项目绑定（NULL=全局，`getRolesForProject` 全局+项目专属合并，createTask 校验 `ROLE_SCOPE_MISMATCH`）+ API/CLI 接线（POST /api/tasks 透传 role_id，`ao-dispatch.sh --role`）+ v526 `channel_configs.role_id` 渠道默认角色（telegram bind 挂载，见 P3 入口实况）+ v527 `roles.feishu_writeback` 回写开关（rule-engine skip + runtime 注入 + 手动回写 403）+ **SPA 管理**（设置 → 角色 tab：新建/编辑/删除 + 项目绑定 + 回写开关；派发表单「角色预设」下拉）。
 - **memory_doc 落库但未接运行时** ❌：schema 已支持，**未做**：每次会话 fresh 载入、超预算压缩、与 session 联动。
 - **下轮待补**：~~UI 管理 roles~~ ✅ 2026-10-13（SPA 角色 tab）；memory_doc 真正的"外化状态"读/写/压缩闭环；评估 harness + 版本化 prompt。渠道默认角色的**管理 UI** 待补（`channel_configs` 尚无 CRUD API 与 SPA 管理页，现仅 telegram bind 路径消费 role_id）。
 

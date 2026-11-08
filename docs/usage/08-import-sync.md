@@ -114,45 +114,8 @@ A: 文件导入（CSV/JSON/Markdown）创建的任务初始状态为 `pending`�
 **Q: 飞书写回什么时候触发？**
 A: 飞书写回是手动调用的 API，不自动触发。可在任务完成后调用，或在 agent 运行过程中通过定时任务定期调用。
 
-## 本机 CLI 会话历史导入（Mac 本机 dev 实例）
+## 本机 CLI 会话历史导入
 
-> 三机各自独立实例（每台自己的 13000）通用——脚本按 `os.homedir()` 动态识别本机会话，见文末「跨机器使用」。本节标题保留 Mac 措辞是因为首次全量导入（clean+scan+summarize+ingest）发生在 Mac dev 实例。
+> 平台端 API（`/api/cli-import`：把本机 Claude Code CLI 会话历史导入为平台任务）随开源版提供；
+> CLI 端辅助脚本（scan / summarize / ingest 一站式）未随开源版发布，可直接调 API 实现。
 
-### 功能点：CLI 历史一键导入（clean/scan/summarize/ingest）
-
-- **是什么**：把本机原生 Claude Code CLI 的全部对话历史（`~/.claude/projects/<目录>/*.jsonl`）导入平台，一个 session = 一个任务（`status='completed'`、`tags=["cli-history"]`），带 LLM 摘要 + token/成本统计；**transcript 零拷贝**——硬链接本地 jsonl 进 `~/.agent-orchestrator/claude-config/projects/<munged-cwd>/`，平台任务详情页直接可看完整对话。
-- **怎么用**（入口 `ao cli-import <子命令>` 或 `jiti scripts/import-cli-history.ts <子命令>`）：
-  1. `clean [--yes]`——清空旧快照任务（判据 `created_at <= 快照日期`，先 `db.backup` 备份；无 `--yes` 只出报告）
-  2. `scan`——流式解析本地会话（跳过 0 真实提问的空会话、非本机 HOME cwd 的会话、本工具 summarize 自产的一次性会话）→ `~/.agent-orchestrator/cli-import/scan.json`
-  3. `summarize [--concurrency 4]`——`claude -p` 逐会话产出中文标题/摘要/关键词（增量可断点续跑；失败回退 aiTitle/summary 行/首提问）
-  4. `ingest`——幂等导入（`tasks.session_id` 命中即跳过）：目录→项目匹配（cwd 精确 → basename 唯一 → 项目名唯一 → 自动建项目）+ sessions 行 + 硬链接
-  5. `sync [--owner-email X]`——scan→summarize→ingest 一键链（增量幂等可重复跑），状态落 `~/.agent-orchestrator/cli-import/state.json`；**平台 UI 入口**：批量导入页「从原生 CLI 会话导入」卡片 → 「开始同步」按钮（= `POST /api/cli-import` 起 detached 子进程跑 `sync`，`GET /api/cli-import` 轮询进度，运行中重复点 409）——老 CLI 用户零学习成本把历史搬进平台
-  6. `status` / `report`——进度查看 / scan↔DB↔文件三方对账
-- **实现原理（开发者参考）**：`scripts/import-cli-history.ts`（文件头注释含完整用法/回滚/关注点）。读取契约：server 强制 `CLAUDE_CONFIG_DIR=$ORCHESTRATOR_HOME/claude-config`，`getSessionHistory()` 按 `task.cwd` 让 SDK 读 `claude-config/projects/<munge(cwd)>/<session_id>.jsonl`，`munge = cwd.normalize("NFC").replace(/[^a-zA-Z0-9]/g,"-")`（sdk.mjs 核实）。UI/API：`spa/src/views/Import.vue` + `src/app/api/cli-import/route.ts`（spawn `node_modules/.bin/jiti`，owner = 当前会话用户；状态单机全局不分用户）。冷启动档 → `docs/plans/cli-history-import.md`。
-- **注意**：
-  - UI 按钮和 sync 写本机实例 DB（直写，不走任务队列）；`sync` 需要 `claude` CLI 在 PATH（摘要用），没有则标题走回退链不影响导入。
-  - `clean` 建议平台 server 停止时跑；回滚 = 恢复 `orchestrator.db.bak-pre-cli-import-*` 备份，或 `DELETE FROM tasks WHERE tags LIKE '%cli-history%'`。
-  - 硬链接的好处：本地 CLI 的 `.last-cleanup` 清掉源文件后，平台侧 inode 仍持有数据。
-
-### 功能点：同步后看板自动分类（ING / cron出片）
-
-- **是什么**：`sync` 之后把当天（本地时区）新导入的会话任务自动挂进看板「分类」视图的全局列表——命中 cron 签名（first_prompt 前缀 `# 视频线每日出片`）的进「cron出片」，其余进「ING」（damo 2026-10-28 立：「后续都这么干」）。
-- **怎么用**：`./scripts/ao cli-import sync && bash scripts/categorize-cli-import.sh`（或补某天：`bash scripts/categorize-cli-import.sh 2026-10-27`）。
-- **注意**：归位三态（已就位跳过 / 错位 mv 搬正 / 未分类 put 挂入），重复跑无副作用；目标实例 = 本机 `AO_BASE_URL` 默认 `http://localhost:13000`；改列表名 / 加新 cron 签名改脚本顶部 `ING_LIST` / `CRON_LIST` / `CRON_PATTERNS` 变量。
-- **实现原理（开发者参考）**：`scripts/categorize-cli-import.sh`（读 `scan.json` 二分 → 本地 sqlite `session_id→task_id` → `ao-pinlist.sh` mv/put；成员快照一次拉全避免逐任务 409 探测）。
-
-### 功能点：跨机器使用（每机独立实例 + 各自导入本机会话）
-
-- **是什么**：每台机器（Mac / Win-WSL / Mac Air）跑自己的平台实例（各自 13000 + 各自 `~/.agent-orchestrator/orchestrator.db`），各自导入**本机**的 CLI 会话历史，各自派发本地任务；跨机协作 = 用 `AO_BASE_URL` 指向对方 LAN IP 调 API（先例：Mac 操作 WSL ao-prod，见 `docs/mac-cli-notes.md`）。
-- **每台新机器启用 runbook**（一次，约 20 分钟；Mac Air 为首个落地点）：
-  1. **前置**：Node ≥ 20.9（`nvm install 22`）；Xcode Command Line Tools（better-sqlite3 原生编译）；Claude Code CLI 已装并登录（`~/.claude/projects/` 有历史 + `claude` 在 PATH，summarize 依赖）；git 能拉 origin（pulu git 服务器加本机公钥，主机名解析见 `docs/hosts.md`）；`git config user.name/email`
-  2. **clone + install**：`git clone ssh://example.com/home/git/repos/agent-orchestrator.git && cd agent-orchestrator && npm install`（国内网络可用 cnpm/npmmirror）
-  3. **env**：`.env.local` 写 `JWT_SECRET=<openssl rand -hex 32>`（不设走 dev 兜底但重启后全员掉登录）+ `COOKIE_SECURE=0`（HTTP 内网）
-  4. **起服务**：`npm run build && nohup npx next start -p 13000 > /tmp/ao-prod.log 2>&1 &`——⚠️ **别用 `npm start`**：`ecosystem.config.cjs` 是 WSL/Pulu 四实例清单，Mac 上跑会把 bt/ao-prod/ao-dev 全拉起来。migration 首启自动跑
-  5. **账号**：浏览器开 `localhost:13000` 注册（首个注册 = admin）+ Settings 配 LLM key（派任务用；cli-import 的 summarize 走本机 `claude` CLI，不依赖它）
-  6. **同步 skills/标准/L1**：`bash scripts/sync-standards.sh`（bare = 本机化 + 落自己实例；会 ssh 锁 WSL/Pulu 副本 → 本机需与 win/pulu 互信，与跨机派发前提一致）
-  7. **导入本机会话**：`./scripts/ao cli-import scan && ./scripts/ao cli-import summarize && ./scripts/ao cli-import ingest`（**不需要 clean**——那是 Mac 首次清 WSL 快照的一次性动作，且快照日期是 Mac 专属常量）
-  8. **日常（拉模式）**：定期 `git pull --rebase && bash scripts/sync-standards.sh` 拿最新 skills/标准；改了东西 commit+push 回 origin
-- **机器无关性口径**：scan 只认 `os.homedir()` 下的会话；Mac↔WSL 家目录别名（`/Users/user` ↔ `/home/user`）自动归一到本机 HOME 形态（保证自动建的项目 cwd 在本机真实存在）；Win 机建议跑在 WSL 里（平台 + CLI 同一文件系统，硬链接才成立）。
-- **跨机访问对方实例**：`export AO_BASE_URL=http://<对方IP>:13000` + 用**对方实例**的账号登录（`scripts/login.sh`，token 按实例隔离）；HTTP 内网直连即可（`COOKIE_SECURE=0`）。
-- **跨机派发模式**：本机派任务到对方实例实现 → 对方 agent 在其 checkout 上 commit+push 同一 origin → 本机 `git pull --rebase` 拿回。SOP → [`docs/shared-standards/task-dispatch-standards.md`](../shared-standards/task-dispatch-standards.md) §7。

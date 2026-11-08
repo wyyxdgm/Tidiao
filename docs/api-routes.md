@@ -5,7 +5,7 @@
 | Method | Path | 说明 |
 |--------|------|------|
 | GET | /api/tasks | 列出任务（支持 `?project=` `?version=` `?unversioned=true` `?unassigned=true` `?status=` `?limit=` `?search=`（R180 顶栏搜索：LIKE 匹配 id/title/status/tags，owner 隔离）过滤）|
-| POST | /api/tasks | 创建任务（`project_id` 必填，`version_id` 可选且必须属于该 Project；可传 `type`、`dispatched_by_task_id`=派发方 task id，跨项目也可，仅校验同 owner）。`role_id`（Role 场景化 P2，[role-scoped-roles.md](plans/role-scoped-roles.md) D2）：挂角色预设，task 继承 role 的 system_prompt/model/effort/max_turns/allowed_tools（task 显式字段优先）；role 须属同 owner 且作用域匹配 —— 全局 role（`project_id` NULL）任意 project 可用，project 专属 role 只能用于绑定 project。`autoComplete`（波 2.5，[auto-complete-dag.md](plans/auto-complete-dag.md) D7）：任务级自动验收，true = 任务进 reviewing 的瞬间自动翻 completed（复用 approveTask 全部副作用：events/webhook/父通知/依赖链下游自动启动）；**仅 DAG 项目可用**（`dag_enforced=1`）。错误码（均 400）：`ROLE_NOT_FOUND` = role 不存在或跨 owner；`ROLE_SCOPE_MISMATCH` = 项目专属 role 跨 project 使用；`AUTO_COMPLETE_REQUIRES_DAG` = autoComplete=true 但项目未开 DAG（route + createTask 两级校验，防绕过） |
+| POST | /api/tasks | 创建任务（`project_id` 必填，`version_id` 可选且必须属于该 Project；可传 `type`、`dispatched_by_task_id`=派发方 task id，跨项目也可，仅校验同 owner）。`role_id`（Role 场景化 P2）：挂角色预设，task 继承 role 的 system_prompt/model/effort/max_turns/allowed_tools（task 显式字段优先）；role 须属同 owner 且作用域匹配 —— 全局 role（`project_id` NULL）任意 project 可用，project 专属 role 只能用于绑定 project。`autoComplete`（波 2.5）：任务级自动验收，true = 任务进 reviewing 的瞬间自动翻 completed（复用 approveTask 全部副作用：events/webhook/父通知/依赖链下游自动启动）；**仅 DAG 项目可用**（`dag_enforced=1`）。错误码（均 400）：`ROLE_NOT_FOUND` = role 不存在或跨 owner；`ROLE_SCOPE_MISMATCH` = 项目专属 role 跨 project 使用；`AUTO_COMPLETE_REQUIRES_DAG` = autoComplete=true 但项目未开 DAG（route + createTask 两级校验，防绕过） |
 | GET | /api/tasks/page | 看板专用分页端点: `?statusGroup=active\|terminal\|all` (必填) + `?project=` `?version=` `?unversioned=` `?includeDeleted=` `?limit=` (默认 50 上限 200) `?offset=` (默认 0). 返回精简投影信封 `{items, total, hasMore}` (`TaskTrimmed` 20 字段, 大字段 prompt/result/error 替换为末尾/头部 preview). `/global` 和 `/[projectId]/[versionId]` 看板专用. 与 `/api/tasks` 共存, 不替换. |
 | GET | /api/tasks/[id] | 任务详情（含 `depends_on_ids`/`dependent_task_ids`/`dispatched_task_ids` 下游派发链）|
 | PATCH | /api/tasks/[id] | 更新任务 |
@@ -59,7 +59,7 @@
 | POST | /api/import/json | JSON 批量导入（目标 `project_id` 必填，`version_id` 可选）|
 | POST | /api/import/csv | CSV 批量导入（目标 `project_id` 必填，`version_id` 可选）|
 | POST | /api/import/markdown | Markdown 批量导入（目标 `project_id` 必填，`version_id` 可选）|
-| GET/POST | /api/cli-import | 本机 CLI 会话历史导入（批量导入页「从原生 CLI 会话导入」卡片）。GET = 读 sync 运行状态（`~/.agent-orchestrator/cli-import/state.json` + pid 探活）；POST = 起 detached 子进程跑 `scripts/import-cli-history.ts sync --owner-email <当前用户>`（任务 owner = 会话用户），运行中重复 POST → 409，stdout/stderr 落 `cli-import/sync.log`。依赖同机文件系统（`~/.claude/projects` + transcript 硬链接），跨机调用无意义 |
+| GET/POST | /api/cli-import | 本机 CLI 会话历史导入（批量导入页「从原生 CLI 会话导入」卡片）。GET = 读 sync 运行状态（`~/.agent-orchestrator/cli-import/state.json` + pid 探活）；POST = 起 detached 子进程跑 内部 CLI 辅助脚本（sync）（任务 owner = 会话用户），运行中重复 POST → 409，stdout/stderr 落 `cli-import/sync.log`。依赖同机文件系统（`~/.claude/projects` + transcript 硬链接），跨机调用无意义；配套 CLI 脚本未随开源版提供 |
 | GET/POST | /api/templates | 模板列表 / 创建 |
 | GET/PATCH/DELETE | /api/templates/[id] | 模板详情 / 更新 / 删除 |
 | POST | /api/templates/[id]/instantiate | 从模板创建任务 |
@@ -136,7 +136,7 @@ curl https://dao.example.com/api/projects/$PID/config/bank_card_no -H "Cookie: s
 
 ## Runners（R1，6 个，远程执行 daemon 的注册 / 心跳 / 探针）
 
-**5 admin + 1 runner daemon**。详见 [docs/runners.md](./runners.md) 架构 + 协议；UI 在 [/runners](../src/app/runners/page.tsx)（admin only）。
+**5 admin + 1 runner daemon**。详见 `docs/usage/runners.md`；UI 在 [/runners](../src/app/runners/page.tsx)（admin only）。
 token 是 256-bit shared secret（3 列 AES-256-GCM 存），**POST 响应是唯一一次返回明文**，之后 GET 永不带。heartbeat 走 middleware bypass（不带 `ao_` 前缀），由路由层自己 `verifyRunnerToken` 验签。
 
 | Method | Path | 说明 |
@@ -153,7 +153,7 @@ token 是 256-bit shared secret（3 列 AES-256-GCM 存），**POST 响应是唯
 **全部 admin only**（`x-user-role === "admin"`）—— 影响全平台所有租户的调度。
 关停会 pause 全部 running（保住 `session_id`，恢复时 resume 续完整 transcript）+ 摘下排队任务；
 状态落库 `maintenance_state`（v34），所以 pm2 重启后新进程仍知道自己该静默。
-CLI: `scripts/maintenance.sh`（含 `probe` 机器可读探测）；部署: `./scripts/deploy.sh` 默认 auto（有任务才关停）。
+CLI: `POST /api/maintenance`（enter/exit/status）；部署时先关停有任务再重启。
 
 | Method | Path | 说明 |
 |--------|------|------|
@@ -168,7 +168,7 @@ CLI: `scripts/maintenance.sh`（含 `probe` 机器可读探测）；部署: `./s
 | POST | /api/feishu/write-back/[taskId] | 写回 task 状态到飞书行（自动查 version 绑定的 sheet）|
 | GET/POST | /api/webhooks | Webhook 列表 / 创建（9 事件可选）|
 | GET/PATCH/DELETE | /api/webhooks/[id] | Webhook 详情 / 更新（启用 + events）/ 删除 |
-| GET/POST | /api/roles | 角色配置包列表 / 创建（§9 v1）。GET 支持 `?projectId=X`（Role 场景化 P1/P5）：返回全局 + 该项目专属合并集（getRolesForProject 语义），无参 = 全量。POST 可带 `project_id`（null/空 = 全局角色）+ `feishu_writeback`（0/1，缺省 1 允许，[role-scoped-roles.md](plans/role-scoped-roles.md) D4/D5）|
+| GET/POST | /api/roles | 角色配置包列表 / 创建（§9 v1）。GET 支持 `?projectId=X`（Role 场景化 P1/P5）：返回全局 + 该项目专属合并集（getRolesForProject 语义），无参 = 全量。POST 可带 `project_id`（null/空 = 全局角色）+ `feishu_writeback`（0/1，缺省 1 允许）|
 | GET/PATCH/DELETE | /api/roles/[id] | 角色详情 / 更新 / 删除。PATCH 支持 `project_id`（undefined=不改，null=清成全局）+ `feishu_writeback`（0/1）|
 
 ## Channels（渠道配置，6 个）
@@ -190,7 +190,7 @@ owner-scoped（`x-user-id`）；secret/webhook_secret 不回传（`has_secret` �
 ## Intake（甲方 intake bot，4 个）
 
 ⚠️ 都在 `src/middleware.ts` public 白名单里（**不走 session**），靠企微验签 / webhook HMAC / Telegram secret_token / 飞书 Encrypt Key+Token 自证。
-详见冷启动源 [`docs/plans/projects/wecom-intake-phase2.md`](./plans/projects/wecom-intake-phase2.md) + [`docs/plans/intake-channel-unify.md`](./plans/intake-channel-unify.md)。
+
 
 | Method | Path | 说明 |
 |--------|------|------|

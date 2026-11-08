@@ -93,7 +93,7 @@
   - 子任务 prompt 头会注入一行 `[dispatched by] 本任务由上游任务「…」派发（task_id=…）`，子 agent 可据此回报进展。该行不依赖 preflight 开关。
   - 与 fork 正交：fork 是同一 SDK session 分叉（共享历史），派发是两个独立 session 之间的因果关系；创建后不可通过 PATCH 修改。
   - **子任务进 reviewing / failed 会自动通知父任务**（R107）：父在终态时这条通知会把父唤醒重跑一轮。**同一「父 + 子 + 目标状态」只通知一次**，详见下方「功能点：子任务状态通知父任务（含重复抑制）」。
-  - **server 侧不读 env（2026-08-26 起）**：派发方溯源只信 body 显式 `dispatched_by_task_id`。曾因 pm2 env 残留让 ao-prod 上 38 条 HTTP 创建被静默归因到 c73132be + prompt 被注入污染 prelude（详见 [`docs/fixes/2026-08-26-task-dispatch-env-pollution.md`](../fixes/2026-08-26-task-dispatch-env-pollution.md)），已删 `POST /api/tasks` 里的 env 回退。`ao-dispatch.sh` 仍读 env（在自己的进程里 → 安全），并把它转成显式 `--from-task` 写到 body；其他非 dispatch 路径请显式传 `dispatched_by_task_id`。
+  - **server 侧不读 env（2026-08-26 起）**：派发方溯源只信 body 显式 `dispatched_by_task_id`。曾因 pm2 env 残留让 ao-prod 上 38 条 HTTP 创建被静默归因到 c73132be + prompt 被注入污染 prelude，已删 `POST /api/tasks` 里的 env 回退。`ao-dispatch.sh` 仍读 env（在自己的进程里 → 安全），并把它转成显式 `--from-task` 写到 body；其他非 dispatch 路径请显式传 `dispatched_by_task_id`。
 
 ### 功能点：子任务状态通知父任务（含重复抑制）
 
@@ -235,7 +235,7 @@
 
 ### 功能点：与需求点联动（R78 闭环）
 
-> **状态**：R78 已落地，需求点 ↔ task 双向打通。详细 6 态 + invariant + 不变量见 [14-需求点管理](./14-requirement-management.md) 与 [`docs/plans/r78-requirement-loop.md`](../plans/r78-requirement-loop.md)。
+> **状态**：R78 已落地，需求点 ↔ task 双向打通。详细 6 态 + invariant + 不变量见 [14-需求点管理](./14-requirement-management.md) 。
 
 #### task 创建时挂需求点
 
@@ -331,9 +331,9 @@ chip 与已有的 `awaiting_markers` chip 是两套不同信号：前者来自�
 
 **已知边界**：ETag 内**不允许空格**（RFC 9110），回传会被截断导致条件拉取永不命中；页窗口（`limit-offset`）必须进 ETag，否则翻页时 304 会把上一页数据当本页返回。两条都有回归测试锁死。
 
-**服务端聚合去重（2026-10-08 压测批次）**：压测发现单次 `/api/tasks/page` 请求会把同款 `GROUP BY status` 跑两遍（fingerprint 一遍、`listTasksPage` 的 statusCounts 一遍），terminal 段 ~4800 行扫两回。现改为 route 先跑 `runTasksPageStatusRows()` 一次，两个函数共享结果——服务端 5 条 SQL 变 4 条，terminal 列表稳态耗时约 -40%（实测 230~340ms 区间收窄）。冷进程首打慢（重启后首个 terminal 查询实测 21.7s，346MB DB 冷页缓存）由 `deploy.sh` 部署后 `wsl_warmup()` 预热兜住（见 [部署变更 2026-10-08](../deploy/2026-10-08.md)）。
+**服务端聚合去重（2026-10-08 压测批次）**：压测发现单次 `/api/tasks/page` 请求会把同款 `GROUP BY status` 跑两遍（fingerprint 一遍、`listTasksPage` 的 statusCounts 一遍），terminal 段 ~4800 行扫两回。现改为 route 先跑 `runTasksPageStatusRows()` 一次，两个函数共享结果——服务端 5 条 SQL 变 4 条，terminal 列表稳态耗时约 -40%（实测 230~340ms 区间收窄）。冷进程首打慢（重启后首个 terminal 查询实测 21.7s，346MB DB 冷页缓存）由部署侧预热兜住（大 DB 冷启动首个查询偏慢属正常，热身后恢复）。
 
-方案对比（为什么没走 SSE 推送 / Service Worker）见 [`docs/plans/r165-resident-background-sync.md`](../plans/r165-resident-background-sync.md)。
+
 
 ### 功能点：tab 切换不重载（R165 迭代二，keep-alive 真正生效）
 
