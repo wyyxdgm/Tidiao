@@ -33,6 +33,30 @@ Requirements: Node ≥ 20, a Claude Code installation (or Anthropic-compatible A
 
 **BYOK**: the orchestrator carries no inference cost of its own — you plug in your own API keys; they are encrypted (AES) in SQLite.
 
+## Run with Docker
+
+The published image bundles the Vue web UI and the Next.js server — no Node toolchain needed on the host:
+
+```bash
+export JWT_SECRET=$(openssl rand -hex 32)
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+# → http://localhost:3000
+```
+
+Images are published to `ghcr.io/wyyxdgm/tidiao` — `latest` tracks `main`, and every `v*` tag gets a matching version tag:
+
+```bash
+docker pull ghcr.io/wyyxdgm/tidiao:v0.2.0
+```
+
+To build locally instead (needs Docker only, not Node):
+
+```bash
+docker compose up -d --build
+```
+
+Data lives in `./data` (SQLite); back it up the same way you would any SQLite file.
+
 ## Driving it with Claude Code skills
 
 Besides the web UI, the repo ships a set of **Claude Code skills** (`.claude/skills/orchestrator-*`) and a unified CLI (`scripts/ao`) so Claude Code can operate the platform directly — dispatch tasks, query status, act on the task lifecycle, monitor, diagnose stuck tasks:

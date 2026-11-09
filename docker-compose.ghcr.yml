@@ -1,0 +1,18 @@
+# docker-compose.ghcr.yml — run the published image instead of building locally.
+#
+# Usage:
+#   export JWT_SECRET=$(openssl rand -hex 32)
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+#
+# Overrides the `build:` section of docker-compose.yml with a registry pull, so
+# no Node toolchain is needed on the host. The image is built by
+# .github/workflows/docker.yml and published on every main commit (tag `latest`)
+# and on every v* tag (tag `v0.2.0`).
+#
+# Pin a version instead of `latest` for reproducible deployments:
+#   sed -i 's|ghcr.io/wyyxdgm/tidiao:latest|ghcr.io/wyyxdgm/tidiao:v0.2.0|' \
+#     docker-compose.ghcr.yml
+services:
+  app:
+    image: ghcr.io/wyyxdgm/tidiao:latest
+    build: !reset null
