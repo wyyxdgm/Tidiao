@@ -51,6 +51,10 @@ __pycache__/
 /spa/.vite
 /spa/*.local
 
+# 打包产物 tarball (本地产物, 8.5MB). 误 add 进 git 会污染仓库体积;
+# 要发布请走 GitHub Release 附件 (gh release create <tag> dist.tar.gz).
+/dist.tar.gz
+
 # R59+ SPA integration: vite build 产物推到 public/, 由 next build 吃进去 (route handler
 # 出 public/index.html). 不能 commit (dist 28MB+ 影响 git 体积 + 部署 SHA 不稳).
 # 例外 public/*.jpg / *.png 是 history 老 tracked 文件, 白名单保留.

@@ -13,7 +13,17 @@ out/
 build/
 
 # Dependencies — installed by `npm ci` inside the builder stage.
-node_modules/
+# NOTE: a bare `node_modules/` pattern only matches the CONTEXT ROOT, not nested
+# trees (verified with docker 28.2.2). spa/node_modules is a separate install
+# tree and would otherwise be copied from the host (macOS binaries) over the
+# alpine ones installed by `npm ci` — and bloats the context by ~370MB.
+**/node_modules
+**/dist
+
+# SPA build output copied into public/ by `npm run build:spa`.
+# The builder stage regenerates both; shipping the host's copy risks staleness.
+/public/index.html
+/public/assets/
 
 # Source tests — not needed at runtime (AC8); stripped from standalone too.
 *.test.ts
@@ -55,7 +65,10 @@ decrypt-test.mjs
 jingyesi-*.jpg
 lushan-waterfall-*.jpg
 npminstall-debug.log
-instrumentation.ts
+# NOTE: instrumentation.ts is NOT excluded — Next.js compiles it into the
+# server bundle as the startup hook (DB init / schedule runner / weixin
+# worker). Excluding it from the context silently drops all three from
+# container startup while the app still looks healthy.
 
 # Docker meta — never copy back into a build.
 Dockerfile

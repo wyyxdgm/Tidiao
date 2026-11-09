@@ -1,13 +1,14 @@
-# R153 phase 1a — multi-stage build for the Next.js Standalone output.
+# Multi-stage build for the Tidiao orchestrator.
 #
-# Stage 1 (builder): installs deps + runs `next build` (which emits
-#   dist/standalone/ + dist/static/). After build we strip the cruft that
-#   Next.js output file tracing copies from the workspace (whole src/ tree,
-#   .git/, *.test.ts, .env*, docs/, scripts/, ...). We keep only what
-#   server.js actually requires at runtime: server.js + dist/ + node_modules/.
+# Stage 1 (builder): installs deps, builds the Vue SPA into public/, then runs
+#   `next build`. Produces .next/ (server bundle + client chunks).
 #
-# Stage 2 (runner): node:20-alpine slim runtime, COPY only the trimmed
-#   artifacts from builder. Final image excludes source/tests/git per AC8.
+# Stage 2 (runner): node:22-alpine slim runtime with production-only deps and
+#   the build output. Runs `next start` — the same entrypoint the pm2
+#   deployment uses (ecosystem.config.cjs), so image and production behave
+#   identically.
+#
+# Deliberately NOT `output: 'standalone'` — see the note on the build step.
 
 # === Stage 1: builder ===
 FROM node:22-alpine AS builder
@@ -43,51 +44,41 @@ RUN apk add --no-cache python3 make g++ sqlite-dev
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund --ignore-scripts
 
+# SPA (Vue 3) deps are a separate install tree (spa/package-lock.json).
+# Installed before COPY . . so the layer caches across source edits.
+COPY spa/package.json spa/package-lock.json ./spa/
+RUN cd spa && npm ci --no-audit --no-fund
+
 # Copy the rest of the source (excluding .dockerignore'd paths)
 COPY . .
 
-# Build = emits dist/standalone/ (server.js + traced deps + traced src) and dist/static/
+# Build the Vue SPA into public/ (index.html + assets/).
+# The web UI is served by src/app/route.ts (root GET → public/index.html);
+# without this the image boots but every page render returns 503 "SPA not built".
+#
+# Same result as the repo's `npm run build:spa`, minus its `npm install`
+# (deps are already installed above via `npm ci`, and re-resolving them in
+# the image would drift from the lockfile).
+RUN cd spa && npm run build \
+ && cd .. \
+ && rm -rf public/assets && mkdir -p public/assets \
+ && cp spa/dist/index.html public/index.html \
+ && cp -R spa/dist/assets/. public/assets/
+
+# Build the Next.js server.
+#
+# Deliberately NOT `output: 'standalone'`: Next 16's standalone output omits
+# dist/server/instrumentation.js and the chunks it depends on (the standalone
+# trace only covers modules reachable from a page route — instrumentation is
+# not one). The runtime looks for dist/server/instrumentation.js, doesn't find
+# it, and silently skips the startup hook — no DB init, no schedule runner,
+# no WeChat worker, while the app still looks healthy.
+# `next start` over .next/ is what the pm2 deployment uses (ecosystem.config.cjs),
+# so the image and production behave identically.
 RUN npm run build
 
-# Trim dist/standalone cruft. Next 16 sets outputFileTracingRoot=workspace,
-# so the tracer copies the whole repo into the standalone output. We keep
-# only the four entries server.js needs:
-#   - server.js         (entry point)
-#   - dist/             (build manifest dir; server.js uses distDir="./dist")
-#   - node_modules/     (pnpm store with traced deps incl. better-sqlite3)
-#   - package.json      (optional; lets `npm start` work too)
-# Everything else (.git, src/, .env*, docs/, scripts/, *.test.ts, ...) is
-# removed here so it never reaches the runner stage.
-RUN find dist/standalone -mindepth 1 -maxdepth 1 \
-      ! -name 'server.js' \
-      ! -name 'dist' \
-      ! -name 'node_modules' \
-      ! -name 'package.json' \
-      -exec rm -rf {} +
-
-# Belt-and-suspenders: scrub any test files / .git dirs that may have leaked
-# via tracing (file-level, in case anything slipped past the top-level prune).
-RUN find dist/standalone -type d -name '.git' -prune -exec rm -rf {} +
-RUN find dist/standalone -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.js' -o -name '*.test.mjs' \) -delete
-RUN rm -rf dist/standalone/.next dist/standalone/.claude dist/standalone/instrumentation.ts
-
-# Drop the dead-weight native binaries that aren't used at runtime on alpine:
-#   - sharp glibc variants (alpine uses musl; sharp auto-picks the right one)
-#   - sharp itself + @img + color-convert + detect-libc (sharp is only loaded
-#     if Next.js Image Optimization kicks in; this backend doesn't use next/image)
-#   - onnxruntime-web + @xenova/transformers + @huggingface (embeddings use
-#     a JS fallback when the native binary is missing; login endpoint never
-#     touches them). Saves ~33MB uncompressed.
-# Verified by `docker export|import` smoke test (login endpoint still 401s,
-# no native-module import errors) — see scripts/docker-smoke.sh AC7 check.
-RUN rm -rf node_modules/@img \
-          node_modules/sharp \
-          node_modules/detect-libc \
-          node_modules/color-convert \
-          node_modules/onnxruntime-web \
-          node_modules/onnxruntime-common \
-          node_modules/@xenova \
-          node_modules/@huggingface
+# Sourcemaps are ~120MB of the build and useless at runtime.
+RUN find .next -name '*.map' -delete
 
 # === Stage 2: runner ===
 FROM node:22-alpine AS runner
@@ -98,17 +89,43 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV ORCHESTRATOR_HOME=/app/data
 
-# Copy only the trimmed standalone artifacts + static assets + public files.
-COPY --from=builder /app/dist/standalone/server.js ./server.js
-COPY --from=builder /app/dist/standalone/dist ./dist
-COPY --from=builder /app/dist/standalone/node_modules ./node_modules
-COPY --from=builder /app/dist/standalone/package.json ./package.json
-COPY --from=builder /app/dist/static ./dist/static
+# Production dependencies only (no devDeps: no typescript, no test tooling).
+#
+# --ignore-scripts skips the onnxruntime-node postinstall (it tries to download
+# a native binary from unofficial-builds.nodejs.org which sometimes returns
+# 302 redirects the install script can't follow). Embeddings use a JS fallback
+# when the native binary is missing; the login endpoint never touches them.
+#
+# better-sqlite3 ships prebuilt binaries for linuxmusl-x64 in prebuilds/, loaded
+# via require('../prebuilds/linuxmusl-x64.node'); it has no install script, so
+# --ignore-scripts leaves the prebuilt in place — no node-gyp rebuild needed.
+#
+# The dropped packages are dead weight at runtime: sharp/@img are only loaded
+# by Next.js Image Optimization (this backend doesn't use next/image), and
+# onnxruntime-web/@xenova/@huggingface only serve embeddings, which fall back
+# to JS when the native binary is absent. Saves ~33MB.
+COPY --from=builder /app/package.json /app/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts \
+ && rm -rf node_modules/@img \
+          node_modules/sharp \
+          node_modules/detect-libc \
+          node_modules/color-convert \
+          node_modules/onnxruntime-web \
+          node_modules/onnxruntime-common \
+          node_modules/@xenova \
+          node_modules/@huggingface
+
+# The build output plus the config the server reads at startup.
+# .next/server/instrumentation.js — the startup hook (DB init, schedule runner,
+# WeChat worker) — ships inside .next/; the runtime loads it from there.
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/package.json ./package.json
 
 EXPOSE 3000
 
 # Run as non-root for defense-in-depth (still WIP — better-sqlite3 needs writable /app/data).
 # USER node
 
-CMD ["node", "server.js"]
+CMD ["npx", "next", "start", "-p", "3000"]
