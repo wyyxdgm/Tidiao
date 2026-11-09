@@ -4,17 +4,15 @@
 # or pinned:   docker pull ghcr.io/wyyxdgm/tidiao:v0.2.0
 #
 # The image is self-contained: it builds the Vue SPA into public/ and the
-# Next.js server in standalone mode, so `docker compose up` needs no Node
-# toolchain on the host.
+# Next.js server, so `docker compose up` needs no Node toolchain on the host.
 name: Docker Image
 
 on:
-  # Tags: publish a version tag + refresh `latest`.
   push:
+    # Tags: publish a version tag (v0.2.0) + refresh `latest`.
     tags:
       - "v*"
-  # main: publish rolling `latest` + commit-sha tags.
-  push:
+    # main: publish rolling `latest` + commit-sha tags.
     branches:
       - main
   # PRs: build only, to prove the Dockerfile still works. Nothing is pushed.
