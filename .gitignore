@@ -135,3 +135,12 @@ ao-session-*.jsonl
 docs/ruanzhu/account.local.json
 docs/ruanzhu/browser-profile/
 .~lock.*#
+
+# R153 Docker 化: compose 把 SQLite 落在仓根 ./data (volumes: ./data:/app/data),
+# 本地跑一次 docker compose up 就在仓根多出 data/orchestrator.db* —— 状态文件不是源码。
+# 不忽略的话每次 git status 都带噪声, 误 commit 会把运行时数据推到远端。
+/data/
+
+# R153: vitest 缓存落在 spa/src/node_modules/.vite —— spa/src 不是独立包目录,
+# 根级 /node_modules 规则盖不到这里, 单独忽略。
+/spa/src/node_modules/

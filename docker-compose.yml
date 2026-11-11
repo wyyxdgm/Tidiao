@@ -43,12 +43,14 @@ services:
     volumes:
       - ./data:/app/data
     healthcheck:
+      # 🔴 R153 实测修: 原来打 /api/auth/login（期望「非 200 即挂」），但 login 校验
+      #   失败本来就返 401 —— wget 视 HTTP 错误为失败退出 1 → 容器永远 unhealthy
+      #   （实测 failing_streak 持续涨，容器起不来健康状态）。
+      #   改成打公开的 /api/health（middleware 已放行该路径）—— 200 才算活。
       test:
         - CMD-SHELL
         - >-
-          wget -qO- --post-data='{"email":"healthcheck","password":"x"}'
-          --header='Content-Type: application/json'
-          http://localhost:3000/api/auth/login || exit 1
+          wget -qO- http://localhost:3000/api/health | grep -q '"ok":true' || exit 1
       interval: 30s
       timeout: 5s
       retries: 3

@@ -29,6 +29,12 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/intake")) return true;
   if (PUBLIC_PATHS.includes(pathname)) return true;
   if (pathname === "/" || pathname.startsWith("/projects/") || pathname.startsWith("/tasks/") || pathname.startsWith("/messages/") || pathname.startsWith("/schedules/") || pathname.startsWith("/requirements/") || pathname.startsWith("/global") || pathname.startsWith("/import") || pathname.startsWith("/settings") || pathname.startsWith("/usage") || pathname.startsWith("/runners") || pathname.startsWith("/wiki")) return true;
+  // 存活探针必须公开 —— 容器 healthcheck / k8s probe / 外部监控都拿不到 session cookie。
+  // 端点本身只回 { ok: true }（不碰 DB / 不泄露业务数据），见 src/app/api/health/route.ts。
+  // 关注点: R153 Docker 化实测 —— compose healthcheck 打 /api/auth/login 期望「非 200 即挂」,
+  //   但 login 失败本来就返 401, wget 视其为错误退出 1 → 容器永远 unhealthy。
+  //   改成打公开的 /api/health 才是正解（不是把 healthcheck 改成「401 也算过」）。
+  if (pathname === "/api/health") return true;
   if (pathname.startsWith("/api/integration/openclaw")) return true;
   if (pathname.match(/^\/api\/runners\/self-register$/)) return true;
   if (pathname.match(/^\/api\/runners\/[^/]+\/heartbeat$/)) return true;
