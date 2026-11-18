@@ -23,9 +23,15 @@ No inference cost from the platform. Your keys, your machine, your data.
 
 ---
 
-![Global kanban board — every project, every task state, one screen](docs/screenshots/01-kanban.png)
+![Global board, grouped view — every project's tasks on one screen](docs/screenshots/01-kanban.png)
 
-> **Global board:** queued / running / reviewing / paused / done / failed — drag, filter, search across all projects. Every task in the instance, one screen.
+> **Global board:** every project, every task state, one screen — board / card / list / grouped / chat views, drag, filter, search across all projects.
+
+### Schedule it, then watch the spend
+
+![Scheduled task creation and usage stats](docs/gifs/01-schedule-and-usage.gif)
+
+> Schedules run on cron or a one-shot trigger and land in the same task queue as a manual dispatch. The usage view breaks down spend per task, per model, and per time bucket — so you can see which agent run actually cost money.
 
 ---
 
@@ -60,13 +66,19 @@ You already use Claude Code. But running agents from a terminal doesn't scale:
 
 > Every tool call is visible: `mcp_media__image_gen` → generated file → Bash verification → auto-generated summary (干掉 / 有用 / 5-step recap). Fork, resume, or send a follow-up message and the agent keeps working.
 
-### 3. Parent & child tasks wake each other automatically
+### 3. See the agent's own self-check before it starts
+
+![Task detail — preflight self-check, live stream, and the summary panel](docs/gifs/02-task-running.gif)
+
+> Before an agent touches the repo, the platform runs a preflight check (working directory, git state, last commit) and shows you the verdict. The transcript streams live next to it, and the right-hand panel keeps a rolling summary — fork, refine, or resume without losing the thread.
+
+### 4. Parent & child tasks wake each other automatically
 
 ![Subtask notify — child task completion automatically wakes the parent, with a relationship graph](docs/screenshots/04-subtask-notify.png)
 
 > A child task finishes → `[subtask-notify]` wakes the parent with the result → parent decides: approve, reject, or dispatch the next child. The relationship graph (0 upstream · 2 downstream) shows the whole chain.
 
-### 4. Swap models — just fill in one key
+### 5. Swap models — just fill in one key
 
 ![LLM provider catalog — 8 built-in domestic providers, auto-filled Base URL, fallback chain and per-task pricing](docs/screenshots/05-model-providers.png)
 
